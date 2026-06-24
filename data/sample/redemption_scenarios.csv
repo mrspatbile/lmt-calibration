@@ -1,0 +1,4 @@
+redemption_scenario_id,version,name,description,redemption_multiplier
+moderate_redemption_pressure,1.0,moderate_redemption_pressure,Moderate synthetic redemption pressure across investor classes.,1.00
+severe_platform_outflow,1.0,severe_platform_outflow,Severe synthetic outflow led by platform distribution investors.,1.50
+extreme_broad_based_outflow,1.0,extreme_broad_based_outflow,Extreme synthetic broad-based redemption pressure.,2.00

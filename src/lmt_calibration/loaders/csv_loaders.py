@@ -134,6 +134,7 @@ def _load_validated_csv(
     integer_fields: set[str],
 ) -> list[dict[str, object]]:
     records = _read_csv_records(path)
+    _normalize_blank_cells(records)
     _convert_integer_fields(records, dataset_name, integer_fields)
     return validator(records)
 
@@ -167,6 +168,13 @@ def _read_csv_records(path: Path) -> list[dict[str, object]]:
             )
 
     return records
+
+
+def _normalize_blank_cells(records: list[dict[str, object]]) -> None:
+    for record in records:
+        for field_name, value in record.items():
+            if value == "":
+                record[field_name] = None
 
 
 def _convert_integer_fields(

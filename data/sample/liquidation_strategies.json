@@ -1,0 +1,47 @@
+{
+  "schema_version": "1.0",
+  "config_type": "liquidation_strategies",
+  "name": "sample_liquidation_strategies",
+  "description": "Synthetic liquidation strategy configuration for V1 LMT calibration scenarios.",
+  "strategies": [
+    {
+      "liquidation_strategy_id": "cash_then_liquid_assets",
+      "version": "1.0",
+      "name": "cash_then_liquid_assets",
+      "description": "Uses cash above the configured minimum buffer first, then eligible liquid assets.",
+      "strategy_type": "most_liquid_first",
+      "preserve_minimum_buffer": true
+    },
+    {
+      "liquidation_strategy_id": "portfolio_profile_pro_rata",
+      "version": "1.0",
+      "name": "portfolio_profile_pro_rata",
+      "description": "Sells eligible non-cash assets proportionally to preserve the portfolio liquidity profile.",
+      "strategy_type": "pro_rata",
+      "preserve_minimum_buffer": true
+    },
+    {
+      "liquidation_strategy_id": "partial_cash_then_pro_rata",
+      "version": "1.0",
+      "name": "partial_cash_then_pro_rata",
+      "description": "Uses part of cash above the configured buffer, then sells eligible non-cash assets proportionally.",
+      "strategy_type": "hybrid",
+      "cash_buffer_use_rate": "0.50",
+      "preserve_minimum_buffer": true
+    },
+    {
+      "liquidation_strategy_id": "balanced_custom_weights",
+      "version": "1.0",
+      "name": "balanced_custom_weights",
+      "description": "Allocates liquidation needs across ETFs, listed equities, and reverse repos using configured weights.",
+      "strategy_type": "custom_weights",
+      "cash_buffer_use_rate": "0.50",
+      "preserve_minimum_buffer": true,
+      "weights": {
+        "listed_etf": "0.45",
+        "listed_equity": "0.35",
+        "reverse_repo": "0.20"
+      }
+    }
+  ]
+}

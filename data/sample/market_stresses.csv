@@ -1,0 +1,4 @@
+market_stress_id,version,name,description,market_shock_rate
+base_market_conditions,1.0,base_market_conditions,No market shock applied in the base synthetic scenario.,0
+europe_equity_downturn,1.0,europe_equity_downturn,Synthetic downturn in European listed equity markets.,-0.12
+global_equity_selloff,1.0,global_equity_selloff,Synthetic global listed equity selloff.,-0.20

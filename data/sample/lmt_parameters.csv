@@ -1,0 +1,3 @@
+fund_id,as_of_date,parameter_set_id,swing_threshold_rate,max_swing_factor_rate,gate_threshold_rate,minimum_buffer_rate
+lux_dynamic_allocation,2026-06-30,board_approved_base,0.015,0.03,0.10,0.05
+lux_dynamic_allocation,2026-06-30,conservative_liquidity_buffer,0.010,0.025,0.08,0.08
