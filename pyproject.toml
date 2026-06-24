@@ -1,0 +1,73 @@
+[build-system]
+requires = ["setuptools>=68.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "lmt-calibration"
+version = "0.1.0"
+description = "Liquidity Management Tools calibration app for fund liquidity stress testing."
+readme = "README.md"
+requires-python = ">=3.13"
+authors = [
+    { name = "mrspatbile" }
+]
+license = { text = "MIT" }
+
+dependencies = [
+    "pandas>=2.2.0",
+    "pydantic>=2.0.0",
+    "streamlit>=1.40.0",
+]
+
+[dependency-groups]
+dev = [
+    "mypy>=1.0.0",
+    "nbstripout>=0.7.0",
+    "pre-commit>=4.0.0",
+    "pytest>=7.0.0",
+    "pytest-cov>=4.0.0",
+    "ruff>=0.5.0",
+]
+
+[tool.setuptools]
+package-dir = { "" = "src" }
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = "test_*.py"
+python_classes = "Test*"
+python_functions = "test_*"
+addopts = "-v --tb=short"
+
+[tool.ruff]
+line-length = 100
+target-version = "py313"
+
+[tool.ruff.lint]
+select = [
+    "E",
+    "F",
+    "W",
+    "I",
+]
+ignore = [
+    "E501",
+]
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
+
+[tool.mypy]
+python_version = "3.13"
+warn_return_any = true
+warn_unused_configs = true
+check_untyped_defs = true
+no_implicit_optional = true
+warn_redundant_casts = true
+warn_unused_ignores = true
+warn_no_return = true
+strict_equality = true

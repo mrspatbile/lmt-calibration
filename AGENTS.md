@@ -1,0 +1,598 @@
+# AGENTS.md
+
+## Project overview
+
+This repository implements **Liquidity Management Tools Calibration** for fund liquidity risk.
+
+The project is a Python and Streamlit application for testing LMT parameters under redemption and asset-side liquidity stress scenarios. It models both sides of liquidity stress:
+
+- liability-side stress: investor redemptions by client class
+- asset-side stress: market shocks, liquidation capacity, haircuts, and settlement constraints
+
+The first version focuses on a realistic but narrow fund universe:
+
+- cash
+- listed equities
+- listed ETFs
+- reverse repos
+- repo financing exposures
+
+The project must avoid generic placeholder assets such as "Asset A" or "Entity B". Sample data should be synthetic but realistic.
+
+Read these files before implementing any module:
+
+- `ARCHITECTURE.md`
+- `docs/METHODOLOGY.md`
+- `docs/DATA_CONVENTIONS.md`
+- `docs/AUDIT_TRAIL.md`
+
+If any of these files are missing or incomplete, ask before implementing business logic.
+
+---
+
+## Core product goal
+
+The application should answer:
+
+> Given a fund liquidity profile, investor redemption behaviour, asset market stress, and liquidity stress assumptions, which LMT warnings or triggers activate and why?
+
+The first version should support:
+
+- investor-class redemption scenarios
+- asset-side market shocks
+- asset-side liquidity haircuts
+- liquidation capacity constraints
+- configurable liquidation strategy
+- dilution estimate
+- swing pricing warning
+- redemption gate warning
+- liquidity buffer warning
+- structured audit trail for scenario runs
+- Streamlit interface for scenario calibration
+
+---
+
+## Commit rules
+
+- Do not commit anything.
+- Do not stage files.
+- Do not push changes.
+- Do not add co-author attribution in commit messages.
+- Do not add Codex, Claude, ChatGPT, OpenAI, or AI references in commit messages.
+- Use only the repository author identity configured in Git.
+- When asked, provide only the relevant `git add` command and a concise commit message.
+- Commit messages should describe the domain reason for the change, not only the code change.
+
+Good commit message examples:
+
+- `add investor class redemption scenario model`
+- `add configurable liquidation strategy with haircut-adjusted cash raised`
+- `validate liquidity bucket capacity assumptions`
+- `add swing pricing trigger for dilution threshold breach`
+
+---
+
+## How we work together
+
+### Session start
+
+At the start of every coding session:
+
+1. State which module or file group is being worked on.
+2. Confirm the relevant project documents have been read.
+3. Confirm the current state of the repo before adding files.
+4. Explain the proposed changes before implementing anything.
+5. Wait for approval before broad or risky changes.
+
+### Implementation style
+
+- Work in small steps.
+- Keep each change focused on one domain concern.
+- Do not jump to another module unless explicitly instructed.
+- After each step, explain what changed and why.
+- If a design decision is ambiguous, ask before inventing business logic.
+- Follow existing repository patterns before introducing new ones.
+
+---
+
+## Module sequencing
+
+Build the project in this order:
+
+1. Project documentation
+   - `ARCHITECTURE.md`
+   - `docs/METHODOLOGY.md`
+   - `docs/DATA_CONVENTIONS.md`
+   - `docs/AUDIT_TRAIL.md`
+
+2. Domain models
+   - fund snapshot
+   - asset position
+   - investor class profile
+   - redemption scenario
+   - stress scenario
+   - LMT parameters
+   - calculation result objects
+
+3. Validation layer
+   - schema validation
+   - unit validation
+   - value range validation
+   - reconciliation checks
+   - domain-specific validation errors
+
+4. Asset-side engine
+   - market stress
+   - liquidity stress
+   - haircut adjustment
+   - liquidation capacity
+   - settlement and maturity treatment
+
+5. Liability-side engine
+   - investor-class redemption behaviour
+   - total redemption amount
+   - client-class concentration warnings
+   - notice and settlement timing
+
+6. Liquidation strategy
+   - strategy selection
+   - cash treatment
+   - reverse repo maturity treatment
+   - eligible asset selection
+   - pro rata and weighted liquidation allocation
+   - repo liquidity effects
+   - shortfall calculation
+   - dilution calculation
+
+7. LMT decision engine
+   - swing pricing warning
+   - gate warning
+   - liquidity buffer warning
+   - explanatory messages
+
+8. Audit trail
+   - scenario run metadata
+   - input summaries
+   - parameter snapshots
+   - result records
+   - output files
+
+9. Streamlit application
+   - input controls
+   - scenario calibration
+   - result display
+   - charts and tables
+
+10. Docker
+   - only after the Streamlit application runs locally
+
+---
+
+## Architecture rules
+
+- Keep business logic independent from Streamlit.
+- Streamlit may collect inputs, call services, and display outputs.
+- Streamlit must not calculate liquidation strategy logic, dilution, haircuts, trigger logic, or calibration results.
+- Calculations must operate on domain objects where practical, not raw DataFrames.
+- Raw DataFrames are allowed in loaders and validation only.
+- External data must pass through loaders and validators before becoming domain objects.
+- Domain models should be explicit and typed.
+- Use composition over deep inheritance.
+- Use abstract base classes only where there is a real boundary, such as loaders, audit writers, or data providers.
+- Do not create abstract classes for single-use logic.
+- Keep methodology parameters explicit. Do not hide required assumptions in silent defaults.
+- No hardcoded methodology assumptions inside calculation code.
+- Centralized constants are allowed for stable labels, column names, enum values, and display names.
+- Required calibration parameters must come from validated inputs, scenario objects, or config objects.
+
+---
+
+## Code standards
+
+- Python 3.13
+- Use `uv` for dependency management
+- Type hints throughout
+- No untyped functions
+- Pydantic v2 or dataclasses for domain objects
+- Use Pydantic v2 syntax with `model_config = ConfigDict(...)`, not `class Config`
+- Use `pathlib` for file paths
+- No string path concatenation
+- Use `pytest` for tests
+- Use fixtures where useful
+- Use logging for runtime messages
+- No `print` statements in production code
+- No `from __future__ import annotations`
+- No business logic inside dashboard code
+- Custom exceptions for domain errors
+- Avoid unnecessary dependencies
+
+Before marking a task done, run:
+
+```bash
+uv run ruff check src tests
+uv run ruff format --check src tests
+uv run mypy src
+uv run pytest
+```
+
+---
+
+## Data conventions
+
+Rates, ratios, and haircuts must be stored as `Decimal`.
+
+Examples:
+
+* `Decimal("0.05")` means 5%
+* `Decimal("1.50")` means 150%
+* `Decimal("0.005")` means 50 bps
+
+Basis points must be stored as `int`.
+
+Examples:
+
+* `50` means 50 bps
+* `150` means 150 bps
+
+Never store raw percentage strings in domain models.
+
+Field names must make units explicit:
+
+* `haircut_rate`
+* `redemption_rate`
+* `market_shock_rate`
+* `liquidity_capacity_rate`
+* `swing_threshold_rate`
+* `spread_bps`
+* `settlement_days`
+* `market_value`
+
+External inputs may contain human-readable values, but loaders must validate and convert them before creating domain objects.
+
+---
+
+## Required data validation
+
+All external data must be validated before domain object creation.
+
+Validation must check:
+
+* required columns exist
+* dates parse correctly
+* monetary values are non-negative unless the field explicitly allows liabilities
+* rates are between 0 and 1 unless explicitly documented otherwise
+* basis-point fields are integers
+* NAV is positive
+* cash is non-negative
+* liquidity capacity rates are between 0 and 1
+* haircut rates are between 0 and 1
+* redemption rates are between 0 and 1
+* investor-class NAV shares sum to 1 per fund and date
+* position market values reconcile to fund NAV within a documented tolerance
+* repo financing exposures are handled separately from liquid assets
+* reverse repo maturity treatment is explicit
+* no duplicate primary keys exist
+* scenario fund IDs exist in the relevant input files
+* required LMT parameters exist for each scenario
+
+Do not silently coerce invalid dates, percentages, monetary values, or missing fields.
+
+Validation errors must be explicit and domain-specific.
+
+---
+
+## Asset-side modelling rules
+
+The V1 asset universe is:
+
+* cash
+* listed equities
+* listed ETFs
+* reverse repos
+* repo financing exposures
+
+For listed equities and ETFs, the model may use:
+
+* market value
+* beta
+* benchmark
+* base haircut rate
+* stressed haircut rate
+* base liquidation capacity rate
+* stressed liquidation capacity rate
+* settlement days
+
+The engine should separate:
+
+* market stress: price or market value impact
+* liquidity stress: haircut and liquidation capacity impact
+* redemption stress: liability-side outflow
+
+For V1, do not rely on live market data. Use synthetic but realistic sample data.
+
+Optional market data enrichment can be added later, but it must not be required for the core simulator.
+
+---
+
+## Liability-side modelling rules
+
+Liability stress must be built from investor classes, not only a single generic redemption number.
+
+The V1 investor classes are:
+
+* retail
+* institutional
+* platform
+* fund_of_funds
+* seed_capital
+
+Each investor class may have:
+
+* NAV share
+* base redemption rate
+* stressed redemption rate
+* concentration factor
+* notice days
+* settlement days
+
+The engine should calculate:
+
+* redemption amount by investor class
+* total redemption amount
+* largest redeeming class
+* concentration warning
+* notice-period effect where relevant
+
+Platform or nominee investors should be treated as operationally concentrated but potentially diversified underneath.
+
+---
+
+## Liquidation strategy rules
+
+Liquidation must be treated as a configurable strategy, not only a fixed most-liquid-first waterfall.
+
+Version 1 should support at least:
+
+* `most_liquid_first`: uses cash and the most liquid eligible assets first
+* `pro_rata`: preserves the configured minimum cash buffer, then sells eligible non-cash assets proportionally
+* `hybrid`: uses part of available cash above the configured minimum buffer, then sells eligible non-cash assets proportionally
+* `custom_weights`: allocates liquidation needs according to user-defined weights by asset group
+
+Each strategy must respect:
+
+* available cash
+* minimum cash buffer
+* reverse repo maturity
+* settlement days
+* stressed liquidity capacity
+* stressed haircut rate
+* asset eligibility under the stress horizon
+
+The model should not automatically drain all cash or all liquid assets. It must be able to preserve a configured minimum liquidity buffer.
+
+The structured output may be called a waterfall result where useful, but implementation must not assume that the fund automatically depletes the most liquid assets first.
+
+---
+
+## LMT decision rules
+
+The first version should support warnings or triggers for:
+
+* swing pricing
+* redemption gate
+* liquidity buffer breach
+
+The decision engine should return structured results with:
+
+* activated warning flags
+* quantitative reason
+* explanatory message
+* relevant thresholds
+* relevant observed values
+
+Do not hardcode the thresholds inside the engine. Thresholds must come from validated LMT parameter objects.
+
+---
+
+## Audit trail rules
+
+Every scenario run must be traceable.
+
+The result must be able to answer:
+
+* which inputs were used
+* which assumptions were applied
+* which scenario was run
+* which parameters were used
+* which LMT warnings activated
+* why they activated
+* when the run happened
+* where outputs were written
+
+Audit records should be structured data, not prose only.
+
+A scenario run may write outputs such as:
+
+```text
+outputs/runs/<run_id>/
+  input_summary.json
+  parameters.json
+  result.json
+  audit.json
+```
+
+---
+
+## Sample data rules
+
+Sample data must be synthetic but realistic.
+
+Do not use placeholder names such as:
+
+* Asset A
+* Entity B
+* Fund 1
+* Client X
+
+Use realistic fund and instrument names, while making clear that the data is synthetic.
+
+Sample data should include:
+
+* at least one fund snapshot
+* listed equity positions
+* listed ETF positions
+* cash
+* reverse repo exposure
+* repo financing exposure
+* investor-class mix
+* redemption scenarios
+* liquidation strategy configuration
+* LMT parameter sets
+
+Nested liquidation strategy configuration and custom weights should use JSON, such as:
+
+```text
+data/sample/liquidation_strategies.json
+```
+
+The first version may use one fund and one snapshot. More funds and snapshots can be added later.
+
+---
+
+## Streamlit rules
+
+Streamlit code belongs outside the core package unless the project structure says otherwise.
+
+Recommended location:
+
+```text
+app/streamlit_app.py
+```
+
+Streamlit code may:
+
+* display controls
+* build scenario objects from user input
+* call application services
+* display result tables
+* display charts
+* display warning panels
+
+Streamlit code must not:
+
+* calculate market stress
+* calculate liquidity haircuts
+* calculate liquidation strategy results
+* calculate dilution
+* decide LMT trigger activation
+* validate raw input schemas directly
+
+---
+
+## Documentation rules
+
+Update documentation when implementation decisions change.
+
+Use:
+
+* `README.md` for project purpose and usage
+* `ARCHITECTURE.md` for module boundaries and dependency direction
+* `docs/METHODOLOGY.md` for finance methodology and assumptions
+* `docs/DATA_CONVENTIONS.md` for units, fields, and validation rules
+* `docs/AUDIT_TRAIL.md` for scenario-run traceability
+
+Avoid migration-style wording such as "new" or "now" in documentation intended for first-time readers.
+
+---
+
+## Naming rules
+
+The repository name is:
+
+```text
+lmt-calibration
+```
+
+The package name is:
+
+```text
+lmt_calibration
+```
+
+The public project title is:
+
+```text
+Liquidity Management Tools Calibration
+```
+
+Use the full phrase in README and documentation so that the regulatory and fund-risk context is clear.
+
+---
+
+## Current V1 scope
+
+The V1 product should remain focused.
+
+Include:
+
+* one synthetic fund snapshot
+* one-period scenario
+* cash, listed equities, listed ETFs, reverse repo, and repo exposure
+* investor classes
+* redemption stress
+* market stress
+* liquidity stress
+* configurable liquidation strategy
+* swing pricing warning
+* gate warning
+* liquidity buffer warning
+* audit trail
+* Streamlit calibration app later, after the calculation engine is stable
+
+Later versions may include:
+
+* 12-month redemption path by investor class
+* stochastic redemptions by investor class
+* selected stress months
+* intra-month liquidation schedule
+* price impact comparison across liquidation strategies
+* strategy comparison view in Streamlit
+* historical or synthetic redemption-flow calibration
+
+Exclude for V1:
+
+* corporate bonds
+* derivatives
+* private debt
+* real estate
+* side pockets
+* 12-month redemption path
+* stochastic redemptions by investor class
+* selected stress months
+* intra-month liquidation schedule
+* price impact comparison across liquidation strategies
+* strategy comparison view in Streamlit
+* full price-impact modelling
+* live market-data dependency
+* database persistence
+* Kubernetes
+* cloud deployment
+* Docker before the app runs locally
+
+---
+
+## When stuck
+
+If the specification is incomplete, stop and ask.
+
+Do not invent:
+
+* LMT methodology
+* calibration thresholds
+* regulatory interpretations
+* hidden default assumptions
+* new asset classes
+* new investor classes
+* extra workflow layers
+
+Prefer a small tested implementation over a broad but unclear one.
