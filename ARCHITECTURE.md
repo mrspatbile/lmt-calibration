@@ -26,46 +26,59 @@ audit records / Streamlit display
 
 ## Package structure
 
+Implemented structure:
+
 ```text
-src/lmt_calibration/
-  domain/
-    fund.py
-    positions.py
-    investors.py
-    scenarios.py
-    parameters.py
-    results.py
+📁 src/lmt_calibration/
+├── 📁 domain/
+│   ├── fund.py
+│   ├── positions.py
+│   ├── investors.py
+│   ├── scenarios.py
+│   ├── parameters.py
+│   └── results.py
+├── 📁 validation/
+│   ├── errors.py
+│   ├── field_checks.py
+│   ├── liquidation_config.py
+│   └── rules.py
+├── 📁 loaders/
+│   ├── csv_loaders.py
+│   └── json_loaders.py
+```
 
-  validation/
-    schemas.py
-    rules.py
+Planned later:
 
-  loaders/
-    csv_loader.py
+```text
+📁 src/lmt_calibration/
+├── 📁 engines/
+│   ├── asset_stress.py
+│   ├── liability_stress.py
+│   ├── liquidation_strategy.py
+│   └── decisions.py
+├── 📁 audit/
+│   ├── records.py
+│   └── writer.py
+└── 📁 reporting/
+    └── summaries.py
 
-  engines/
-    asset_stress.py
-    liability_stress.py
-    liquidation_strategy.py
-    decisions.py
+📁 app/
+└── streamlit_app.py
+```
 
-  audit/
-    records.py
-    writer.py
+Sample data:
 
-  reporting/
-    summaries.py
-
-app/
-  streamlit_app.py
-
-data/sample/
-  funds.csv
-  positions.csv
-  investor_classes.csv
-  redemption_scenarios.csv
-  lmt_parameters.csv
-  liquidation_strategies.json
+```text
+📁 data/sample/
+├── funds.csv
+├── positions.csv
+├── investor_classes.csv
+├── redemption_scenarios.csv
+├── market_stresses.csv
+├── liquidity_stresses.csv
+├── scenario_definitions.csv
+├── lmt_parameters.csv
+└── liquidation_strategies.json
 ```
 
 ## Dependency direction
@@ -164,14 +177,16 @@ The engine handles strategy-specific liquidation allocation and returns a consis
 
 ### LMT decision engine
 
-Converts results into warnings and trigger analysis.
+Converts results into threshold checks and warning analysis.
 
 It handles:
 
-* swing-pricing warning
-* redemption-gate warning
-* liquidity-buffer warning
+* swing-pricing threshold check
+* redemption-gate threshold check
+* liquidity-buffer threshold check
 * explanatory messages
+
+The project reports threshold checks and warnings. It does not decide whether a fund manager should activate an LMT.
 
 ## Streamlit responsibilities
 
@@ -188,7 +203,7 @@ Streamlit must not:
 * calculate market stress
 * calculate liquidation strategy results
 * calculate dilution
-* decide LMT trigger activation
+* decide whether an LMT should be activated
 * validate raw CSV schemas directly
 
 ## Audit responsibilities
@@ -200,7 +215,7 @@ Every scenario run should be traceable to:
 * scenario parameters
 * liquidation strategy configuration
 * calculation results
-* warning triggers
+* reported threshold checks and warnings
 * timestamp
 * run identifier
 

@@ -12,6 +12,7 @@ The calibrated parameters are swing-pricing thresholds, redemption-gate threshol
 Calibration results are tested across configurable liquidation strategies and reported through dilution estimates, cash-buffer usage, shortfall analysis, and LMT warning flags.
 
 The stress framework combines:
+
 * liability-side pressure from investor redemptions by client class
 * asset-side pressure from market shocks, liquidity haircuts, liquidation limits, and settlement constraints
 
@@ -26,9 +27,10 @@ This project uses the liquidity-management framework for UCITS and open-ended AI
 It is a non-production portfolio implementation for structured liquidity stress testing, configurable liquidation strategies, and LMT calibration analysis. It is not regulatory advice and does not replicate a production ManCo risk system.
 
 ---
+
 ## Version 1 scope
 
-Version 1 is a one-period liquidity stress and LMT calibration workflow.
+The first version is a one-period liquidity stress and LMT calibration workflow.
 
 It covers investor-class redemption stress, asset market and liquidity stress, configurable liquidation strategies, dilution, shortfall, cash-buffer analysis, and LMT threshold checks.
 
@@ -36,7 +38,15 @@ Later versions may add multi-period redemption paths, reverse stress testing, be
 
 ## Documentation
 
-For methodology and implementation details, see [`docs/`](docs/), [`ARCHITECTURE.md`](ARCHITECTURE.md), and [`RUNBOOK.md`](RUNBOOK.md).
+Key documentation:
+
+* [`docs/METHODOLOGY.md`](docs/METHODOLOGY.md) describes the stress methodology.
+* [`docs/DATA_REFERENCE.md`](docs/DATA_REFERENCE.md) explains the data workflow and dataset relationships.
+* [`docs/DATA_SCHEMA.md`](docs/DATA_SCHEMA.md) documents the field-level schemas for input files.
+* [`docs/DATA_CONVENTIONS.md`](docs/DATA_CONVENTIONS.md) defines shared naming, unit, date, and validation conventions.
+* [`docs/AUDIT_TRAIL.md`](docs/AUDIT_TRAIL.md) describes scenario-run traceability.
+* [`ARCHITECTURE.md`](ARCHITECTURE.md) describes module boundaries.
+* [`RUNBOOK.md`](RUNBOOK.md) describes local project operations.
 
 ## Setup
 

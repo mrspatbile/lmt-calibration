@@ -213,9 +213,11 @@ Repo financing exposures are treated separately as liquidity obligations.
 
 ## Scenario to strategy mapping
 
-Each redemption scenario references exactly one `liquidation_strategy_id` in Version 1.
+Each scenario definition in `scenario_definitions.csv` references exactly one `liquidation_strategy_id` in Version 1.
 
-Nested liquidation strategy configuration and custom strategy weights belong in `data/sample/liquidation_strategies.json`, not in `redemption_scenarios.csv`.
+Redemption scenarios remain reusable liability-side assumptions and do not reference liquidation strategies.
+
+Nested liquidation strategy configuration and custom strategy weights belong in `data/sample/liquidation_strategies.json`, not in scenario definition or redemption scenario CSV files.
 
 Future scenario comparison runs can be handled by a separate run configuration or scenario pack.
 

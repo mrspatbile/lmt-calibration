@@ -37,3 +37,16 @@ dist/
 
 # Human
 /meta/
+
+# data
+data/raw/*
+!data/raw/.gitkeep
+
+data/cleaned/*
+!data/cleaned/.gitkeep
+
+outputs/audit/*
+!outputs/audit/.gitkeep
+
+outputs/reports/*
+!outputs/reports/.gitkeep

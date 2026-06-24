@@ -16,8 +16,8 @@ Each scenario run should answer:
 - which assumptions were applied
 - which liquidation strategy was used
 - which LMT parameters were used
-- which warnings activated
-- why they activated
+- which warnings were reported
+- why they were reported
 - when the run happened
 - which output files were written
 
@@ -25,11 +25,11 @@ Each scenario run should answer:
 
 Each scenario run should have a unique `run_id`.
 
-Suggested format:
+Format:
 
 ```text
 YYYYMMDD_HHMMSS_<scenario_id>
-````
+```
 
 Example:
 
@@ -40,12 +40,12 @@ Example:
 ## Suggested output structure
 
 ```text
-outputs/
-  audit/
-    <run_id>_audit.json
-  reports/
-    <run_id>_summary.json
-    <run_id>_results.csv
+📁 outputs/
+├── 📁 audit/
+│   └── <run_id>_audit.json
+└── 📁 reports/
+    ├── <run_id>_summary.json
+    └── <run_id>_results.csv
 ```
 
 Audit records are saved as structured JSON runtime outputs under `outputs/audit/`.
@@ -131,7 +131,7 @@ The audit record should include:
 * liquidation strategy configuration
 * validation results
 * calculation summary
-* warnings activated
+* warnings reported
 * output file paths
 
 ## Audit design rules
@@ -166,4 +166,3 @@ Later versions may add:
 * monthly redemption pressure by investor class
 * monthly liquidity-management response
 * LMT warning path through time
-

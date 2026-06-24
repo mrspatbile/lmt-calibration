@@ -23,6 +23,8 @@ Read these files before implementing any module:
 
 - `ARCHITECTURE.md`
 - `docs/METHODOLOGY.md`
+- `docs/DATA_REFERENCE.md`
+- `docs/DATA_SCHEMA.md`
 - `docs/DATA_CONVENTIONS.md`
 - `docs/AUDIT_TRAIL.md`
 
@@ -34,7 +36,9 @@ If any of these files are missing or incomplete, ask before implementing busines
 
 The application should answer:
 
-> Given a fund liquidity profile, investor redemption behaviour, asset market stress, and liquidity stress assumptions, which LMT warnings or triggers activate and why?
+> Given a fund liquidity profile, investor redemption behaviour, asset market stress, and liquidity stress assumptions, which LMT threshold checks or warnings are raised and why?
+
+The project reports threshold checks and warnings. It does not decide whether a fund manager should activate an LMT.
 
 The first version should support:
 
@@ -102,6 +106,8 @@ Build the project in this order:
 1. Project documentation
    - `ARCHITECTURE.md`
    - `docs/METHODOLOGY.md`
+   - `docs/DATA_REFERENCE.md`
+   - `docs/DATA_SCHEMA.md`
    - `docs/DATA_CONVENTIONS.md`
    - `docs/AUDIT_TRAIL.md`
 
@@ -376,7 +382,7 @@ The structured output may be called a waterfall result where useful, but impleme
 
 ## LMT decision rules
 
-The first version should support warnings or triggers for:
+The first version should report threshold checks and warnings for:
 
 * swing pricing
 * redemption gate
@@ -384,11 +390,13 @@ The first version should support warnings or triggers for:
 
 The decision engine should return structured results with:
 
-* activated warning flags
+* reported warning flags
 * quantitative reason
 * explanatory message
 * relevant thresholds
 * relevant observed values
+
+The project reports threshold checks and warnings. It does not decide whether a fund manager should activate an LMT.
 
 Do not hardcode the thresholds inside the engine. Thresholds must come from validated LMT parameter objects.
 
@@ -404,8 +412,8 @@ The result must be able to answer:
 * which assumptions were applied
 * which scenario was run
 * which parameters were used
-* which LMT warnings activated
-* why they activated
+* which LMT warnings were reported
+* why they were reported
 * when the run happened
 * where outputs were written
 
@@ -414,11 +422,12 @@ Audit records should be structured data, not prose only.
 A scenario run may write outputs such as:
 
 ```text
-outputs/runs/<run_id>/
-  input_summary.json
-  parameters.json
-  result.json
-  audit.json
+outputs/audit/
+  <run_id>_audit.json
+
+outputs/reports/
+  <run_id>_summary.json
+  <run_id>_results.csv
 ```
 
 ---
@@ -484,7 +493,7 @@ Streamlit code must not:
 * calculate liquidity haircuts
 * calculate liquidation strategy results
 * calculate dilution
-* decide LMT trigger activation
+* decide whether an LMT should be activated
 * validate raw input schemas directly
 
 ---
@@ -498,7 +507,9 @@ Use:
 * `README.md` for project purpose and usage
 * `ARCHITECTURE.md` for module boundaries and dependency direction
 * `docs/METHODOLOGY.md` for finance methodology and assumptions
-* `docs/DATA_CONVENTIONS.md` for units, fields, and validation rules
+* `docs/DATA_REFERENCE.md` for data flow and dataset relationships
+* `docs/DATA_SCHEMA.md` for input file fields and formats
+* `docs/DATA_CONVENTIONS.md` for shared units, naming, formats, and validation principles
 * `docs/AUDIT_TRAIL.md` for scenario-run traceability
 
 Avoid migration-style wording such as "new" or "now" in documentation intended for first-time readers.
@@ -529,9 +540,9 @@ Use the full phrase in README and documentation so that the regulatory and fund-
 
 ---
 
-## Current V1 scope
+## Current scope
 
-The V1 product should remain focused.
+The first version should remain focused.
 
 Include:
 
@@ -559,7 +570,7 @@ Later versions may include:
 * strategy comparison view in Streamlit
 * historical or synthetic redemption-flow calibration
 
-Exclude for V1:
+Exclude for first version:
 
 * corporate bonds
 * derivatives
