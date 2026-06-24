@@ -34,6 +34,7 @@ class LiquidationResult(BaseModel):
     total_redemption_amount: Decimal = Field(ge=Decimal("0"))
     cash_used: Decimal = Field(ge=Decimal("0"))
     assets_liquidated: tuple[LiquidatedAssetResult, ...]
+    asset_group_allocations: dict[AssetGroup, Decimal] = Field(default_factory=dict)
     total_post_haircut_cash_raised: Decimal = Field(ge=Decimal("0"))
     total_haircut_cost: Decimal = Field(ge=Decimal("0"))
     shortfall: Decimal = Field(ge=Decimal("0"))
