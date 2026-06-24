@@ -1,6 +1,3 @@
-Copy-paste this as the full `docs/DATA_CONVENTIONS.md`:
-
-````markdown
 # Data Conventions
 
 ## Purpose
@@ -22,33 +19,15 @@ data/
 outputs/
   audit/
   reports/
-````
+```
 
 ## Folder rules
 
 * `data/raw/` contains original input files that are not modified by the app.
 * `data/cleaned/` contains validated or cleaned datasets created from raw inputs.
-`data/sample/` contains synthetic sample data committed to Git for examples and tests.
+* `data/sample/` contains synthetic sample data committed to Git for examples and tests.
 * `outputs/audit/` contains generated JSON audit records for scenario runs.
 * `outputs/reports/` contains generated summaries, tables, charts, or exported reports.
-
-## Git tracking rules
-
-* Commit `data/sample/`.
-* Do not commit `data/raw/`.
-* Do not commit `data/cleaned/`.
-* Do not commit `outputs/`.
-
-Generated data and outputs should be excluded from Git. Tests should write generated files to temporary directories.
-
-Suggested `.gitignore` rules:
-
-```gitignore
-data/raw/
-data/cleaned/
-outputs/
-!data/sample/
-```
 
 ## Numerical representation
 
@@ -77,6 +56,10 @@ Use `Decimal` for:
 * buffer thresholds
 * concentration factors
 * liquidation strategy weights
+* beta
+* duration
+* spread duration
+* delta
 
 ### Basis points
 
@@ -109,6 +92,9 @@ Examples:
 * liquidation amount
 * dilution cost
 * shortfall
+* notional amount
+* entry price
+* strike price
 
 ### Dates
 
@@ -147,6 +133,12 @@ notice_days
 spread_bps
 cash_buffer_use_rate
 liquidation_strategy_id
+redemption_scenario_id
+market_stress_id
+liquidity_stress_id
+scenario_id
+parameter_set_id
+lmt_parameter_set_id
 ```
 
 Avoid unclear names such as:
@@ -170,6 +162,9 @@ data/sample/funds.csv
 data/sample/positions.csv
 data/sample/investor_classes.csv
 data/sample/redemption_scenarios.csv
+data/sample/market_stresses.csv
+data/sample/liquidity_stresses.csv
+data/sample/scenario_definitions.csv
 data/sample/lmt_parameters.csv
 data/sample/liquidation_strategies.json
 ```
@@ -180,6 +175,9 @@ Use CSV for flat tabular inputs:
 * positions
 * investor classes
 * redemption scenarios
+* market stresses
+* liquidity stresses
+* scenario definitions
 * LMT parameters
 
 Use JSON for nested or structured configuration:
@@ -214,12 +212,21 @@ Rules:
 
 ## Position data
 
-Version 1 instrument types:
+Version 1 may start with a narrow operational universe, but the canonical position schema should support later market-risk extensions.
+
+Supported instrument groups:
 
 ```text
 cash
 listed_equity
 listed_etf
+government_bond
+corporate_bond
+fx_forward
+equity_future
+interest_rate_future
+equity_option
+interest_rate_swap
 reverse_repo
 repo_financing
 ```
@@ -230,15 +237,37 @@ Expected fields:
 position_id
 fund_id
 as_of_date
+
+asset_group
 instrument_type
+instrument_subtype
+
 instrument_name
 ticker
 currency
+
 market_value
+notional_amount
+
+risk_factor_id
+underlying_position_id
+underlying_risk_factor_id
+
 beta
+duration_years
+spread_duration_years
+delta
+
+entry_price
+strike_price
+option_type
+expiry_date
+
 benchmark_ticker
+
 base_haircut_rate
 base_liquidity_capacity_rate
+
 settlement_days
 maturity_days
 ```
@@ -247,12 +276,30 @@ Rules:
 
 * `position_id` must be unique per fund and date.
 * `market_value` must be non-negative for assets.
+* `notional_amount` must be non-negative when required.
 * Repo financing exposures must be handled as liquidity obligations, not ordinary liquid assets.
 * Cash must have zero haircut.
 * Cash must have full immediate liquidity capacity.
 * Reverse repo maturity treatment must be explicit.
 * Listed equities and listed ETFs may have beta and benchmark fields.
 * Missing beta is allowed only when the scenario does not use beta-based market stress.
+* Positions may reference `risk_factor_id` for direct market-factor exposure.
+* Derivatives may reference `underlying_position_id` when the underlying is already held in the portfolio.
+* Derivatives may reference `underlying_risk_factor_id` when the underlying is an external risk factor.
+* Do not duplicate full underlying definitions inside derivative positions when `underlying_position_id` is available.
+* Derivative-specific fields are optional in the flat schema but conditionally required by `instrument_subtype`.
+
+Conditional examples:
+
+* `listed_equity` requires `market_value`, `risk_factor_id`, and `beta`.
+* `listed_etf` requires `market_value`, `risk_factor_id`, and may use `beta`.
+* `government_bond` requires `market_value`, `risk_factor_id`, and `duration_years`.
+* `corporate_bond` requires `market_value`, `risk_factor_id`, `duration_years`, and `spread_duration_years`.
+* `equity_future` requires `notional_amount`, `entry_price`, `delta`, and `underlying_risk_factor_id`.
+* `interest_rate_future` requires `notional_amount`, `entry_price`, `delta`, and `underlying_risk_factor_id`.
+* `equity_option` requires `notional_amount`, `strike_price`, `option_type`, `expiry_date`, `delta`, and either `underlying_position_id` or `underlying_risk_factor_id`.
+* `fx_forward` requires `notional_amount`, `entry_price`, `expiry_date`, `delta`, and `underlying_risk_factor_id`.
+* `interest_rate_swap` requires `notional_amount`, `underlying_risk_factor_id`, and either `duration_years` or another documented sensitivity measure.
 
 ## Investor class data
 
@@ -292,31 +339,121 @@ Rules:
 
 ## Redemption scenario data
 
+A redemption scenario represents liability-side redemption assumptions only.
+
+Redemption scenarios are reusable. They are not tied directly to `fund_id`, `as_of_date`, market stress, liquidity stress, liquidation strategy, or LMT parameter set.
+
+Expected fields:
+
+```text
+redemption_scenario_id
+version
+name
+description
+redemption_multiplier
+```
+
+Rules:
+
+* `redemption_scenario_id` must be unique.
+* `version` is required.
+* `name` is required and must use snake_case.
+* `description` is required.
+* `redemption_multiplier` must be positive.
+* Redemption scenario data must not include `fund_id` or `as_of_date`.
+* Redemption scenario data must not include `market_stress_id`, `liquidity_stress_id`, `liquidation_strategy_id`, or `lmt_parameter_set_id`.
+* Investor-class redemption behaviour comes from investor class data and the selected redemption scenario multiplier.
+
+## Market stress data
+
+A market stress represents reusable asset-side market shock assumptions.
+
+Expected fields:
+
+```text
+market_stress_id
+version
+name
+description
+market_shock_rate
+```
+
+Rules:
+
+* `market_stress_id` must be unique.
+* `version` is required.
+* `name` is required and must use snake_case.
+* `description` is required.
+* `market_shock_rate` must be stored as a decimal value.
+* `market_shock_rate` may be negative where it represents a price decline.
+* Market stress data must not include `fund_id` or `as_of_date`.
+
+Later market stress designs may support a set of risk-factor shocks instead of a single `market_shock_rate`.
+
+Examples:
+
+```text
+euro_equity
+us_equity
+eur_rates_5y
+eur_credit_spread_ig
+eur_usd
+```
+
+## Liquidity stress data
+
+A liquidity stress represents reusable asset-side liquidity shock assumptions.
+
+Expected fields:
+
+```text
+liquidity_stress_id
+version
+name
+description
+liquidity_stress_multiplier
+stress_horizon_days
+```
+
+Rules:
+
+* `liquidity_stress_id` must be unique.
+* `version` is required.
+* `name` is required and must use snake_case.
+* `description` is required.
+* `liquidity_stress_multiplier` must be positive.
+* `stress_horizon_days` must be positive.
+* Liquidity stress data must not include `fund_id` or `as_of_date`.
+
+## Scenario definition data
+
+A scenario definition is the object that links a fund snapshot to the selected reusable assumptions.
+
 Expected fields:
 
 ```text
 scenario_id
 fund_id
 as_of_date
-scenario_name
-description
-redemption_multiplier
-market_shock_rate
-liquidity_stress_multiplier
-stress_horizon_days
+redemption_scenario_id
+market_stress_id
+liquidity_stress_id
 liquidation_strategy_id
+lmt_parameter_set_id
 ```
 
 Rules:
 
 * `scenario_id` must be unique.
-* `redemption_multiplier` must be positive.
-* `liquidity_stress_multiplier` must be positive.
-* `stress_horizon_days` must be positive.
-* `liquidation_strategy_id` must reference exactly one strategy in the JSON liquidation strategy configuration.
-* Scenario fund and date must exist in the fund snapshot data.
-* Nested liquidation strategy settings must be stored in JSON configuration, not in `redemption_scenarios.csv`.
-* Custom liquidation weights must be stored in JSON configuration, not in `redemption_scenarios.csv`.
+* `fund_id` and `as_of_date` must reference an existing fund snapshot.
+* Each scenario definition must reference exactly one `redemption_scenario_id`.
+* Each scenario definition must reference exactly one `market_stress_id`.
+* Each scenario definition must reference exactly one `liquidity_stress_id`.
+* Each scenario definition must reference exactly one `liquidation_strategy_id`.
+* Each scenario definition must reference exactly one `lmt_parameter_set_id`.
+* Nested liquidation strategy settings must be stored in JSON configuration, not in `scenario_definitions.csv`.
+* Custom liquidation weights must be stored in JSON configuration, not in `scenario_definitions.csv`.
+* Scenario definition data must not include custom strategy configuration fields.
 
 ## Liquidation strategy data
 
@@ -370,6 +507,7 @@ Rules:
 * Unknown top-level fields should fail validation unless explicitly allowed.
 * Unknown strategy fields should fail validation unless explicitly allowed.
 * Required fields must not use silent defaults.
+* JSON/config envelope `schema_version` is separate from object-level `version`.
 
 Example:
 
@@ -381,9 +519,11 @@ Example:
   "description": "Synthetic liquidation strategy configuration for sample LMT scenarios.",
   "strategies": [
     {
-      "strategy_id": "balanced_custom_weights",
-      "strategy_type": "custom_weights",
+      "liquidation_strategy_id": "balanced_custom_weights",
+      "version": "1.0",
+      "name": "balanced_custom_weights",
       "description": "Preserves the minimum cash buffer and allocates sales across eligible ETFs and equities.",
+      "strategy_type": "custom_weights",
       "cash_buffer_use_rate": "0.50",
       "preserve_minimum_buffer": true,
       "weights": {
@@ -411,12 +551,13 @@ minimum_buffer_rate
 
 Rules:
 
+* `parameter_set_id` must be explicit and traceable.
 * Threshold rates must be between 0 and 1.
 * `max_swing_factor_rate` must be between 0 and 1.
 * `minimum_buffer_rate` must be between 0 and 1.
 * `minimum_buffer_rate` is the only Version 1 source for the minimum cash buffer.
 * Required LMT parameters must not use hidden defaults.
-* Parameter sets must be explicit and traceable.
+* Parameter sets are linked to scenario runs through `lmt_parameter_set_id` in scenario definition data.
 
 ## Validation rules
 
@@ -430,14 +571,26 @@ Validation must check:
 * positive NAV
 * non-negative asset values
 * valid currencies
+* valid instrument groups
 * valid instrument types
-* rates between 0 and 1
+* valid instrument subtypes
+* rates between 0 and 1 where applicable
+* positive multipliers where applicable
 * basis-point fields as integers
 * investor-class NAV shares summing to 1
 * position values reconciling to NAV within documented tolerance
-* scenario references matching existing fund snapshots
-* each scenario referencing exactly one `liquidation_strategy_id`
-* LMT parameters existing for each scenario
+* conditional position fields required by `instrument_subtype`
+* derivative references to `underlying_position_id` or `underlying_risk_factor_id`
+* scenario definition references matching existing fund snapshots
+* scenario definition references exactly one redemption scenario
+* scenario definition references exactly one market stress
+* scenario definition references exactly one liquidity stress
+* scenario definition references exactly one liquidation strategy
+* scenario definition references exactly one LMT parameter set
+* redemption scenarios do not contain fund/date or strategy fields
+* market stresses do not contain fund/date fields
+* liquidity stresses do not contain fund/date fields
+* LMT parameters existing for each scenario definition
 * liquidation strategies using supported strategy names
 * custom liquidation weights summing to 1 per scenario where applicable
 * liquidation strategy inputs respecting asset eligibility, maturity, settlement, stressed capacity, and stressed haircut constraints
@@ -472,6 +625,25 @@ Rules:
 * Stress months must identify where stressed redemption rates replace or augment base monthly assumptions.
 * Path results must support cumulative redemption pressure, monthly liquidity-management response, and LMT warning status through time.
 
+## Future fixed-income rollover convention
+
+Later multi-period versions may need an explicit maturity and reinvestment convention for fixed-income instruments.
+
+In a multi-period liquidity simulation, fixed-income instruments may mature before the end of the simulation horizon. If no reinvestment rule is defined, the portfolio may lose duration, spread exposure, and interest-rate sensitivity for reasons unrelated to market movements or investor redemptions.
+
+A future methodology may define a rollover rule where maturing principal is reinvested into a synthetic replacement exposure that preserves selected risk characteristics, such as:
+
+* asset class
+* currency
+* issuer or rating bucket
+* duration target
+* spread duration
+* liquidity profile
+* haircut assumptions
+* liquidation capacity assumptions
+
+This rule is not part of Version 1.
+
 ## Synthetic data rules
 
 Sample data must be synthetic but realistic.
@@ -505,4 +677,3 @@ Each module dealing with data should include:
 * module-level docstring explaining unit conventions
 * field-level descriptions for non-obvious fields
 * examples where values could be misread
-
