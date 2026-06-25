@@ -4,7 +4,7 @@
 
 This repository implements **Liquidity Management Tools Calibration** for fund liquidity risk.
 
-The project is a Python and Streamlit application for testing LMT parameters under redemption and asset-side liquidity stress scenarios. It models both sides of liquidity stress:
+The project is a Python and Streamlit application for calibrating and assessing LMT thresholds under redemption and asset-side liquidity stress scenarios. It models both sides of liquidity stress:
 
 - liability-side stress: investor redemptions by client class
 - asset-side stress: market shocks, liquidation capacity, haircuts, and settlement constraints
@@ -36,9 +36,11 @@ If any of these files are missing or incomplete, ask before implementing busines
 
 The application should answer:
 
-> Given a fund liquidity profile, investor redemption behaviour, asset market stress, and liquidity stress assumptions, which LMT threshold checks or warnings are raised and why?
+> Given a fund liquidity profile, investor redemption behaviour, asset market stress, and liquidity stress assumptions, what LMT thresholds are coherent for swing pricing, redemption gates, and liquidity buffers under the tested stress case, and what diagnostic warnings explain the result?
 
-The project reports threshold checks and warnings. It does not decide whether a fund manager should activate an LMT.
+The project calibrates and assesses Liquidity Management Tool thresholds for a fund under liquidity stress assumptions. Version 1 focuses on single-fund, single-period stress cases and uses liquidation outputs to compare proposed or reference thresholds for swing pricing, redemption gates, and liquidity buffers. Warning checks are diagnostic outputs that support calibration and review; they are not the central product objective.
+
+The project does not decide whether a fund manager should activate an LMT.
 
 The first version should support:
 
@@ -48,9 +50,9 @@ The first version should support:
 - liquidation capacity constraints
 - configurable liquidation strategy
 - dilution estimate
-- swing pricing warning
-- redemption gate warning
-- liquidity buffer warning
+- swing pricing threshold assessment and diagnostic warning
+- redemption gate threshold assessment and diagnostic warning
+- liquidity buffer threshold assessment and diagnostic warning
 - structured audit trail for scenario runs
 - Streamlit interface for scenario calibration
 
@@ -150,10 +152,11 @@ Build the project in this order:
    - shortfall calculation
    - dilution calculation
 
-7. LMT decision engine
-   - swing pricing warning
-   - gate warning
-   - liquidity buffer warning
+7. LMT calibration and diagnostic layer
+   - swing pricing threshold assessment
+   - gate threshold assessment
+   - liquidity buffer threshold assessment
+   - diagnostic warning flags
    - explanatory messages
 
 8. Audit trail
@@ -380,15 +383,15 @@ The structured output may be called a waterfall result where useful, but impleme
 
 ---
 
-## LMT decision rules
+## LMT calibration and diagnostic rules
 
-The first version should report threshold checks and warnings for:
+The first version should calibrate and assess LMT thresholds for:
 
 * swing pricing
 * redemption gate
-* liquidity buffer breach
+* liquidity buffer
 
-The decision engine should return structured results with:
+Diagnostic outputs should support threshold calibration and reviewer interpretation. They may include:
 
 * reported warning flags
 * quantitative reason
@@ -396,7 +399,9 @@ The decision engine should return structured results with:
 * relevant thresholds
 * relevant observed values
 
-The project reports threshold checks and warnings. It does not decide whether a fund manager should activate an LMT.
+Warning flags, observed values, threshold comparisons, and messages are diagnostic outputs. They are not the central project objective.
+
+The project does not decide whether a fund manager should activate an LMT.
 
 Do not hardcode the thresholds inside the engine. Thresholds must come from validated LMT parameter objects.
 
@@ -412,8 +417,9 @@ The result must be able to answer:
 * which assumptions were applied
 * which scenario was run
 * which parameters were used
-* which LMT warnings were reported
-* why they were reported
+* which threshold values were used or assessed
+* which diagnostic warnings or checks were reported
+* why diagnostic outputs were reported
 * when the run happened
 * where outputs were written
 
@@ -556,9 +562,10 @@ Include:
 * market stress
 * liquidity stress
 * configurable liquidation strategy
-* swing pricing warning
-* gate warning
-* liquidity buffer warning
+* swing pricing threshold assessment
+* gate threshold assessment
+* liquidity buffer threshold assessment
+* diagnostic warnings
 * audit trail
 * Streamlit calibration app later, after the calculation engine is stable
 

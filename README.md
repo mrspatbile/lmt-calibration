@@ -9,7 +9,7 @@
 
 The calibrated parameters are swing-pricing thresholds, redemption-gate thresholds, and liquidity-buffer thresholds.
 
-Calibration results are tested across configurable liquidation strategies and reported through dilution estimates, cash-buffer usage, shortfall analysis, and LMT warning flags.
+Calibration results are assessed across configurable liquidation strategies and supported by dilution estimates, cash-buffer usage, shortfall analysis, threshold comparisons, and diagnostic warning flags.
 
 The stress framework combines:
 
@@ -32,7 +32,7 @@ It is a non-production portfolio implementation for structured liquidity stress 
 
 The first version is a one-period liquidity stress and LMT calibration workflow.
 
-It covers investor-class redemption stress, asset market and liquidity stress, configurable liquidation strategies, dilution, shortfall, cash-buffer analysis, and LMT threshold checks.
+It covers investor-class redemption stress, asset market and liquidity stress, configurable liquidation strategies, dilution, shortfall, cash-buffer analysis, and diagnostic threshold assessment for calibration review.
 
 Later versions may add multi-period redemption paths, reverse stress testing, behavioural redemption feedback, asset-side contagion effects, and strategy comparison views.
 

@@ -55,7 +55,7 @@ Planned later:
 │   ├── asset_stress.py
 │   ├── liability_stress.py
 │   ├── liquidation_strategy.py
-│   └── decisions.py
+│   └── lmt_calibration.py
 ├── 📁 audit/
 │   ├── records.py
 │   └── writer.py
@@ -113,7 +113,7 @@ Expected domain objects:
 * liquidation strategy configuration
 * LMT parameter set
 * liquidation result
-* LMT decision result
+* LMT calibration and diagnostic result
 * audit record
 
 Domain models should contain data and simple derived properties only. Complex calculations belong in engines.
@@ -175,18 +175,19 @@ It handles:
 
 The engine handles strategy-specific liquidation allocation and returns a consistent liquidation result object regardless of selected strategy. The structured output may be called a liquidation result or waterfall result, but the engine must not assume that selling the most liquid assets first is the only valid method.
 
-### LMT decision engine
+### LMT calibration and diagnostic layer
 
-Converts results into threshold checks and warning analysis.
+Uses stress and liquidation outputs to assess proposed or reference LMT thresholds. Diagnostic checks compare observed stress metrics against threshold values and explain warning flags where relevant.
 
-It handles:
+Conceptually, this layer supports:
 
-* swing-pricing threshold check
-* redemption-gate threshold check
-* liquidity-buffer threshold check
-* explanatory messages
+* swing-pricing threshold assessment
+* redemption-gate threshold assessment
+* liquidity-buffer threshold assessment
+* diagnostic warnings, breach flags, and explanatory messages
+* comparison of observed stress metrics against threshold values
 
-The project reports threshold checks and warnings. It does not decide whether a fund manager should activate an LMT.
+Warnings and breach checks are diagnostic support for calibration and review; they are not the main architectural output. The project does not decide whether a fund manager should activate an LMT.
 
 ## Streamlit responsibilities
 
@@ -215,7 +216,8 @@ Every scenario run should be traceable to:
 * scenario parameters
 * liquidation strategy configuration
 * calculation results
-* reported threshold checks and warnings
+* threshold values used or assessed
+* diagnostic checks and warnings
 * timestamp
 * run identifier
 
@@ -231,7 +233,7 @@ Version 1 includes:
 * asset market stress
 * asset liquidity stress
 * cash, listed equities, listed ETFs, reverse repos, and repo financing exposures
-* LMT warnings
+* LMT threshold assessment diagnostics
 * file-based audit records
 * Streamlit calibration interface later, after the calculation engine is stable
 

@@ -4,7 +4,7 @@
 
 This document defines how scenario runs should be recorded.
 
-The audit trail allows each result to be traced back to inputs, assumptions, parameters, calculation outputs, warnings, and generated output files.
+The audit trail allows each result to be traced back to inputs, assumptions, parameters, liquidation outputs, threshold values used or assessed, diagnostic warnings, and generated output files.
 
 ## Audit objective
 
@@ -15,9 +15,10 @@ Each scenario run should answer:
 - which scenario was run
 - which assumptions were applied
 - which liquidation strategy was used
-- which LMT parameters were used
-- which warnings were reported
-- why they were reported
+- which LMT threshold values were used or assessed
+- which liquidation outputs supported threshold assessment
+- which diagnostic warnings or checks were reported
+- why diagnostic outputs were reported
 - when the run happened
 - which output files were written
 
@@ -93,10 +94,10 @@ The audit record should include:
 * cash buffer rule
 * cash buffer use rate, if applicable
 * whether the minimum cash buffer should be preserved
-* swing-pricing threshold
+* swing-pricing threshold value used or assessed
 * max swing factor
-* gate threshold
-* minimum buffer threshold
+* gate threshold value used or assessed
+* minimum buffer threshold value used or assessed
 
 ### Result
 
@@ -104,19 +105,22 @@ The audit record should include:
 
 * total redemption amount
 * redemption amount by investor class
+* total redemption rate
 * cash used
 * assets liquidated
 * liquidation strategy used
 * strategy allocation by asset group
 * whether the minimum cash buffer was preserved
+* gross sales
 * haircut cost
 * post-haircut cash raised
 * shortfall
 * dilution amount
 * dilution rate
 * remaining liquidity buffer
-* warning flags
-* explanatory messages
+* threshold values used or assessed
+* diagnostic warning flags or checks
+* explanatory messages, where available
 
 ### Audit metadata
 
@@ -131,7 +135,8 @@ The audit record should include:
 * liquidation strategy configuration
 * validation results
 * calculation summary
-* warnings reported
+* threshold assessment summary
+* diagnostic warnings reported
 * output file paths
 
 ## Audit design rules
@@ -140,7 +145,7 @@ The audit record should include:
 * Audit records should not rely on prose only.
 * Audit records should not include confidential data.
 * Audit records should be reproducible from the same inputs and parameters.
-* Audit records should preserve enough information to explain each warning.
+* Audit records should preserve enough information to explain threshold assessment diagnostics and warning flags.
 * Audit records should distinguish input assumptions from calculated results.
 * Audit records should be generated outputs, not source files.
 * Tests should write audit records to temporary directories rather than committed output folders.
@@ -165,4 +170,4 @@ Later versions may add:
 * 12-month redemption path records
 * monthly redemption pressure by investor class
 * monthly liquidity-management response
-* LMT warning path through time
+* LMT threshold assessment and diagnostic path through time

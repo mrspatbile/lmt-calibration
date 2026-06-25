@@ -11,15 +11,15 @@ The project is a methodology prototype for structured liquidity stress testing, 
 The application should answer:
 
 ```text
-Given a fund liquidity profile, investor redemption behaviour, market stress, and liquidity stress assumptions, which LMT thresholds are breached and why?
+Given a fund liquidity profile, investor redemption behaviour, asset market stress, and liquidity stress assumptions, what LMT thresholds are coherent for swing pricing, redemption gates, and liquidity buffers under the tested stress case, and what diagnostic warnings explain the result?
 ```
 
 ## Methodology roadmap
 
 | Version   | Horizon                      | Main objective                                                | Included methodology                                                                                                                                                                             | Not included                                                                                                     |
 | --------- | ---------------------------- | ------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------- |
-| Version 1 | One-period stress event      | Calibrate LMT thresholds under a single redemption shock      | Investor-class redemption stress, asset market stress, asset liquidity stress, configurable liquidation strategy, dilution estimate, shortfall analysis, cash-buffer check, LMT threshold checks | Redemption path, deferred redemption backlog, behavioural feedback, asset-side contagion, reverse stress testing |
-| Version 2 | Multi-period redemption path | Track liquidity and LMT pressure through time                 | Monthly redemption path, repeated LMT checks, deferred redemptions, behavioural redemption feedback, liquidity-management response through time                                                  | Full reverse stress testing, advanced market contagion model                                                     |
+| Version 1 | One-period stress event      | Calibrate and assess LMT thresholds under a single redemption shock      | Investor-class redemption stress, asset market stress, asset liquidity stress, configurable liquidation strategy, dilution estimate, shortfall analysis, cash-buffer analysis, threshold assessment diagnostics | Redemption path, deferred redemption backlog, behavioural feedback, asset-side contagion, reverse stress testing |
+| Version 2 | Multi-period redemption path | Track liquidity and LMT pressure through time                 | Monthly redemption path, repeated threshold assessment diagnostics, deferred redemptions, behavioural redemption feedback, liquidity-management response through time                                                  | Full reverse stress testing, advanced market contagion model                                                     |
 | Version 3 | Reverse stress and contagion | Identify the shocks that first breach selected LMT thresholds | Reverse stress testing, richer market/liquidity contagion, strategy comparison under breach conditions                                                                                           | Production ManCo workflow, live market-data dependency                                                           |
 
 ## Version 1 scope
@@ -35,9 +35,10 @@ It includes:
 * dilution estimate
 * shortfall analysis
 * cash-buffer analysis
-* swing-pricing threshold check
-* redemption-gate threshold check
-* liquidity-buffer threshold check
+* swing-pricing threshold assessment
+* redemption-gate threshold assessment
+* liquidity-buffer threshold assessment
+* diagnostic warning checks that support calibration review
 * structured audit trail for scenario runs
 
 ## Version 1 exclusions
@@ -62,7 +63,7 @@ Version 1 does not include:
 
 Version 1 uses a one-period stress horizon.
 
-The one-period design represents a single redemption event under stressed market and liquidity assumptions. It is suitable for testing LMT parameter sensitivity, liquidation strategy outcomes, dilution estimates, shortfall risk, and liquidity-buffer pressure at one scenario date.
+The one-period design represents a single redemption event under stressed market and liquidity assumptions. It is suitable for calibrating and assessing LMT parameter sensitivity, liquidation strategy outcomes, dilution estimates, shortfall risk, and liquidity-buffer pressure at one scenario date.
 
 Version 1 does not model a redemption path through time. It does not include monthly redemption dynamics, deferred redemption backlogs, repeated gate decisions, investor behavioural feedback, or asset-side contagion effects across multiple periods.
 
@@ -255,7 +256,7 @@ Dilution represents the estimated cost created by liquidating assets under stres
 dilution_rate = total_dilution_cost / NAV
 ```
 
-Dilution is used to assess whether swing-pricing thresholds are breached.
+Dilution is used to calibrate and assess swing-pricing thresholds. Breach checks against current or reference thresholds are diagnostic outputs.
 
 ## Remaining liquidity buffer
 
@@ -271,29 +272,29 @@ remaining_liquid_buffer_rate = remaining_liquid_resources / NAV
 
 The remaining cash amount must reflect the configured minimum cash buffer rule.
 
-## LMT threshold checks
+## LMT threshold calibration and diagnostics
 
-Version 1 reports threshold checks. It does not decide whether a fund manager should activate an LMT.
+Version 1 calibrates and assesses thresholds using one-period stress outputs. It also reports diagnostic checks against current or reference thresholds. These diagnostics support reviewer interpretation and audit evidence; they do not decide whether a fund manager should activate an LMT.
 
-### Swing-pricing threshold check
+### Swing-pricing threshold assessment
 
-A swing-pricing threshold is breached when estimated dilution exceeds the configured threshold.
+Swing-pricing threshold assessment compares estimated dilution with the proposed or reference threshold. A diagnostic breach is reported when estimated dilution exceeds the configured threshold.
 
 ```text
 dilution_rate > swing_threshold_rate
 ```
 
-The result should report:
+The diagnostic output should report:
 
 * observed dilution rate
-* configured threshold
+* proposed or reference threshold
 * estimated dilution cost
 * liquidation strategy used
-* reason for breach
+* diagnostic reason for any breach
 
-### Redemption-gate threshold check
+### Redemption-gate threshold assessment
 
-A redemption-gate threshold may be breached when redemption pressure exceeds the configured gate threshold or when the liquidation strategy produces a shortfall.
+Redemption-gate threshold assessment compares redemption pressure and liquidation shortfall with the proposed or reference gate threshold. A diagnostic breach may be reported when redemption pressure exceeds the configured gate threshold or when the liquidation strategy produces a shortfall.
 
 ```text
 total_redemption_rate > gate_threshold_rate
@@ -305,25 +306,25 @@ or:
 shortfall > 0
 ```
 
-The result should report:
+The diagnostic output should report:
 
 * total redemption rate
-* configured gate threshold
+* proposed or reference gate threshold
 * shortfall, if any
 * main driver of redemption pressure
 
-### Liquidity-buffer threshold check
+### Liquidity-buffer threshold assessment
 
-A liquidity-buffer threshold is breached when remaining liquid resources fall below the configured minimum buffer.
+Liquidity-buffer threshold assessment compares remaining liquid resources with the proposed or reference minimum buffer. A diagnostic breach is reported when remaining liquid resources fall below the configured minimum buffer.
 
 ```text
 remaining_liquid_buffer_rate < minimum_buffer_rate
 ```
 
-The result should report:
+The diagnostic output should report:
 
 * remaining buffer
-* configured minimum
+* proposed or reference minimum
 * assets consumed by the liquidation strategy
 * whether the configured minimum cash buffer was preserved
 
@@ -341,7 +342,7 @@ The user changes:
 * gate threshold
 * minimum liquidity buffer
 
-The app reports how threshold breaches, dilution estimates, cash-buffer usage, and shortfall change under those assumptions.
+The app reports how threshold values, diagnostic breaches, dilution estimates, cash-buffer usage, and shortfall change under those assumptions.
 
 ## Audit trail
 
@@ -357,7 +358,8 @@ The audit record should include:
 * liquidation allocation by asset group
 * input files
 * scenario parameters
-* LMT threshold checks and reasons
+* LMT threshold values used or assessed
+* diagnostic checks and reasons
 * output file paths
 
 Audit records are saved as generated runtime outputs, not source files.
@@ -366,11 +368,13 @@ Audit records are saved as generated runtime outputs, not source files.
 
 Later versions may extend the one-period methodology into a multi-period redemption path.
 
-The path-based version should track redemptions, deferred amounts, repeated LMT threshold checks, behavioural redemption feedback, and liquidity-management response through time.
+The path-based version should track redemptions, deferred amounts, repeated threshold assessment diagnostics, behavioural redemption feedback, and liquidity-management response through time.
 
 Reverse stress testing may then be added to identify the redemption rate, market shock, haircut, or liquidation capacity shock that first breaches a selected LMT threshold.
 
 Asset-side contagion may be added to model how stressed liquidation or wider market pressure may increase haircuts, reduce liquidation capacity, or apply additional shocks to related assets.
+
+Future phases may also add market stress scenario variations, participation-rate assumptions, market volume assumptions, price-impact assumptions, random sampling from beta distributions by investor type, fixed stress months by investor type, and behavioural feedback after LMT activation.
 
 ## Methodology limits
 
