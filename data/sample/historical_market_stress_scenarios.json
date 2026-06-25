@@ -1,0 +1,104 @@
+{
+  "schema_version": "1.0",
+  "source": "Historical market stress scenario library",
+  "scenario_type": "historical",
+  "notes": "Sample historical market stress scenarios for comparing fund liquidity results under different market environments.",
+  "scenarios": {
+    "historical_2008_financial_crisis": {
+      "test_category": "Historical",
+      "scenario_name": "2008 Financial Crisis",
+      "description": "Global Financial Crisis period capturing equity market crashes, credit spread widening, and FX volatility.",
+      "period": "September - December 2008",
+      "holding_period_days": 20,
+      "shocks": {
+        "equity": {
+          "shock": -0.4,
+          "unit": "pct",
+          "description": "Equity market decline."
+        },
+        "interest_rates": {
+          "shock": -0.01,
+          "unit": "pct",
+          "description": "Parallel rate shift during financial crisis conditions."
+        },
+        "credit_spreads": {
+          "shock": 0.03,
+          "unit": "pct",
+          "description": "Credit spread widening."
+        },
+        "fx": {
+          "shock_by_currency": {
+            "USD": -0.05,
+            "GBP": -0.15
+          },
+          "unit": "pct",
+          "description": "FX movements against EUR."
+        }
+      }
+    },
+    "historical_2020_covid": {
+      "test_category": "Historical",
+      "scenario_name": "2020 COVID-19 Crash",
+      "description": "COVID-19 pandemic initial shock period with equity decline, credit widening, and FX volatility.",
+      "period": "February - March 2020",
+      "holding_period_days": 20,
+      "shocks": {
+        "equity": {
+          "shock": -0.3,
+          "unit": "pct",
+          "description": "Equity market decline."
+        },
+        "interest_rates": {
+          "shock": -0.005,
+          "unit": "pct",
+          "description": "Parallel rate shift during policy easing conditions."
+        },
+        "credit_spreads": {
+          "shock": 0.02,
+          "unit": "pct",
+          "description": "Credit spread widening."
+        },
+        "fx": {
+          "shock_by_currency": {
+            "USD": 0.05,
+            "GBP": -0.05
+          },
+          "unit": "pct",
+          "description": "FX movements against EUR."
+        }
+      }
+    },
+    "historical_2022_rate_inflation": {
+      "test_category": "Historical",
+      "scenario_name": "2022 Rate and Inflation Shock",
+      "description": "Rate-hike and inflation shock environment with equity decline, rate increase, and credit spread widening.",
+      "period": "January - December 2022",
+      "holding_period_days": 20,
+      "shocks": {
+        "equity": {
+          "shock": -0.2,
+          "unit": "pct",
+          "description": "Equity market decline due to rising rates and growth concerns."
+        },
+        "interest_rates": {
+          "shock": 0.03,
+          "unit": "pct",
+          "description": "Parallel rate shift during rising-rate conditions."
+        },
+        "credit_spreads": {
+          "shock": 0.015,
+          "unit": "pct",
+          "description": "Credit spread widening due to tighter financial conditions."
+        },
+        "fx": {
+          "shock_by_currency": {
+            "USD": 0.1,
+            "GBP": -0.05
+          },
+          "unit": "pct",
+          "description": "FX movements against EUR."
+        }
+      }
+    }
+  }
+}

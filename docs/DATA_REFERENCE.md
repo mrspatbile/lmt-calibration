@@ -70,7 +70,8 @@ data/sample/
 ├── liquidity_stresses.csv
 ├── scenario_definitions.csv
 ├── lmt_parameters.csv
-└── liquidation_strategies.json
+├── liquidation_strategies.json
+└── historical_market_stress_scenarios.json
 ```
 
 Dataset sections:
@@ -84,6 +85,7 @@ Dataset sections:
 * [scenario_definitions.csv](#scenario-definitions-csv)
 * [lmt_parameters.csv](#lmt-parameters-csv)
 * [liquidation_strategies.json](#liquidation-strategies-json)
+* [historical_market_stress_scenarios.json](#historical-market-stress-scenarios-json)
 
 ---
 
@@ -223,6 +225,20 @@ Relationships:
 
 ---
 
+<a id="historical-market-stress-scenarios-json"></a>
+
+### historical_market_stress_scenarios.json
+
+`historical_market_stress_scenarios.json` defines a reusable library of historical market stress scenarios. JSON is used because each scenario contains nested shock groups and currency-specific FX shocks.
+
+Relationships:
+
+* The library is loader-ready sample data for future market-stress selection.
+* It is not selected by `scenario_definitions.csv`.
+* V1 calculation engines do not apply the historical shocks.
+
+---
+
 
 ## Relationship Summary
 
@@ -231,6 +247,8 @@ Relationships:
 * `positions.csv`, `investor_classes.csv`, and `lmt_parameters.csv` are fund-snapshot datasets linked by `fund_id` and `as_of_date`.
 
 * `redemption_scenarios.csv`, `market_stresses.csv`, `liquidity_stresses.csv`, and `liquidation_strategies.json` contain reusable assumptions selected by `scenario_definitions.csv`.
+
+* `historical_market_stress_scenarios.json` is a standalone historical stress library and is not selected by `scenario_definitions.csv`.
 
 ---
 

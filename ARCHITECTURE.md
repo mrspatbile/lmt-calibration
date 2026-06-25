@@ -78,8 +78,13 @@ Sample data:
 ├── liquidity_stresses.csv
 ├── scenario_definitions.csv
 ├── lmt_parameters.csv
-└── liquidation_strategies.json
+├── liquidation_strategies.json
+└── historical_market_stress_scenarios.json
 ```
+
+`historical_market_stress_scenarios.json` is a loader-ready sample library for
+future market stress selection. The V1 calculation engines do not apply the
+historical shocks.
 
 ## Dependency direction
 

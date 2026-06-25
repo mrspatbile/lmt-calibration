@@ -4,6 +4,7 @@ from pathlib import Path
 from lmt_calibration.domain import AssetGroup, LiquidationStrategyType
 from lmt_calibration.loaders import (
     load_funds_csv,
+    load_historical_market_stress_scenarios_json,
     load_investor_classes_csv,
     load_liquidation_strategies_json,
     load_liquidity_stresses_csv,
@@ -33,6 +34,9 @@ def test_sample_files_load_through_v1_loaders() -> None:
     liquidation_strategies = load_liquidation_strategies_json(
         SAMPLE_DATA_DIR / "liquidation_strategies.json"
     )
+    historical_market_stress_scenarios = load_historical_market_stress_scenarios_json(
+        SAMPLE_DATA_DIR / "historical_market_stress_scenarios.json"
+    )
 
     assert funds
     assert positions
@@ -43,6 +47,7 @@ def test_sample_files_load_through_v1_loaders() -> None:
     assert scenario_definitions
     assert lmt_parameters
     assert liquidation_strategies
+    assert historical_market_stress_scenarios.scenarios
 
 
 def test_sample_position_values_reconcile_to_nav_excluding_repo_financing() -> None:

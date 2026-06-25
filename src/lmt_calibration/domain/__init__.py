@@ -14,6 +14,10 @@ from lmt_calibration.domain.results import (
     WarningType,
 )
 from lmt_calibration.domain.scenarios import (
+    HistoricalFxShock,
+    HistoricalMarketStressScenario,
+    HistoricalMarketStressScenarioLibrary,
+    HistoricalStressShock,
     LiquidationStrategyConfig,
     LiquidationStrategyType,
     LiquidityStress,
@@ -27,6 +31,10 @@ __all__ = [
     "AssetPosition",
     "ClientClass",
     "FundSnapshot",
+    "HistoricalFxShock",
+    "HistoricalMarketStressScenario",
+    "HistoricalMarketStressScenarioLibrary",
+    "HistoricalStressShock",
     "InstrumentSubtype",
     "InvestorClassProfile",
     "LiquidatedAssetResult",

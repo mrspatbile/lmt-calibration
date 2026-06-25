@@ -72,6 +72,8 @@ Decimal("1.25") = 125%
 
 External CSV and JSON files may store decimal values as strings. Raw percentage strings such as `5%` are not allowed.
 
+For historical market stress JSON, `unit: "pct"` uses the same decimal-rate convention. For example, `-0.4` means a 40% decline.
+
 Use decimal representation for:
 
 * redemption rates

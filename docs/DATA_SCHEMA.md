@@ -354,6 +354,62 @@ Relationships:
 * Custom strategy weights must appear only in this JSON file.
 * Strategy weights should reference supported asset groups.
 
+### historical_market_stress_scenarios.json
+
+Purpose: reusable historical market stress scenario library.
+
+Primary identifier: scenario ID keys inside the `scenarios` object.
+
+Top-level required fields:
+
+| Field | Description | Format |
+| --- | --- | --- |
+| `schema_version` | JSON envelope schema version | `1.0` |
+| `source` | Data source label | text |
+| `scenario_type` | Scenario library type | `historical` |
+| `notes` | Human-readable library notes | text |
+| `scenarios` | Historical stress scenario objects keyed by scenario ID | object |
+
+Scenario fields:
+
+| Field | Description | Format |
+| --- | --- | --- |
+| `test_category` | Scenario category | text |
+| `scenario_name` | Human-readable scenario name | text |
+| `description` | Human-readable scenario description | text |
+| `period` | Historical reference period | text |
+| `holding_period_days` | Stress holding period | positive integer |
+| `shocks` | Scenario shock assumptions | object |
+
+Required shock groups:
+
+* `equity`
+* `interest_rates`
+* `credit_spreads`
+* `fx`
+
+Non-FX shock fields:
+
+| Field | Description | Format |
+| --- | --- | --- |
+| `shock` | Decimal-rate shock value | number or decimal-compatible text |
+| `unit` | Shock unit | `pct` |
+| `description` | Human-readable shock description | text |
+
+FX shock fields:
+
+| Field | Description | Format |
+| --- | --- | --- |
+| `shock_by_currency` | Decimal-rate shock values by impacted currency | object keyed by uppercase 3-letter currency |
+| `unit` | Shock unit | `pct` |
+| `description` | Human-readable shock description | text |
+
+Relationships:
+
+* The file is a standalone historical stress library.
+* It is not referenced by `scenario_definitions.csv`.
+* V1 calculation engines do not apply these shocks.
+
 ## Relationship Summary
 
 `scenario_definitions.csv` is the central linking file. Each row selects:

@@ -3,12 +3,14 @@
 from datetime import date
 from decimal import Decimal
 from enum import StrEnum
+from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 from lmt_calibration.domain.positions import AssetGroup
 
 SNAKE_CASE_PATTERN = r"^[a-z][a-z0-9_]*$"
+HISTORICAL_SHOCK_GROUPS = {"equity", "interest_rates", "credit_spreads", "fx"}
 
 
 class VersionedAssumption(BaseModel):
@@ -41,6 +43,96 @@ class LiquidityStress(VersionedAssumption):
     liquidity_stress_id: str = Field(pattern=SNAKE_CASE_PATTERN)
     liquidity_stress_multiplier: Decimal = Field(gt=Decimal("0"))
     stress_horizon_days: int = Field(gt=0)
+
+
+class HistoricalStressShock(BaseModel):
+    """One non-FX historical market stress shock."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True, str_strip_whitespace=True)
+
+    shock: Decimal
+    unit: Literal["pct"]
+    description: str
+
+
+class HistoricalFxShock(BaseModel):
+    """Historical FX shocks keyed by impacted currency."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True, str_strip_whitespace=True)
+
+    shock_by_currency: dict[str, Decimal] = Field(min_length=1)
+    unit: Literal["pct"]
+    description: str
+
+    @field_validator("shock_by_currency")
+    @classmethod
+    def validate_currency_codes(cls, value: dict[str, Decimal]) -> dict[str, Decimal]:
+        """Require ISO-style uppercase currency keys."""
+
+        for currency in value:
+            if len(currency) != 3 or not currency.isalpha() or not currency.isupper():
+                raise ValueError("FX shock currency keys must be 3-letter uppercase codes")
+        return value
+
+
+class HistoricalMarketStressScenario(BaseModel):
+    """One historical market stress scenario definition."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True, str_strip_whitespace=True)
+
+    test_category: str
+    scenario_name: str
+    description: str
+    period: str
+    holding_period_days: int = Field(gt=0)
+    shocks: dict[str, HistoricalStressShock | HistoricalFxShock] = Field(min_length=1)
+
+    @model_validator(mode="after")
+    def validate_shock_groups(self) -> "HistoricalMarketStressScenario":
+        """Validate the supported V1 historical stress shock group shape."""
+
+        if set(self.shocks) != HISTORICAL_SHOCK_GROUPS:
+            raise ValueError(
+                "historical market stress scenarios must include equity, "
+                "interest_rates, credit_spreads, and fx shocks"
+            )
+        if not isinstance(self.shocks["fx"], HistoricalFxShock):
+            raise ValueError("fx shock must use shock_by_currency")
+        for shock_group in ("equity", "interest_rates", "credit_spreads"):
+            if not isinstance(self.shocks[shock_group], HistoricalStressShock):
+                raise ValueError(f"{shock_group} shock must use shock")
+        return self
+
+
+class HistoricalMarketStressScenarioLibrary(BaseModel):
+    """Versioned historical market stress scenario library."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True, str_strip_whitespace=True)
+
+    schema_version: Literal["1.0"]
+    source: str
+    scenario_type: Literal["historical"]
+    notes: str
+    scenarios: dict[str, HistoricalMarketStressScenario] = Field(min_length=1)
+
+    @field_validator("scenarios")
+    @classmethod
+    def validate_scenario_ids(
+        cls, value: dict[str, HistoricalMarketStressScenario]
+    ) -> dict[str, HistoricalMarketStressScenario]:
+        """Require simple snake_case scenario identifiers."""
+
+        allowed_characters = set("abcdefghijklmnopqrstuvwxyz0123456789_")
+        for scenario_id in value:
+            if (
+                not scenario_id
+                or scenario_id[0] == "_"
+                or scenario_id[-1] == "_"
+                or "__" in scenario_id
+                or any(character not in allowed_characters for character in scenario_id)
+            ):
+                raise ValueError("historical scenario IDs must use snake_case")
+        return value
 
 
 class ScenarioDefinition(BaseModel):
