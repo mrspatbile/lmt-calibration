@@ -12,9 +12,12 @@ from lmt_calibration.domain import (
     LiquidationStrategyConfig,
     LiquidationStrategyType,
     LmtParameters,
+    LmtThresholdAssessmentResult,
+    LmtThresholdDiagnosticResult,
     MarketStress,
     RedemptionScenario,
     ScenarioDefinition,
+    ThresholdAssessmentType,
 )
 
 
@@ -247,3 +250,74 @@ def test_liquidation_strategy_requires_minimum_buffer_preservation_for_v1() -> N
             strategy_type=LiquidationStrategyType.MOST_LIQUID_FIRST,
             preserve_minimum_buffer=False,
         )
+
+
+def test_lmt_threshold_diagnostic_result_accepts_reference_threshold_values() -> None:
+    diagnostic = LmtThresholdDiagnosticResult(
+        assessment_type="swing_pricing",
+        breached=True,
+        observed_value="0.018",
+        reference_threshold_value="0.015",
+        quantitative_reason="Dilution rate exceeds the reference swing-pricing threshold.",
+        message="Reference swing-pricing threshold diagnostic breach.",
+    )
+
+    assert diagnostic.assessment_type is ThresholdAssessmentType.SWING_PRICING
+    assert diagnostic.observed_value == Decimal("0.018")
+    assert diagnostic.reference_threshold_value == Decimal("0.015")
+
+
+def test_lmt_threshold_diagnostic_result_rejects_negative_values() -> None:
+    with pytest.raises(ValidationError):
+        LmtThresholdDiagnosticResult(
+            assessment_type="redemption_gate",
+            breached=False,
+            observed_value="-0.01",
+            reference_threshold_value="0.10",
+            quantitative_reason="Invalid negative observed value.",
+            message="Invalid diagnostic.",
+        )
+
+    with pytest.raises(ValidationError):
+        LmtThresholdDiagnosticResult(
+            assessment_type="liquidity_buffer",
+            breached=True,
+            observed_value="0.04",
+            reference_threshold_value="-0.05",
+            quantitative_reason="Invalid negative reference threshold.",
+            message="Invalid diagnostic.",
+        )
+
+
+def test_lmt_threshold_diagnostic_result_rejects_extra_fields() -> None:
+    with pytest.raises(ValidationError):
+        LmtThresholdDiagnosticResult(
+            assessment_type="swing_pricing",
+            breached=False,
+            observed_value="0.010",
+            reference_threshold_value="0.015",
+            quantitative_reason="Dilution rate is below the reference threshold.",
+            message="No diagnostic breach.",
+            proposed_threshold_value="0.020",
+        )
+
+
+def test_lmt_threshold_assessment_result_contains_diagnostics_only() -> None:
+    diagnostic = LmtThresholdDiagnosticResult(
+        assessment_type=ThresholdAssessmentType.REDEMPTION_GATE,
+        breached=False,
+        observed_value="0.085",
+        reference_threshold_value="0.10",
+        quantitative_reason="Total redemption rate is below the reference gate threshold.",
+        message="Reference gate threshold diagnostic is not breached.",
+    )
+
+    result = LmtThresholdAssessmentResult(
+        scenario_id="platform_outflow_hybrid",
+        parameter_set_id="board_approved_base",
+        diagnostics=[diagnostic],
+    )
+
+    assert result.scenario_id == "platform_outflow_hybrid"
+    assert result.parameter_set_id == "board_approved_base"
+    assert result.diagnostics == (diagnostic,)

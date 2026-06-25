@@ -7,7 +7,10 @@ from lmt_calibration.domain.positions import AssetGroup, AssetPosition, Instrume
 from lmt_calibration.domain.results import (
     LiquidatedAssetResult,
     LiquidationResult,
+    LmtThresholdAssessmentResult,
+    LmtThresholdDiagnosticResult,
     LmtWarningResult,
+    ThresholdAssessmentType,
     WarningType,
 )
 from lmt_calibration.domain.scenarios import (
@@ -32,9 +35,12 @@ __all__ = [
     "LiquidationStrategyType",
     "LiquidityStress",
     "LmtParameters",
+    "LmtThresholdAssessmentResult",
+    "LmtThresholdDiagnosticResult",
     "LmtWarningResult",
     "MarketStress",
     "RedemptionScenario",
     "ScenarioDefinition",
+    "ThresholdAssessmentType",
     "WarningType",
 ]
