@@ -192,11 +192,12 @@ def _allocate_most_liquid_first(
         for asset in ordered_assets:
             if remaining_need <= ZERO:
                 return results
-            gross_sale_amount = min(remaining_need, _available_capacity(asset))
+            gross_sale_amount = _gross_sale_amount_for_cash_need(asset, remaining_need)
             if gross_sale_amount <= ZERO:
                 continue
-            results.append(_liquidated_asset_result(asset, gross_sale_amount))
-            remaining_need -= gross_sale_amount
+            liquidated_asset = _liquidated_asset_result_for_cash_need(asset, remaining_need)
+            results.append(liquidated_asset)
+            remaining_need -= liquidated_asset.post_haircut_cash_raised
 
     return results
 
@@ -217,12 +218,12 @@ def _allocate_pro_rata(
 
     results: list[LiquidatedAssetResult] = []
     for asset in sorted(eligible_assets, key=lambda item: item.position_id):
-        target_sale_amount = (
+        target_cash_raised = (
             redemption_need * _stressed_market_value(asset) / total_stressed_market_value
         )
-        gross_sale_amount = min(target_sale_amount, _available_capacity(asset))
+        gross_sale_amount = _gross_sale_amount_for_cash_need(asset, target_cash_raised)
         if gross_sale_amount > ZERO:
-            results.append(_liquidated_asset_result(asset, gross_sale_amount))
+            results.append(_liquidated_asset_result_for_cash_need(asset, target_cash_raised))
     return results
 
 
@@ -271,13 +272,26 @@ def _allocate_group_pro_rata(
 
     results: list[LiquidatedAssetResult] = []
     for asset in sorted(group_assets, key=lambda item: item.position_id):
-        target_sale_amount = (
+        target_cash_raised = (
             group_need * _stressed_market_value(asset) / total_stressed_market_value
         )
-        gross_sale_amount = min(target_sale_amount, _available_capacity(asset))
+        gross_sale_amount = _gross_sale_amount_for_cash_need(asset, target_cash_raised)
         if gross_sale_amount > ZERO:
-            results.append(_liquidated_asset_result(asset, gross_sale_amount))
+            results.append(_liquidated_asset_result_for_cash_need(asset, target_cash_raised))
     return results
+
+
+def _gross_sale_amount_for_cash_need(
+    asset: StressedLiquidationPosition,
+    cash_need: Decimal,
+) -> Decimal:
+    available_capacity = _available_capacity(asset)
+    if cash_need <= ZERO or available_capacity <= ZERO:
+        return ZERO
+    if asset.stressed_haircut_rate >= ONE:
+        return available_capacity
+    required_gross_sale = cash_need / (ONE - asset.stressed_haircut_rate)
+    return min(required_gross_sale, available_capacity)
 
 
 def _liquidated_asset_result(
@@ -292,6 +306,30 @@ def _liquidated_asset_result(
         post_haircut_cash_raised=post_haircut_cash_raised,
         haircut_cost=gross_sale_amount - post_haircut_cash_raised,
     )
+
+
+def _liquidated_asset_result_for_cash_need(
+    asset: StressedLiquidationPosition,
+    cash_need: Decimal,
+) -> LiquidatedAssetResult:
+    gross_sale_amount = _gross_sale_amount_for_cash_need(asset, cash_need)
+    if _can_raise_cash_need(asset, cash_need):
+        post_haircut_cash_raised = cash_need
+        return LiquidatedAssetResult(
+            position_id=asset.position_id,
+            asset_group=asset.asset_group,
+            gross_sale_amount=gross_sale_amount,
+            post_haircut_cash_raised=post_haircut_cash_raised,
+            haircut_cost=gross_sale_amount - post_haircut_cash_raised,
+        )
+    return _liquidated_asset_result(asset, gross_sale_amount)
+
+
+def _can_raise_cash_need(asset: StressedLiquidationPosition, cash_need: Decimal) -> bool:
+    if cash_need <= ZERO or asset.stressed_haircut_rate >= ONE:
+        return False
+    required_gross_sale = cash_need / (ONE - asset.stressed_haircut_rate)
+    return required_gross_sale <= _available_capacity(asset)
 
 
 def _available_capacity(asset: StressedLiquidationPosition) -> Decimal:

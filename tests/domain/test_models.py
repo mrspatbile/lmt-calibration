@@ -235,3 +235,15 @@ def test_custom_weight_strategy_requires_weights_sum_to_one() -> None:
                 "listed_equity": "0.30",
             },
         )
+
+
+def test_liquidation_strategy_requires_minimum_buffer_preservation_for_v1() -> None:
+    with pytest.raises(ValidationError):
+        LiquidationStrategyConfig(
+            liquidation_strategy_id="buffer_override_not_supported",
+            version="1.0",
+            name="buffer_override_not_supported",
+            description="Invalid because V1 does not support cash-buffer override.",
+            strategy_type=LiquidationStrategyType.MOST_LIQUID_FIRST,
+            preserve_minimum_buffer=False,
+        )

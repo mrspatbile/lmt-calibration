@@ -80,6 +80,9 @@ class LiquidationStrategyConfig(VersionedAssumption):
     def validate_strategy_weights(self) -> "LiquidationStrategyConfig":
         """Validate custom-weight strategy shape without implementing allocation logic."""
 
+        if not self.preserve_minimum_buffer:
+            raise ValueError("V1 liquidation strategies must preserve the minimum cash buffer")
+
         if self.strategy_type is LiquidationStrategyType.CUSTOM_WEIGHTS:
             if not self.weights:
                 raise ValueError("custom_weights strategy requires weights")

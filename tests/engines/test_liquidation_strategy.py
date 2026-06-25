@@ -36,13 +36,17 @@ def test_most_liquid_first_uses_cash_above_buffer_then_assets() -> None:
 
     assert result.cash_used == Decimal("50.0")
     assert result.assets_liquidated[0].position_id == "reverse_repo"
-    assert result.assets_liquidated[0].gross_sale_amount == Decimal("150.0")
-    assert result.assets_liquidated[0].post_haircut_cash_raised == Decimal("135.000")
-    assert result.shortfall == Decimal("15.000")
-    assert result.asset_group_allocations == {
-        AssetGroup.CASH: Decimal("50.0"),
-        AssetGroup.REVERSE_REPO: Decimal("150.0"),
-    }
+    assert result.assets_liquidated[0].gross_sale_amount.quantize(Decimal("0.01")) == Decimal(
+        "166.67"
+    )
+    assert result.assets_liquidated[0].post_haircut_cash_raised == Decimal(
+        "150.0000000000000000000000000"
+    )
+    assert result.shortfall == Decimal("0E-25")
+    assert result.asset_group_allocations[AssetGroup.CASH] == Decimal("50.0")
+    assert result.asset_group_allocations[AssetGroup.REVERSE_REPO].quantize(
+        Decimal("0.01")
+    ) == Decimal("166.67")
 
 
 def test_no_strategy_consumes_cash_below_minimum_buffer() -> None:
@@ -66,6 +70,79 @@ def test_no_strategy_consumes_cash_below_minimum_buffer() -> None:
     assert result.minimum_cash_buffer_preserved is False
     assert result.asset_group_allocations[AssetGroup.LISTED_ETF] == Decimal("100")
     assert AssetGroup.CASH not in result.asset_group_allocations
+
+
+@pytest.mark.parametrize(
+    (
+        "strategy_id",
+        "strategy_type",
+        "cash_buffer_use_rate",
+        "weights",
+        "expected_cash_used",
+    ),
+    (
+        (
+            "cash_then_liquid_assets",
+            LiquidationStrategyType.MOST_LIQUID_FIRST,
+            None,
+            None,
+            Decimal("50.0"),
+        ),
+        (
+            "portfolio_profile_pro_rata",
+            LiquidationStrategyType.PRO_RATA,
+            None,
+            None,
+            Decimal("0"),
+        ),
+        (
+            "partial_cash_then_pro_rata",
+            LiquidationStrategyType.HYBRID,
+            Decimal("1"),
+            None,
+            Decimal("50.0"),
+        ),
+        (
+            "balanced_custom_weights",
+            LiquidationStrategyType.CUSTOM_WEIGHTS,
+            None,
+            {
+                AssetGroup.CASH: Decimal("0.50"),
+                AssetGroup.LISTED_ETF: Decimal("0.50"),
+            },
+            Decimal("50.0"),
+        ),
+    ),
+)
+def test_all_strategies_preserve_cash_above_minimum_buffer(
+    strategy_id: str,
+    strategy_type: LiquidationStrategyType,
+    cash_buffer_use_rate: Decimal | None,
+    weights: dict[AssetGroup, Decimal] | None,
+    expected_cash_used: Decimal,
+) -> None:
+    strategy = _strategy(
+        strategy_id,
+        strategy_type,
+        cash_buffer_use_rate=cash_buffer_use_rate,
+        weights=weights,
+    )
+
+    result = calculate_liquidation_strategy(
+        scenario_id="buffer_preservation",
+        fund=_fund(),
+        positions=(
+            _position("cash", AssetGroup.CASH, "150", "0", "1", 0),
+            _position("listed_etf", AssetGroup.LISTED_ETF, "500", "0", "1", 2),
+        ),
+        redemption_amount=Decimal("200"),
+        strategy=strategy,
+        lmt_parameters=_parameters(),
+        stress_horizon_days=5,
+    )
+
+    assert result.cash_used == expected_cash_used
+    assert result.minimum_cash_buffer_preserved is True
 
 
 def test_pro_rata_allocates_once_by_eligible_stressed_market_value() -> None:
@@ -175,7 +252,25 @@ def test_capacity_caps_create_reported_shortfall() -> None:
     assert result.shortfall == Decimal("100.00")
 
 
-def test_haircut_creates_dilution_cost() -> None:
+def test_zero_haircut_gross_sale_equals_post_haircut_cash_with_no_dilution() -> None:
+    result = calculate_liquidation_strategy(
+        scenario_id="base_no_haircut",
+        fund=_fund(),
+        positions=(_position("listed_etf", AssetGroup.LISTED_ETF, "500", "0", "1", 2),),
+        redemption_amount=Decimal("100"),
+        strategy=_strategy("portfolio_profile_pro_rata", LiquidationStrategyType.PRO_RATA),
+        lmt_parameters=_parameters(),
+        stress_horizon_days=5,
+    )
+
+    assert result.assets_liquidated[0].gross_sale_amount == Decimal("100")
+    assert result.assets_liquidated[0].post_haircut_cash_raised == Decimal("100")
+    assert result.total_haircut_cost == Decimal("0")
+    assert result.dilution_amount == Decimal("0")
+    assert result.shortfall == Decimal("0")
+
+
+def test_positive_haircut_with_enough_capacity_targets_post_haircut_cash_need() -> None:
     result = calculate_liquidation_strategy(
         scenario_id="haircut_cost",
         fund=_fund(),
@@ -186,11 +281,49 @@ def test_haircut_creates_dilution_cost() -> None:
         stress_horizon_days=5,
     )
 
-    assert result.assets_liquidated[0].gross_sale_amount == Decimal("100")
-    assert result.assets_liquidated[0].post_haircut_cash_raised == Decimal("90.00")
-    assert result.assets_liquidated[0].haircut_cost == Decimal("10.00")
-    assert result.dilution_amount == Decimal("10.00")
-    assert result.dilution_rate == Decimal("0.010")
+    assert result.assets_liquidated[0].gross_sale_amount.quantize(Decimal("0.01")) == Decimal(
+        "111.11"
+    )
+    assert result.assets_liquidated[0].post_haircut_cash_raised == Decimal(
+        "100.0000000000000000000000000"
+    )
+    assert result.assets_liquidated[0].haircut_cost.quantize(Decimal("0.01")) == Decimal("11.11")
+    assert result.shortfall == Decimal("0E-25")
+    assert result.dilution_amount.quantize(Decimal("0.01")) == Decimal("11.11")
+    assert result.dilution_rate.quantize(Decimal("0.0001")) == Decimal("0.0111")
+
+
+def test_positive_haircut_with_insufficient_capacity_sells_capacity_and_reports_shortfall() -> None:
+    result = calculate_liquidation_strategy(
+        scenario_id="haircut_capacity_shortfall",
+        fund=_fund(),
+        positions=(_position("listed_etf", AssetGroup.LISTED_ETF, "100", "0.10", "0.50", 2),),
+        redemption_amount=Decimal("100"),
+        strategy=_strategy("portfolio_profile_pro_rata", LiquidationStrategyType.PRO_RATA),
+        lmt_parameters=_parameters(),
+        stress_horizon_days=5,
+    )
+
+    assert result.assets_liquidated[0].gross_sale_amount == Decimal("50.00")
+    assert result.assets_liquidated[0].post_haircut_cash_raised == Decimal("45.0000")
+    assert result.shortfall == Decimal("55.0000")
+
+
+def test_remaining_liquid_buffer_rate_uses_post_haircut_eligible_liquidity() -> None:
+    result = calculate_liquidation_strategy(
+        scenario_id="remaining_buffer_post_haircut",
+        fund=_fund(),
+        positions=(
+            _position("cash", AssetGroup.CASH, "200", "0", "1", 0),
+            _position("listed_etf", AssetGroup.LISTED_ETF, "500", "0.10", "1", 2),
+        ),
+        redemption_amount=Decimal("100"),
+        strategy=_strategy("portfolio_profile_pro_rata", LiquidationStrategyType.PRO_RATA),
+        lmt_parameters=_parameters(),
+        stress_horizon_days=5,
+    )
+
+    assert result.remaining_liquid_buffer_rate == Decimal("0.5500000000000000000000000000")
 
 
 def test_repo_financing_is_not_liquidated() -> None:

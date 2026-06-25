@@ -110,6 +110,30 @@ def test_liquidation_strategy_config_rejects_duplicate_strategy_ids_and_bad_weig
     assert "weights: must sum to 1" in message
 
 
+def test_liquidation_strategy_config_rejects_disabled_minimum_buffer_preservation() -> None:
+    config = {
+        "schema_version": "1.0",
+        "config_type": "liquidation_strategies",
+        "name": "sample_liquidation_strategies",
+        "description": "Synthetic liquidation strategy configuration.",
+        "strategies": [
+            {
+                "liquidation_strategy_id": "buffer_override_not_supported",
+                "version": "1.0",
+                "name": "buffer_override_not_supported",
+                "description": "Invalid because V1 does not support cash-buffer override.",
+                "strategy_type": "most_liquid_first",
+                "preserve_minimum_buffer": False,
+            }
+        ],
+    }
+
+    with pytest.raises(DataValidationError) as error:
+        validate_liquidation_strategy_config(config)
+
+    assert "preserve_minimum_buffer: must be true for V1 liquidation strategies" in str(error.value)
+
+
 def test_scenario_definition_rejects_custom_strategy_fields_and_multiple_references() -> None:
     records = [
         {

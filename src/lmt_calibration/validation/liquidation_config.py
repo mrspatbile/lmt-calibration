@@ -128,6 +128,14 @@ def _validate_strategy_entries(strategies: list[object], issues: list[Validation
                     message="must be a boolean",
                 )
             )
+        elif strategy_record.get("preserve_minimum_buffer") is False:
+            issues.append(
+                ValidationIssue(
+                    location=location,
+                    field="preserve_minimum_buffer",
+                    message="must be true for V1 liquidation strategies",
+                )
+            )
 
         if strategy_record.get("strategy_type") == "custom_weights":
             _validate_custom_weights(strategy_record, location, issues)
