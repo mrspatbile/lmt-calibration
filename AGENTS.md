@@ -514,6 +514,8 @@ Use:
 
 Avoid migration-style wording such as "new" or "now" in documentation intended for first-time readers.
 
+For educational notebooks and walkthroughs, avoid self-referential phrasing such as "this notebook", "the notebook shows", or "the notebook explains". Prefer direct wording such as "this walkthrough", "the sample inputs", "the analysis", or an active sentence about the reader, scenario, loader, or engine.
+
 ---
 
 ## Naming rules
