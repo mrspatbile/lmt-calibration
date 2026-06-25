@@ -249,3 +249,16 @@ uv run pre-commit run --all-files
 * `uv add` updates dependencies and the lock file.
 * `uv sync` recreates or updates the environment from the lock file.
 
+### Addendum: Register project Jupyter kernel
+
+If `ipykernel` is already installed in the project environment:
+
+uv run python3 -m ipykernel install --user --name lmt-calibration --display-name "lmt-calibration"
+
+If `ipykernel` is not installed:
+
+uv add --dev ipykernel
+uv run python3 -m ipykernel install --user --name lmt-calibration --display-name "lmt-calibration"
+
+Then reload VS Code and select the `lmt-calibration` kernel in the notebook picker.
+
