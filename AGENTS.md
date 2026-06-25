@@ -38,7 +38,7 @@ The application should answer:
 
 > Given a fund liquidity profile, investor redemption behaviour, asset market stress, and liquidity stress assumptions, what LMT thresholds are coherent for swing pricing, redemption gates, and liquidity buffers under the tested stress case, and what diagnostic warnings explain the result?
 
-The project calibrates and assesses Liquidity Management Tool thresholds for a fund under liquidity stress assumptions. Version 1 focuses on single-fund, single-period stress cases and uses liquidation outputs to compare proposed or reference thresholds for swing pricing, redemption gates, and liquidity buffers. Warning checks are diagnostic outputs that support calibration and review; they are not the central product objective.
+The project calibrates and assesses Liquidity Management Tool thresholds for a fund under liquidity stress assumptions. Version 1 focuses on single-fund, single-period stress cases and uses liquidation outputs to assess reference thresholds for swing pricing, redemption gates, and liquidity buffers. Warning checks are diagnostic outputs that support calibration review; they are not the central product objective.
 
 The project does not decide whether a fund manager should activate an LMT.
 

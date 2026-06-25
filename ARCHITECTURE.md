@@ -177,7 +177,7 @@ The engine handles strategy-specific liquidation allocation and returns a consis
 
 ### LMT calibration and diagnostic layer
 
-Uses stress and liquidation outputs to assess proposed or reference LMT thresholds. Diagnostic checks compare observed stress metrics against threshold values and explain warning flags where relevant.
+Uses stress and liquidation outputs to assess reference LMT thresholds in Version 1. Diagnostic checks compare observed stress metrics against threshold values and explain warning flags where relevant.
 
 Conceptually, this layer supports:
 

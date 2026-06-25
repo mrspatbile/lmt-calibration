@@ -278,7 +278,7 @@ Version 1 calibrates and assesses thresholds using one-period stress outputs. It
 
 ### Swing-pricing threshold assessment
 
-Swing-pricing threshold assessment compares estimated dilution with the proposed or reference threshold. A diagnostic breach is reported when estimated dilution exceeds the configured threshold.
+Swing-pricing threshold assessment compares estimated dilution with the reference threshold. A diagnostic breach is reported when estimated dilution exceeds the configured threshold.
 
 ```text
 dilution_rate > swing_threshold_rate
@@ -287,14 +287,14 @@ dilution_rate > swing_threshold_rate
 The diagnostic output should report:
 
 * observed dilution rate
-* proposed or reference threshold
+* reference threshold
 * estimated dilution cost
 * liquidation strategy used
 * diagnostic reason for any breach
 
 ### Redemption-gate threshold assessment
 
-Redemption-gate threshold assessment compares redemption pressure and liquidation shortfall with the proposed or reference gate threshold. A diagnostic breach may be reported when redemption pressure exceeds the configured gate threshold or when the liquidation strategy produces a shortfall.
+Redemption-gate threshold assessment compares redemption pressure and liquidation shortfall with the reference gate threshold. A diagnostic breach may be reported when redemption pressure exceeds the configured gate threshold or when the liquidation strategy produces a shortfall.
 
 ```text
 total_redemption_rate > gate_threshold_rate
@@ -309,13 +309,13 @@ shortfall > 0
 The diagnostic output should report:
 
 * total redemption rate
-* proposed or reference gate threshold
+* reference gate threshold
 * shortfall, if any
 * main driver of redemption pressure
 
 ### Liquidity-buffer threshold assessment
 
-Liquidity-buffer threshold assessment compares remaining liquid resources with the proposed or reference minimum buffer. A diagnostic breach is reported when remaining liquid resources fall below the configured minimum buffer.
+Liquidity-buffer threshold assessment compares remaining liquid resources with the reference minimum buffer. A diagnostic breach is reported when remaining liquid resources fall below the configured minimum buffer.
 
 ```text
 remaining_liquid_buffer_rate < minimum_buffer_rate
@@ -324,7 +324,7 @@ remaining_liquid_buffer_rate < minimum_buffer_rate
 The diagnostic output should report:
 
 * remaining buffer
-* proposed or reference minimum
+* reference minimum
 * assets consumed by the liquidation strategy
 * whether the configured minimum cash buffer was preserved
 
