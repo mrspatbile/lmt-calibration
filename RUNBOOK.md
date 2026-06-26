@@ -89,6 +89,14 @@ Run tests with coverage:
 uv run pytest tests/ -v --cov=src --cov-report=term-missing
 ```
 
+## Streamlit app
+
+Run the local app with sample data:
+
+```bash
+uv run streamlit run app/streamlit_app.py
+```
+
 ## Project checks
 
 Before asking for review, run:
@@ -261,4 +269,3 @@ uv add --dev ipykernel
 uv run python3 -m ipykernel install --user --name lmt-calibration --display-name "lmt-calibration"
 
 Then reload VS Code and select the `lmt-calibration` kernel in the notebook picker.
-

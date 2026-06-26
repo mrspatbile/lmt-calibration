@@ -54,6 +54,14 @@ Key documentation:
 uv sync
 ```
 
+## Streamlit app
+
+Run the local app with sample data:
+
+```bash
+uv run streamlit run app/streamlit_app.py
+```
+
 Run checks:
 
 ```bash
