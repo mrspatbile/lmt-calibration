@@ -50,3 +50,6 @@ outputs/audit/*
 
 outputs/reports/*
 !outputs/reports/.gitkeep
+
+# AI agents
+.claude/
