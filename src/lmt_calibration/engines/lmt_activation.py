@@ -1,4 +1,4 @@
-"""LMT activation and investor impact assessment."""
+"""Simulated LMT activation assessment and investor impact analysis."""
 
 from dataclasses import dataclass
 from decimal import Decimal
@@ -29,7 +29,7 @@ class CalibrationAdequacy(str, Enum):
 
 @dataclass(frozen=True)
 class LmtActivationResult:
-    """LMT activation and investor impact assessment for a redemption scenario."""
+    """Simulated activation assessment and investor impact for a redemption scenario."""
 
     swing_activated: bool
     gate_activated: bool
@@ -111,7 +111,7 @@ def assess_lmt_impact(
     lmt_parameters: LmtParameters,
     remaining_liquid_buffer_rate: Decimal | None = None,
 ) -> LmtActivationResult:
-    """Assess LMT activation and investor impact for a redemption scenario.
+    """Assess simulated LMT activation and investor impact for a redemption scenario.
 
     Args:
         nav: Current NAV after market valuation shock and before LMT effects.
@@ -121,7 +121,7 @@ def assess_lmt_impact(
         remaining_liquid_buffer_rate: Remaining liquidity buffer rate (optional).
 
     Returns:
-        LmtActivationResult with activation status and investor impact metrics.
+        LmtActivationResult with simulated activation states and investor impact metrics.
     """
     # Calculate gross redemption amount
     gross_redemption_amount = nav * redemption_rate
@@ -130,15 +130,15 @@ def assess_lmt_impact(
     estimated_cost_rate = estimate_liquidity_cost_rate(market_stress)
     estimated_cost_amount = estimate_liquidity_cost_amount(gross_redemption_amount, market_stress)
 
-    # Check swing pricing activation (based on threshold)
+    # Evaluate the simulated swing activation threshold comparison.
     swing_factor_rate = lmt_parameters.max_swing_factor_rate
     swing_activated = redemption_rate >= lmt_parameters.swing_threshold_rate
 
-    # Calculate cost recovery through swing pricing (if activated)
+    # Calculate cost recovery through swing pricing when the simulated condition is met.
     # Swing pricing applies the selected factor to the redemption amount
     recovered_cost_amount = gross_redemption_amount * swing_factor_rate if swing_activated else ZERO
 
-    # Calculate residual dilution (cost not covered by activated LMTs)
+    # Calculate residual dilution after simulated LMT effects.
     residual_dilution_amount = max(estimated_cost_amount - recovered_cost_amount, ZERO)
     residual_dilution_rate = residual_dilution_amount / nav if nav > ZERO else ZERO
 
@@ -149,11 +149,11 @@ def assess_lmt_impact(
         else Decimal("1")
     )
 
-    # Check gate activation (based on threshold)
+    # Evaluate the simulated gate activation threshold comparison.
     gate_activated = redemption_rate >= lmt_parameters.gate_threshold_rate
 
     # Calculate redemption paid vs deferred
-    # If gate is activated, redemption is deferred; otherwise paid in full
+    # Defer redemption when the simulated gate activation condition is met.
     if gate_activated:
         gate_capacity_rate = lmt_parameters.gate_threshold_rate
         redemption_paid_amount = nav * gate_capacity_rate

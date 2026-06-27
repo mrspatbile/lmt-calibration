@@ -250,7 +250,7 @@ def run_selected_sample_scenario(
         stress_horizon_days=liquidity_stress.stress_horizon_days,
     )
 
-    # Calculate estimated liquidity costs and LMT activation
+    # Calculate estimated liquidity costs and the simulated activation assessment.
     liquidity_cost_breakdown = estimate_liquidity_cost_breakdown(redemption_amount, market_stress)
     lmt_activation = assess_lmt_impact(
         nav=current_nav_before_lmt_effects,
