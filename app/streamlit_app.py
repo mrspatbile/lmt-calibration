@@ -1,5 +1,6 @@
 """Alternative Streamlit dashboard for Liquidity Management Tools Calibration."""
 
+import sys
 from dataclasses import dataclass
 from decimal import Decimal
 from html import escape
@@ -20,6 +21,13 @@ from lmt_calibration.services import (
     run_scenario_across_market_conditions,
     run_selected_sample_scenario,
 )
+
+# Add app directory to path for content import
+_APP_DIR = Path(__file__).resolve().parent
+if str(_APP_DIR) not in sys.path:
+    sys.path.insert(0, str(_APP_DIR))
+
+import content  # noqa: E402
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 SAMPLE_DATA_DIR = PROJECT_ROOT / "data" / "sample"
@@ -224,7 +232,34 @@ ul[data-baseweb="menu"] li:hover,
   color: $text;
   font-size: 1.08rem;
   font-weight: 800;
+  margin: 0;
+}
+.lmt-sidebar-header {
+  align-items: baseline;
+  display: flex;
+  gap: 7px;
   margin: 0 0 14px;
+}
+.lmt-sidebar-separator {
+  color: $muted !important;
+  font-size: 0.72rem;
+  font-weight: 400;
+}
+.lmt-sidebar-header .lmt-about-link {
+  background: none;
+  border: 0;
+  box-shadow: none;
+  color: $muted !important;
+  cursor: pointer;
+  font-size: 0.72rem;
+  font-weight: 400;
+  padding: 0;
+  text-decoration: none;
+}
+.lmt-sidebar-header .lmt-about-link:hover,
+.lmt-sidebar-header .lmt-about-link:focus-visible {
+  color: $accent !important;
+  text-decoration: underline;
 }
 .lmt-theme-toggle {
   background: $tertiary;
@@ -701,6 +736,12 @@ LIGHT_MODE_CSS = """
 """
 
 
+@st.dialog("About this app")
+def show_about_dialog() -> None:
+    """Display the About this app modal dialog."""
+    st.markdown(content.ABOUT_TEXT)
+
+
 def main() -> None:
     """Render the alternative Streamlit dashboard."""
 
@@ -714,7 +755,19 @@ def main() -> None:
     inputs = _load_inputs()
 
     with st.sidebar:
-        st.markdown("<div class='lmt-sidebar-title'>LMT Calibration</div>", unsafe_allow_html=True)
+        st.markdown(
+            "<div class='lmt-sidebar-header'>"
+            "<span class='lmt-sidebar-title'>LMT Calibration</span>"
+            "<span class='lmt-sidebar-separator'>|</span>"
+            "<a class='lmt-about-link' href='?about=1' target='_self' "
+            "aria-label='About this app'>About</a>"
+            "</div>",
+            unsafe_allow_html=True,
+        )
+
+    if st.query_params.get("about") == "1":
+        del st.query_params["about"]
+        show_about_dialog()
 
     # Initialize session state for theme
     if "dark_mode" not in st.session_state:
