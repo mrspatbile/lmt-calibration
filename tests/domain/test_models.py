@@ -258,8 +258,8 @@ def test_lmt_threshold_diagnostic_result_accepts_reference_threshold_values() ->
         breached=True,
         observed_value="0.018",
         reference_threshold_value="0.015",
-        quantitative_reason="Dilution rate exceeds the reference swing-pricing threshold.",
-        message="Reference swing-pricing threshold diagnostic breach.",
+        quantitative_reason="Redemption rate exceeds the reference swing activation threshold.",
+        message="Reference swing activation threshold diagnostic breach.",
     )
 
     assert diagnostic.assessment_type is ThresholdAssessmentType.SWING_PRICING
@@ -296,7 +296,7 @@ def test_lmt_threshold_diagnostic_result_rejects_extra_fields() -> None:
             breached=False,
             observed_value="0.010",
             reference_threshold_value="0.015",
-            quantitative_reason="Dilution rate is below the reference threshold.",
+            quantitative_reason="Redemption rate is below the reference threshold.",
             message="No diagnostic breach.",
             proposed_threshold_value="0.020",
         )

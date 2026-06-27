@@ -7,10 +7,10 @@ All notable changes to this project are documented here.
 ### Added
 - Streamlit dashboard for LMT calibration and scenario review.
 - Scenario comparison matrix across market conditions.
-- LMT activation engine for swing pricing, redemption gates, and liquidity-buffer threshold checks.
+- LMT activation-assessment engine for simulated swing activation, simulated gate activation, and liquidity-buffer threshold checks.
 - Liquidity cost breakdown by asset group.
 - Per-asset-group liquidity stress assumptions in `liquidity_stresses.json`.
-- Calibration guidance panel with activation status, cost recovery, and deferral indicators.
+- Calibration guidance panel with simulated activation status, cost recovery, and deferral indicators.
 
 ### Changed
 - Expanded market stress inputs with execution-cost assumptions.

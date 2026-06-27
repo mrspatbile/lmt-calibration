@@ -177,7 +177,7 @@ shortfall = max(
 )
 ```
 
-Shortfall is a liquidation result. It is not a redemption-gate trigger in the current threshold logic.
+Shortfall is a liquidation result. It is not part of the current gate activation threshold comparison.
 
 ## Realised cost and estimated execution-cost context
 
@@ -239,9 +239,9 @@ gate_threshold_diagnostic =
     redemption_rate >= gate_threshold_rate
 ```
 
-When the scenario crosses the gate threshold, the current model calculates paid and deferred redemption amounts for that single period. It does not model a deferred-redemption backlog through time.
+When the simulated gate activation condition is met, the current model calculates paid and deferred redemption amounts for that single period. It does not model a deferred-redemption backlog through time.
 
-Shortfall remains a separate liquidation result and does not independently trigger the gate diagnostic.
+Shortfall remains a separate liquidation result and does not independently satisfy the gate activation condition.
 
 ### Liquidity-buffer threshold diagnostic
 

@@ -1,4 +1,4 @@
-"""Tests for LMT activation and investor impact assessment."""
+"""Tests for simulated LMT activation assessment and investor impact."""
 
 from decimal import Decimal
 from pathlib import Path
@@ -187,8 +187,8 @@ def test_buffer_breach_not_checked_when_none(market_stresses, lmt_params):
     assert result.buffer_breached is False
 
 
-def test_buffer_breach_not_activated(market_stresses, lmt_params):
-    """Test buffer breach when buffer is above minimum."""
+def test_buffer_not_breached_when_above_minimum(market_stresses, lmt_params):
+    """Test that the liquidity buffer is not breached when above the minimum."""
     normal = market_stresses[0]
     base_params = lmt_params[0]  # min buffer 5%
     nav = Decimal("100000000")
@@ -205,8 +205,8 @@ def test_buffer_breach_not_activated(market_stresses, lmt_params):
     assert result.buffer_breached is False
 
 
-def test_buffer_breach_activated(market_stresses, lmt_params):
-    """Test buffer breach when buffer is below minimum."""
+def test_buffer_breached_when_below_minimum(market_stresses, lmt_params):
+    """Test that the liquidity buffer is breached when below the minimum."""
     normal = market_stresses[0]
     base_params = lmt_params[0]  # min buffer 5%
     nav = Decimal("100000000")

@@ -32,7 +32,7 @@ def test_app_scenario_run_contains_computed_values(sample_data):
         "remaining buffer should be in result"
     )
     assert run.liquidity_cost_breakdown is not None, "liquidity cost breakdown should be present"
-    assert run.lmt_activation is not None, "LMT activation status should be present"
+    assert run.lmt_activation is not None, "Activation-assessment result should be present"
 
 
 def test_lmt_parameters_wired_to_ribbon(sample_data):
@@ -76,17 +76,17 @@ def test_liquidity_cost_breakdown_available(sample_data):
 
 
 def test_lmt_activation_status_available(sample_data):
-    """Verify LMT activation status is computed and available."""
+    """Verify simulated LMT activation status is computed and available."""
     run = run_selected_sample_scenario(
         sample_data, fund_id="lux_dynamic_allocation", strategy_id="cash_then_liquid_assets"
     )
 
     activation = run.lmt_activation
 
-    # These are the values that should be displayed in LMT status section
-    assert isinstance(activation.swing_activated, bool), "swing activation should be bool"
-    assert isinstance(activation.gate_activated, bool), "gate activation should be bool"
-    assert isinstance(activation.buffer_breached, bool), "buffer breach should be bool"
+    # These values support the dashboard activation assessment.
+    assert isinstance(activation.swing_activated, bool), "simulated swing activation should be bool"
+    assert isinstance(activation.gate_activated, bool), "simulated gate activation should be bool"
+    assert isinstance(activation.buffer_breached, bool), "liquidity-buffer breach should be bool"
     assert activation.calibration_adequacy is not None, "calibration adequacy should be set"
     assert activation.calibration_message != "", "calibration message should be non-empty"
 

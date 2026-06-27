@@ -2,10 +2,8 @@
 
 ![Python](https://img.shields.io/badge/python-3.13-blue)
 ![CI](https://github.com/mrspatbile/lmt-calibration/actions/workflows/ci.yml/badge.svg)
-[![ESMA](https://img.shields.io/badge/ESMA-LMT%20Guidelines-005AA9)](https://www.esma.europa.eu/document/guidelines-liquidity-management-tools-ucits-and-open-ended-aifs)
-[![AIFMD RTS](https://img.shields.io/badge/AIFMD-LMT%20RTS-blueviolet)](https://eur-lex.europa.eu/eli/reg_del/2026/465/oj/eng)
-[![UCITS RTS](https://img.shields.io/badge/UCITS-LMT%20RTS-blueviolet)](https://eur-lex.europa.eu/eli/reg_del/2026/466/oj/eng)
-[![CSSF](https://img.shields.io/badge/CSSF-26%2F910-lightgrey)](https://www.cssf.lu/wp-content/uploads/cssf26_910eng.pdf)
+[![ESMA](https://img.shields.io/badge/ESMA-LMT%20Guidelines-FF8C00)](https://www.esma.europa.eu/document/guidelines-liquidity-management-tools-ucits-and-open-ended-aifs)
+[![CSSF](https://img.shields.io/badge/CSSF-26%2F910-blueviolet)](https://www.cssf.lu/wp-content/uploads/cssf26_910eng.pdf)
 
 
 `lmt-calibration` is a fund liquidity risk project for calibrating Liquidity Management Tools under fund liquidity stress scenarios.
@@ -44,7 +42,7 @@ It combines investor-base redemption assumptions, asset market shocks, liquidity
 - **Investor classes**: retail, institutional, platform/distribution channels, fund-of-funds allocators, seed capital.
 - **Market conditions**: normal market conditions, moderate stress, severe stress, 2008 crisis conditions.
 - **Liquidation strategies**: most-liquid-first, pro-rata, hybrid, custom allocation.
-- **LMT thresholds**: swing-pricing activation level, redemption-gate trigger, internal liquidity-buffer target.
+- **LMT thresholds**: swing-pricing activation threshold, gate activation threshold, internal liquidity-buffer threshold.
 - **Liquidity stress evaluation**: compares how redemption pressure, market stress, liquidation strategy, and LMT settings affect liquidity needs, costs, shortfalls, and threshold indicators.
 
 </details>

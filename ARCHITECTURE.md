@@ -160,9 +160,9 @@ It handles:
 * participation-rate haircuts
 * cost breakdown by asset group
 
-### LMT activation and diagnostic engine
+### LMT activation-assessment and diagnostic engine
 
-Assesses which LMT tools activate under stress and provides diagnostic threshold comparisons.
+Evaluates simulated LMT activation conditions under stress and provides diagnostic threshold comparisons. It does not make fund-manager activation decisions.
 
 It handles:
 
@@ -182,7 +182,7 @@ The `services/streamlit_mvp.py` module orchestrates the complete workflow:
 * loads and caches sample data files
 * validates inputs and creates domain objects
 * applies scenario assumptions (market stress, liquidity stress, redemption stress)
-* calls liquidation, liquidity cost, and LMT activation engines
+* calls liquidation, liquidity cost, and LMT activation-assessment engines
 * returns dashboard-ready result objects for presentation
 
 This layer decouples the Streamlit UI from core calculation engines, allowing engines to be tested and reused independently.

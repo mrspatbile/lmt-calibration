@@ -74,7 +74,7 @@ Good commit message examples:
 - `add investor class redemption scenario model`
 - `add configurable liquidation strategy with haircut-adjusted cash raised`
 - `validate liquidity bucket capacity assumptions`
-- `add swing pricing trigger for dilution threshold breach`
+- `add swing activation assessment using the redemption-rate threshold`
 
 ---
 
@@ -152,7 +152,7 @@ Standalone asset-side and liability-side engine modules are not part of the curr
 - Keep business logic independent from Streamlit.
 - Streamlit may collect inputs, call services, and display outputs.
 - `services/streamlit_mvp.py` is the orchestration boundary between Streamlit, loaders, scenario preparation, calculation engines, and dashboard-ready outputs.
-- Streamlit must not calculate liquidation strategy logic, dilution, haircuts, trigger logic, or calibration results.
+- Streamlit must not calculate liquidation strategy logic, dilution, haircuts, threshold-comparison logic, or calibration results.
 - Calculations must operate on domain objects where practical, not raw DataFrames.
 - Raw DataFrames are allowed in loaders and validation only.
 - External data must pass through loaders and validators before becoming domain objects.

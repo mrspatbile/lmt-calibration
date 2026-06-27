@@ -47,7 +47,7 @@ def test_scenario_definitions_reference_valid_market_stresses():
 
 
 def test_run_scenario_with_new_analysis():
-    """Test running a scenario produces liquidity cost and LMT activation results."""
+    """Test that a scenario produces liquidity cost and activation-assessment results."""
     sample_data = load_app_sample_data(Path("data/sample"))
     run = run_selected_sample_scenario(
         sample_data,
@@ -65,7 +65,7 @@ def test_run_scenario_with_new_analysis():
     assert "total_cost_rate" in run.liquidity_cost_breakdown
     assert "bid_ask_cost_amount" in run.liquidity_cost_breakdown
 
-    # Check LMT activation result
+    # Check the simulated activation-assessment result.
     assert isinstance(run.lmt_activation.swing_activated, bool)
     assert isinstance(run.lmt_activation.gate_activated, bool)
     assert isinstance(run.lmt_activation.buffer_breached, bool)

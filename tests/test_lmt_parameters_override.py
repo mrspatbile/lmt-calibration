@@ -11,7 +11,7 @@ from lmt_calibration.services.streamlit_mvp import (
 
 
 def test_swing_threshold_override_affects_activation():
-    """Verify that overriding swing_threshold_rate changes activation status."""
+    """Verify that overriding swing_threshold_rate changes simulated activation status."""
     sample_data = load_app_sample_data(Path("data/sample"))
 
     # Run with default parameters
@@ -37,7 +37,7 @@ def test_swing_threshold_override_affects_activation():
         lmt_parameters_override=high_swing_params,
     )
 
-    # With high threshold, swing should NOT be activated
+    # With a high threshold, the simulated swing activation condition is not met.
     assert not run_high_threshold.lmt_activation.swing_activated, (
         "High swing threshold should prevent activation"
     )
@@ -81,7 +81,7 @@ def test_gate_threshold_override_affects_deferred():
 
 
 def test_buffer_target_override_affects_warning():
-    """Verify that overriding minimum_buffer_rate changes buffer warning status."""
+    """Verify that overriding minimum_buffer_rate changes buffer-breach warning status."""
     sample_data = load_app_sample_data(Path("data/sample"))
 
     # Run with default parameters
@@ -107,9 +107,9 @@ def test_buffer_target_override_affects_warning():
         lmt_parameters_override=high_buffer_params,
     )
 
-    # With high buffer target, buffer warning should be triggered
+    # With a high target, the liquidity buffer should be breached and a warning reported.
     assert run_high_buffer.lmt_activation.buffer_breached, (
-        "High buffer target should trigger warning"
+        "High buffer target should report a liquidity-buffer warning"
     )
     print("✓ Buffer target override correctly affects warning status")
 

@@ -92,8 +92,8 @@ def _audit_record() -> ScenarioAuditRecord:
                     breached=False,
                     observed_value="0.006",
                     reference_threshold_value="0.015",
-                    quantitative_reason="Dilution rate is below the reference threshold.",
-                    message="Reference swing-pricing threshold diagnostic is not breached.",
+                    quantitative_reason="Redemption rate is below the reference swing activation threshold.",
+                    message="Reference swing activation threshold diagnostic is not breached.",
                 )
             ],
         ),

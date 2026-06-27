@@ -30,7 +30,7 @@ def test_redemption_rate_uses_market_shocked_nav_before_lmt_effects():
 
 
 def test_swing_and_gate_use_canonical_redemption_rate():
-    """Apply both activation thresholds to the rate exposed by the scenario run."""
+    """Apply both simulated activation threshold comparisons to the scenario rate."""
     sample_data = load_app_sample_data(Path("data/sample"))
     run = run_selected_sample_scenario(
         sample_data,

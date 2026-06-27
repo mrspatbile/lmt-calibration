@@ -896,7 +896,7 @@ def _capture_lmt_thresholds_from_sliders(default_params: LmtParameters) -> LmtPa
         value=default_swing,
         step=0.25,
         key="swing_threshold",
-        help="Redemption rate at which swing pricing activates.",
+        help="Redemption rate at which the simulated swing activation condition is met.",
     )
 
     st.markdown("</div>", unsafe_allow_html=True)
@@ -914,7 +914,7 @@ def _capture_lmt_thresholds_from_sliders(default_params: LmtParameters) -> LmtPa
         value=6.0,
         step=1.0,
         key="gate_threshold",
-        help="Redemption rate at which redemption gate activates.",
+        help="Redemption rate at which the simulated gate activation condition is met.",
     )
 
     st.markdown("</div>", unsafe_allow_html=True)
@@ -1147,7 +1147,7 @@ def _scenario_result_from_market_condition_run(
                 _money(outcome.nav_after_lmt),
                 _format_lmt_pills_compact(market_run, outcome),
                 "NAV after LMT effects",
-                "NAV after activated LMTs and resulting cash-flow adjustments.",
+                "NAV after simulated LMT effects and resulting cash-flow adjustments.",
                 "danger" if final_nav_change < ZERO else "success",
             ),
             StageResult(
@@ -1324,7 +1324,7 @@ def _render_fund_card(characteristics: FundCharacteristics, fund_name: str) -> N
 
 
 def _render_lmt_configuration(run: AppScenarioRun) -> None:
-    """Render calibrated thresholds and selected inputs side by side (50/50) as ribbon-style banners."""
+    """Render thresholds under review and selected inputs as ribbon-style banners."""
     # Read slider values from session state, fallback to run parameters
     default_swing = float(run.parameters.swing_threshold_rate * ONE_HUNDRED)
     default_gate = float(run.parameters.gate_threshold_rate * ONE_HUNDRED)
@@ -1344,8 +1344,8 @@ def _render_lmt_configuration(run: AppScenarioRun) -> None:
     <div style='display:grid;grid-template-columns:1fr 1fr;gap:60px;margin-top:8px;margin-bottom:16px;'>
       <div class='lmt-config-panel' style='border-top:1px solid rgba(139,151,163,0.5);border-bottom:1px solid rgba(139,151,163,0.5);padding:10px 0;display:flex;align-items:center;gap:10px;'>
         <div class='lmt-banner-heading'>
-          <span>Calibrated<br/>thresholds</span>
-          <span class='lmt-help-icon' role='button' tabindex='0' aria-label='How to change calibrated thresholds' data-tooltip='Change these values using the threshold sliders in the sidebar.'>?</span>
+          <span>Thresholds<br/>under review</span>
+          <span class='lmt-help-icon' role='button' tabindex='0' aria-label='How to change threshold values' data-tooltip='Change these values using the threshold sliders in the sidebar.'>?</span>
         </div>
         <div style='width:1px;background:rgba(139,151,163,0.5);height:24px;flex-shrink:0;'></div>
         <div style='display:flex;gap:0;flex:1;justify-content:space-around;'>
@@ -1389,7 +1389,7 @@ def _format_lmt_pills_compact(
     run: AppScenarioRun,
     outcome: ScenarioMatrixOutcome,
 ) -> str:
-    """Format LMT activation pills as HTML for matrix display.
+    """Format simulated LMT activation-assessment pills for matrix display.
 
     Returns HTML that shows in the matrix cell below the NAV value for each scenario.
     Each LMT action is a separate pill using lmt-badge styling.
@@ -1415,7 +1415,7 @@ def _format_lmt_pills_compact(
         pills_html.append("<span class='lmt-badge tone-danger'>Buffer warning</span>")
 
     if not pills_html:
-        return "No LMT activated"
+        return "No simulated activation conditions met"
 
     return "<div style='line-height:1.6;'>" + " ".join(pills_html) + "</div>"
 
@@ -1423,7 +1423,7 @@ def _format_lmt_pills_compact(
 def _render_calibration_guidance(run: AppScenarioRun) -> None:
     """Render LMT Calibration Guidance using exact 6-column grid layout."""
     st.markdown(
-        "<div class='lmt-guidance-container' style='margin-top:13px;border-radius:12px;padding:6px 10px;'><div style='display:grid;grid-template-columns:0.8fr 1.1fr 1.1fr 1.1fr 1.1fr 1.1fr;gap:8px;'><div style='grid-column:1;'><div style='color:#9ca3af;font-size:13px;font-weight:600;margin-bottom:3px;line-height:1.3;'>LMT Calibration Guidance</div><div style='color:#6b7280;font-size:10px;line-height:1.4;'>Indicative suitability based on selected fund characteristics and scenario.</div></div><div style='grid-column:2/4;margin-left:14px;'><div style='display:flex;align-items:center;gap:6px;margin-bottom:4px;'><div style='width:22px;height:2px;background:rgba(111,168,220,0.65);'></div><div style='color:#aaa;font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:0.5px;'>Anti-dilution tools</div></div><div style='display:grid;grid-template-columns:1fr 1fr;gap:6px 6px;row-gap:5px;'><div style='border:1px solid rgba(0,102,204,0.4);border-radius:2px;padding:5px 8px;background:transparent;'><span style='color:#4da6ff;font-size:11px;font-weight:600;'>Swing pricing</span> <span style='background:#0066cc;color:#fff;padding:1px 4px;border-radius:1px;font-size:9px;margin-left:8px;'>Selected</span><div style='color:#999;font-size:8px;margin-top:2px;'>Price adjustment | flow threshold | passes liquidity cost</div></div><div style='border:1px solid rgba(85,85,85,0.4);border-radius:2px;padding:5px 8px;background:transparent;'><span style='color:#ccc;font-size:11px;font-weight:600;'>Anti-dilution levy</span><div style='color:#999;font-size:8px;margin-top:2px;'>Separate levy | cost recovery | alternative to swing</div></div><div style='border:1px solid rgba(85,85,85,0.4);border-radius:2px;padding:5px 8px;background:transparent;'><span style='color:#ccc;font-size:11px;font-weight:600;'>Dual pricing</span><div style='color:#999;font-size:8px;margin-top:2px;'>Bid/offer NAV | spread-based | operationally heavier</div></div><div style='border:1px solid rgba(85,85,85,0.4);border-radius:2px;padding:5px 8px;background:transparent;'><span style='color:#ccc;font-size:11px;font-weight:600;'>Redemption fee</span><div style='color:#999;font-size:8px;margin-top:2px;'>Fixed fee | predictable costs | less stress-responsive</div></div></div></div><div style='grid-column:4/7;margin-left:10px;'><div style='display:flex;align-items:center;gap:6px;margin-bottom:4px;'><div style='width:22px;height:2px;background:rgba(111,168,220,0.65);'></div><div style='color:#aaa;font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:0.5px;'>Quantitative-based LMT<span style='font-size:0.75em;'>S</span></div></div><div style='display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px 6px;row-gap:5px;'><div style='border:1px solid rgba(0,102,204,0.4);border-radius:2px;padding:5px 8px;background:transparent;'><span style='color:#4da6ff;font-size:11px;font-weight:600;'>Redemption gate</span> <span style='background:#0066cc;color:#fff;padding:1px 4px;border-radius:1px;font-size:9px;margin-left:8px;'>Selected</span><div style='color:#999;font-size:8px;margin-top:2px;'>Partial deferral | protects liquidity</div></div><div style='border:1px solid rgba(85,85,85,0.4);border-radius:2px;padding:5px 8px;background:transparent;'><span style='color:#ccc;font-size:11px;font-weight:600;'>Notice extension</span><div style='color:#999;font-size:8px;margin-top:2px;'>More time to sell | ex-ante tool | less liquid assets</div></div><div style='border:1px solid rgba(85,85,85,0.4);border-radius:2px;padding:5px 8px;background:transparent;'><span style='color:#ccc;font-size:11px;font-weight:600;'>Side pockets</span><span style='background:rgba(136,136,136,0.5);color:#fff;padding:1px 4px;border-radius:1px;font-size:9px;margin-left:8px;'>Exceptional</span><div style='color:#999;font-size:8px;margin-top:2px;'>Segregate assets | hard-to-value/illiquid</div></div><div style='border:1px solid rgba(85,85,85,0.4);border-radius:2px;padding:5px 8px;background:transparent;'><span style='color:#ccc;font-size:11px;font-weight:600;'>Redemption in kind</span><div style='color:#999;font-size:8px;margin-top:2px;'>Institutional use | avoids forced sales</div></div><div style='border:1px solid rgba(85,85,85,0.4);border-radius:2px;padding:5px 8px;background:transparent;'><span style='color:#ccc;font-size:11px;font-weight:600;'>Suspension</span><span style='background:rgba(136,136,136,0.5);color:#fff;padding:1px 4px;border-radius:1px;font-size:9px;margin-left:8px;'>Exceptional</span><div style='color:#999;font-size:8px;margin-top:2px;'>Temporary stop | last resort</div></div><div style='background:transparent;'></div></div></div></div></div>",
+        "<div class='lmt-guidance-container' style='margin-top:13px;border-radius:12px;padding:6px 10px;'><div style='display:grid;grid-template-columns:0.8fr 1.1fr 1.1fr 1.1fr 1.1fr 1.1fr;gap:8px;'><div style='grid-column:1;'><div style='color:#9ca3af;font-size:13px;font-weight:600;margin-bottom:3px;line-height:1.3;'>LMT Calibration Guidance</div><div style='color:#6b7280;font-size:10px;line-height:1.4;'>Indicative suitability based on selected fund characteristics and scenario.</div></div><div style='grid-column:2/4;margin-left:14px;'><div style='display:flex;align-items:center;gap:6px;margin-bottom:4px;'><div style='width:22px;height:2px;background:rgba(111,168,220,0.65);'></div><div style='color:#aaa;font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:0.5px;'>Anti-dilution tools</div></div><div style='display:grid;grid-template-columns:1fr 1fr;gap:6px 6px;row-gap:5px;'><div style='border:1px solid rgba(0,102,204,0.4);border-radius:2px;padding:5px 8px;background:transparent;'><span style='color:#4da6ff;font-size:11px;font-weight:600;'>Swing pricing</span> <span style='background:#0066cc;color:#fff;padding:1px 4px;border-radius:1px;font-size:9px;margin-left:8px;'>Selected</span><div style='color:#999;font-size:8px;margin-top:2px;'>Price adjustment | activation threshold | passes liquidity cost</div></div><div style='border:1px solid rgba(85,85,85,0.4);border-radius:2px;padding:5px 8px;background:transparent;'><span style='color:#ccc;font-size:11px;font-weight:600;'>Anti-dilution levy</span><div style='color:#999;font-size:8px;margin-top:2px;'>Separate levy | cost recovery | alternative to swing</div></div><div style='border:1px solid rgba(85,85,85,0.4);border-radius:2px;padding:5px 8px;background:transparent;'><span style='color:#ccc;font-size:11px;font-weight:600;'>Dual pricing</span><div style='color:#999;font-size:8px;margin-top:2px;'>Bid/offer NAV | spread-based | operationally heavier</div></div><div style='border:1px solid rgba(85,85,85,0.4);border-radius:2px;padding:5px 8px;background:transparent;'><span style='color:#ccc;font-size:11px;font-weight:600;'>Redemption fee</span><div style='color:#999;font-size:8px;margin-top:2px;'>Fixed fee | predictable costs | less stress-responsive</div></div></div></div><div style='grid-column:4/7;margin-left:10px;'><div style='display:flex;align-items:center;gap:6px;margin-bottom:4px;'><div style='width:22px;height:2px;background:rgba(111,168,220,0.65);'></div><div style='color:#aaa;font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:0.5px;'>Quantitative-based LMT<span style='font-size:0.75em;'>S</span></div></div><div style='display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px 6px;row-gap:5px;'><div style='border:1px solid rgba(0,102,204,0.4);border-radius:2px;padding:5px 8px;background:transparent;'><span style='color:#4da6ff;font-size:11px;font-weight:600;'>Redemption gate</span> <span style='background:#0066cc;color:#fff;padding:1px 4px;border-radius:1px;font-size:9px;margin-left:8px;'>Selected</span><div style='color:#999;font-size:8px;margin-top:2px;'>Partial deferral | protects liquidity</div></div><div style='border:1px solid rgba(85,85,85,0.4);border-radius:2px;padding:5px 8px;background:transparent;'><span style='color:#ccc;font-size:11px;font-weight:600;'>Notice extension</span><div style='color:#999;font-size:8px;margin-top:2px;'>More time to sell | ex-ante tool | less liquid assets</div></div><div style='border:1px solid rgba(85,85,85,0.4);border-radius:2px;padding:5px 8px;background:transparent;'><span style='color:#ccc;font-size:11px;font-weight:600;'>Side pockets</span><span style='background:rgba(136,136,136,0.5);color:#fff;padding:1px 4px;border-radius:1px;font-size:9px;margin-left:8px;'>Exceptional</span><div style='color:#999;font-size:8px;margin-top:2px;'>Segregate assets | hard-to-value/illiquid</div></div><div style='border:1px solid rgba(85,85,85,0.4);border-radius:2px;padding:5px 8px;background:transparent;'><span style='color:#ccc;font-size:11px;font-weight:600;'>Redemption in kind</span><div style='color:#999;font-size:8px;margin-top:2px;'>Institutional use | avoids forced sales</div></div><div style='border:1px solid rgba(85,85,85,0.4);border-radius:2px;padding:5px 8px;background:transparent;'><span style='color:#ccc;font-size:11px;font-weight:600;'>Suspension</span><span style='background:rgba(136,136,136,0.5);color:#fff;padding:1px 4px;border-radius:1px;font-size:9px;margin-left:8px;'>Exceptional</span><div style='color:#999;font-size:8px;margin-top:2px;'>Temporary stop | last resort</div></div><div style='background:transparent;'></div></div></div></div></div>",
         unsafe_allow_html=True,
     )
 
