@@ -2,6 +2,7 @@
 
 import csv
 from collections.abc import Callable
+from decimal import Decimal
 from pathlib import Path
 
 from lmt_calibration.domain import (
@@ -81,12 +82,21 @@ def load_redemption_scenarios_csv(path: Path) -> list[RedemptionScenario]:
 def load_market_stresses_csv(path: Path) -> list[MarketStress]:
     """Load validated reusable market stresses from a CSV file."""
 
-    records = _load_validated_csv(
-        path,
-        dataset_name="market_stresses",
-        validator=validate_market_stress_records,
-        integer_fields=set(),
+    records = _read_csv_records(path)
+    _normalize_blank_cells(records)
+    _convert_decimal_fields(
+        records,
+        "market_stresses",
+        {
+            "market_shock_rate",
+            "bid_ask_spread_rate",
+            "transaction_cost_rate",
+            "market_impact_rate",
+            "participation_rate",
+            "liquidity_haircut_rate",
+        },
     )
+    records = validate_market_stress_records(records)
     return [MarketStress.model_validate(record) for record in records]
 
 
@@ -207,6 +217,43 @@ def _convert_integer_fields(
                     location=f"{dataset_name}[{index}]",
                     field=field_name,
                     message="must be integer",
+                )
+            )
+
+    if issues:
+        raise DataValidationError(issues)
+
+
+def _convert_decimal_fields(
+    records: list[dict[str, object]],
+    dataset_name: str,
+    decimal_fields: set[str],
+) -> None:
+    issues: list[ValidationIssue] = []
+    for index, record in enumerate(records):
+        for field_name in sorted(decimal_fields):
+            value = record.get(field_name)
+            if value is None or value == "":
+                continue
+            if isinstance(value, Decimal):
+                continue
+            if isinstance(value, str):
+                try:
+                    record[field_name] = Decimal(value)
+                except Exception:
+                    issues.append(
+                        ValidationIssue(
+                            location=f"{dataset_name}[{index}]",
+                            field=field_name,
+                            message="must be decimal",
+                        )
+                    )
+                continue
+            issues.append(
+                ValidationIssue(
+                    location=f"{dataset_name}[{index}]",
+                    field=field_name,
+                    message="must be decimal",
                 )
             )
 
