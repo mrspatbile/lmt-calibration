@@ -4,12 +4,12 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "lmt-calibration"
-version = "0.4.0"
+version = "0.5.0"
 description = "Liquidity Management Tools calibration app for fund liquidity stress testing."
 readme = "README.md"
 requires-python = ">=3.13"
 authors = [
-    { name = "mrspatbile" }
+    { name = "mrspatbile", email = "mrspatbile@gmail.com"}
 ]
 license = { text = "MIT" }
 
