@@ -1,4 +1,5 @@
-market_stress_id,version,name,description,market_shock_rate
-base_market_conditions,1.0,base_market_conditions,No market shock applied in the base synthetic scenario.,0
-europe_equity_downturn,1.0,europe_equity_downturn,Synthetic downturn in European listed equity markets.,-0.12
-global_equity_selloff,1.0,global_equity_selloff,Synthetic global listed equity selloff.,-0.20
+market_stress_id,version,name,description,market_shock_rate,bid_ask_spread_rate,transaction_cost_rate,market_impact_rate,participation_rate,liquidity_haircut_rate
+normal_market_conditions,1.0,normal_market_conditions,Normal market conditions with baseline execution costs.,0.00,0.0010,0.0005,0.0005,0.50,0.05
+moderate_market_stress,1.0,moderate_market_stress,Moderate market stress with increased execution costs.,-0.05,0.0025,0.0010,0.0015,0.25,0.10
+severe_market_stress,1.0,severe_market_stress,Severe market stress with significant execution deterioration.,-0.12,0.0050,0.0020,0.0030,0.15,0.15
+historical_crisis_2008,1.0,historical_crisis_2008,2008 Financial Crisis conditions with severe market dislocations.,-0.35,0.0100,0.0050,0.0075,0.05,0.25

@@ -34,15 +34,44 @@ class MarketStress(VersionedAssumption):
     """Reusable asset-side market shock assumption."""
 
     market_stress_id: str = Field(pattern=SNAKE_CASE_PATTERN)
-    market_shock_rate: Decimal
+    market_shock_rate: Decimal = Field(ge=Decimal("-1"), le=Decimal("1"))
+    bid_ask_spread_rate: Decimal | None = Field(default=None, ge=Decimal("0"), le=Decimal("1"))
+    transaction_cost_rate: Decimal | None = Field(default=None, ge=Decimal("0"), le=Decimal("1"))
+    market_impact_rate: Decimal | None = Field(default=None, ge=Decimal("0"), le=Decimal("1"))
+    participation_rate: Decimal | None = Field(default=None, gt=Decimal("0"), le=Decimal("1"))
+    liquidity_haircut_rate: Decimal | None = Field(default=None, ge=Decimal("0"), le=Decimal("1"))
+
+
+class LiquidityExecutionAssumption(BaseModel):
+    """Execution and tradability assumptions for an asset class under liquidity stress."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True, str_strip_whitespace=True)
+
+    bid_ask_spread_rate: Decimal = Field(ge=Decimal("0"), le=Decimal("1"))
+    transaction_cost_rate: Decimal = Field(ge=Decimal("0"), le=Decimal("1"))
+    market_impact_rate: Decimal = Field(ge=Decimal("0"), le=Decimal("1"))
+    participation_rate: Decimal = Field(gt=Decimal("0"), le=Decimal("1"))
+    liquidity_haircut_rate: Decimal = Field(ge=Decimal("0"), le=Decimal("1"))
 
 
 class LiquidityStress(VersionedAssumption):
-    """Reusable asset-side liquidity shock assumption."""
+    """Reusable asset-side liquidity shock assumption with execution assumptions by asset class."""
 
     liquidity_stress_id: str = Field(pattern=SNAKE_CASE_PATTERN)
-    liquidity_stress_multiplier: Decimal = Field(gt=Decimal("0"))
     stress_horizon_days: int = Field(gt=0)
+    execution_assumptions_by_asset_group: dict[AssetGroup, LiquidityExecutionAssumption] = Field(
+        min_length=1
+    )
+
+    @field_validator("execution_assumptions_by_asset_group")
+    @classmethod
+    def validate_execution_assumptions(
+        cls, value: dict[AssetGroup, LiquidityExecutionAssumption]
+    ) -> dict[AssetGroup, LiquidityExecutionAssumption]:
+        """Ensure all asset groups have valid execution assumptions."""
+        if not value:
+            raise ValueError("execution_assumptions_by_asset_group must not be empty")
+        return value
 
 
 class HistoricalStressShock(BaseModel):

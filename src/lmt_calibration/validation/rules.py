@@ -235,13 +235,35 @@ def validate_market_stress_records(records: object) -> list[dict[str, object]]:
     for index, record in enumerate(copied_records):
         location = record_location("market_stresses", index)
         validate_forbidden_fields(record, {"fund_id", "as_of_date"}, location, issues)
-        validate_decimal(record, "market_shock_rate", location, issues)
+        validate_decimal(
+            record, "market_shock_rate", location, issues, ge=Decimal("-1"), le=Decimal("1")
+        )
+        if record.get("bid_ask_spread_rate") is not None:
+            validate_decimal(
+                record, "bid_ask_spread_rate", location, issues, ge=Decimal("0"), le=Decimal("1")
+            )
+        if record.get("transaction_cost_rate") is not None:
+            validate_decimal(
+                record, "transaction_cost_rate", location, issues, ge=Decimal("0"), le=Decimal("1")
+            )
+        if record.get("market_impact_rate") is not None:
+            validate_decimal(
+                record, "market_impact_rate", location, issues, ge=Decimal("0"), le=Decimal("1")
+            )
+        if record.get("participation_rate") is not None:
+            validate_decimal(
+                record, "participation_rate", location, issues, gt=Decimal("0"), le=Decimal("1")
+            )
+        if record.get("liquidity_haircut_rate") is not None:
+            validate_decimal(
+                record, "liquidity_haircut_rate", location, issues, ge=Decimal("0"), le=Decimal("1")
+            )
     raise_if_issues(issues)
     return copied_records
 
 
 def validate_liquidity_stress_records(records: object) -> list[dict[str, object]]:
-    """Validate reusable liquidity stress records."""
+    """Validate reusable liquidity stress records with asset-class-specific execution assumptions."""
 
     copied_records = _validate_versioned_assumption_records(
         records,
@@ -252,8 +274,8 @@ def validate_liquidity_stress_records(records: object) -> list[dict[str, object]
     for index, record in enumerate(copied_records):
         location = record_location("liquidity_stresses", index)
         validate_forbidden_fields(record, {"fund_id", "as_of_date"}, location, issues)
-        validate_decimal(record, "liquidity_stress_multiplier", location, issues, gt=Decimal("0"))
         validate_int(record, "stress_horizon_days", location, issues, gt=0)
+        # execution_assumptions_by_asset_group is validated by Pydantic model
     raise_if_issues(issues)
     return copied_records
 
@@ -368,5 +390,5 @@ def _stress_value_fields(id_field: str) -> set[str]:
     if id_field == "market_stress_id":
         return {"market_shock_rate"}
     if id_field == "liquidity_stress_id":
-        return {"liquidity_stress_multiplier", "stress_horizon_days"}
+        return {"stress_horizon_days"}
     return set()

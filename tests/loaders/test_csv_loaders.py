@@ -99,11 +99,6 @@ def test_csv_loaders_return_typed_domain_objects(tmp_path: Path) -> None:
                 "name": "europe_equity_downturn",
                 "description": "Reusable market shock.",
                 "market_shock_rate": "-0.12",
-                "bid_ask_spread_rate": "0.0050",
-                "transaction_cost_rate": "0.0020",
-                "market_impact_rate": "0.0030",
-                "participation_rate": "0.15",
-                "liquidity_haircut_rate": "0.15",
             }
         ],
     )
