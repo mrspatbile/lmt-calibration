@@ -29,7 +29,9 @@ result objects
 outputs/audit/ and outputs/reports/
 ```
 
-Loaders read files and pass parsed records through validation before creating typed domain models. The workflow is designed so later calculation engines consume domain models, not raw CSV rows or DataFrames. Generated audit and report files are runtime outputs, not source data.
+Loaders read files and pass parsed records through validation before creating typed domain models. Calculation engines consume domain models, not raw CSV rows or DataFrames. Generated audit and report files are runtime outputs, not source data.
+
+In the Streamlit dashboard, `app/streamlit_app.py` provides the presentation layer and calls `services/streamlit_mvp.py` to load sample data, prepare scenarios, call the engines, and return dashboard-ready outputs.
 
 ---
 
@@ -67,7 +69,7 @@ data/sample/
 ├── investor_classes.csv
 ├── redemption_scenarios.csv
 ├── market_stresses.csv
-├── liquidity_stresses.csv
+├── liquidity_stresses.json
 ├── scenario_definitions.csv
 ├── lmt_parameters.csv
 ├── liquidation_strategies.json
@@ -81,7 +83,7 @@ Dataset sections:
 * [investor_classes.csv](#investor-classes-csv)
 * [redemption_scenarios.csv](#redemption-scenarios-csv)
 * [market_stresses.csv](#market-stresses-csv)
-* [liquidity_stresses.csv](#liquidity-stresses-csv)
+* [liquidity_stresses.json](#liquidity-stresses-json)
 * [scenario_definitions.csv](#scenario-definitions-csv)
 * [lmt_parameters.csv](#lmt-parameters-csv)
 * [liquidation_strategies.json](#liquidation-strategies-json)
@@ -116,7 +118,7 @@ Relationships:
 * reverse repos
 * repo financing exposures
 
-Positions are designed for later asset-side stress and liquidation strategy engines. Repo financing exposures are treated as liquidity obligations, not ordinary liquid assets.
+Positions are used in current stress preparation and by the liquidation strategy engine. Repo financing exposures are treated as liquidity obligations, not ordinary liquid assets.
 
 Relationships:
 
@@ -162,20 +164,23 @@ Relationships:
 Relationships:
 
 * `scenario_definitions.csv` selects exactly one `market_stress_id`.
-* The selected market stress is designed to be applied to eligible asset positions by the asset-side engine.
+* The selected market stress is applied to eligible asset positions during scenario preparation.
 
 ---
 
-<a id="liquidity-stresses-csv"></a>
+<a id="liquidity-stresses-json"></a>
 
-### liquidity_stresses.csv
+### liquidity_stresses.json
 
-`liquidity_stresses.csv` defines reusable asset-side liquidity stress assumptions. Liquidity stresses include the liquidity stress multiplier and stress horizon.
+`liquidity_stresses.json` defines reusable asset-side liquidity stress assumptions with execution assumptions broken down by asset group. Liquidity stresses include a stress horizon and per-asset-group execution costs such as bid-ask spreads, transaction costs, market impact, participation rates, and liquidity haircuts.
+
+For field-level details, see [DATA_SCHEMA.md](DATA_SCHEMA.md#liquidity-stresses-json).
 
 Relationships:
 
 * `scenario_definitions.csv` selects exactly one `liquidity_stress_id`.
-* Liquidity stress is designed to affect haircut and capacity treatment in asset-side and liquidation engines.
+* Different asset groups may have different execution assumptions under the same liquidity stress scenario.
+* Used with position settlement days and maturity days to determine asset eligibility under the stress horizon.
 
 ---
 
@@ -233,9 +238,9 @@ Relationships:
 
 Relationships:
 
-* The library is loader-ready sample data for future market-stress selection.
+* The library is loaded as sample and reference context.
 * It is not selected by `scenario_definitions.csv`.
-* V1 calculation engines do not apply the historical shocks.
+* The current calculation workflow does not directly apply the library's nested historical shock values.
 
 ---
 
@@ -246,7 +251,7 @@ Relationships:
 
 * `positions.csv`, `investor_classes.csv`, and `lmt_parameters.csv` are fund-snapshot datasets linked by `fund_id` and `as_of_date`.
 
-* `redemption_scenarios.csv`, `market_stresses.csv`, `liquidity_stresses.csv`, and `liquidation_strategies.json` contain reusable assumptions selected by `scenario_definitions.csv`.
+* `redemption_scenarios.csv`, `market_stresses.csv`, `liquidity_stresses.json`, and `liquidation_strategies.json` contain reusable assumptions selected by `scenario_definitions.csv`.
 
 * `historical_market_stress_scenarios.json` is a standalone historical stress library and is not selected by `scenario_definitions.csv`.
 
@@ -255,14 +260,14 @@ Relationships:
 
 ## Runtime Outputs
 
-Scenario runs should produce generated outputs under:
+When explicitly invoked, the audit writer may produce generated audit records under `outputs/audit/`. The `outputs/reports/` directory is reserved for reports and exports; dashboard runs do not write either output automatically.
 
 ```text
 outputs/audit/
 outputs/reports/
 ```
 
-Audit records preserve input references, selected assumptions, parameter references, liquidation strategy references, result summaries, warning flags, and output paths. For detailed audit content, see [AUDIT_TRAIL.md](AUDIT_TRAIL.md).
+Written audit records preserve input references, selected assumptions, parameter references, liquidation strategy references, result summaries, warning flags, and output paths. For detailed audit content, see [AUDIT_TRAIL.md](AUDIT_TRAIL.md).
 
 ---
 

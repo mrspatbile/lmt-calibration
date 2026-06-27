@@ -89,7 +89,7 @@ Optional or conditionally required fields:
 | `benchmark_ticker` | Benchmark or index identifier | text |
 | `maturity_days` | Remaining maturity | integer days |
 
-V1 sample asset groups:
+Current sample asset groups:
 
 * `cash`
 * `listed_equity`
@@ -182,7 +182,7 @@ Required fields:
 | `notice_days` | Redemption notice period | integer days |
 | `settlement_days` | Redemption settlement timing | integer days |
 
-Supported V1 investor classes:
+Supported investor classes:
 
 * `retail`
 * `institutional`
@@ -233,34 +233,22 @@ Required fields:
 | `description` | Human-readable description | text |
 | `market_shock_rate` | Market shock rate | decimal string; may be negative |
 
-Relationships:
-
-* Referenced by `scenario_definitions.csv`.
-* Must not contain fund/date fields.
-
-
-### liquidity_stresses.csv
-
-Purpose: reusable asset-side liquidity stress assumptions.
-
-Primary identifier: `liquidity_stress_id`.
-
-Required fields:
+Optional execution-cost fields:
 
 | Field | Description | Format |
 | --- | --- | --- |
-| `liquidity_stress_id` | Liquidity stress identifier | snake_case |
-| `version` | Assumption version | text |
-| `name` | Display/config name | snake_case |
-| `description` | Human-readable description | text |
-| `liquidity_stress_multiplier` | Haircut/capacity stress multiplier | positive decimal string |
-| `stress_horizon_days` | Scenario liquidity horizon | positive integer days |
+| `bid_ask_spread_rate` | Bid-ask spread cost under stress | decimal string, 0 to 1 |
+| `transaction_cost_rate` | Transaction cost under stress | decimal string, 0 to 1 |
+| `market_impact_rate` | Market impact cost under stress | decimal string, 0 to 1 |
+| `participation_rate` | Execution participation rate under stress | decimal string, >0 to 1 |
+| `liquidity_haircut_rate` | Market-driven liquidity haircut | decimal string, 0 to 1 |
 
 Relationships:
 
 * Referenced by `scenario_definitions.csv`.
-* Used with position maturity and settlement fields.
 * Must not contain fund/date fields.
+* Optional fields are provided in the current sample data but are not required for basic use.
+
 
 ### scenario_definitions.csv
 
@@ -277,7 +265,7 @@ Required fields:
 | `as_of_date` | Snapshot date | `YYYY-MM-DD` |
 | `redemption_scenario_id` | Selected redemption scenario | references `redemption_scenarios.csv` |
 | `market_stress_id` | Selected market stress | references `market_stresses.csv` |
-| `liquidity_stress_id` | Selected liquidity stress | references `liquidity_stresses.csv` |
+| `liquidity_stress_id` | Selected liquidity stress | references `liquidity_stresses.json` |
 | `liquidation_strategy_id` | Selected liquidation strategy | references `liquidation_strategies.json` |
 | `lmt_parameter_set_id` | Selected LMT parameter set | references `lmt_parameters.csv` |
 
@@ -307,7 +295,7 @@ Required fields:
 Relationships:
 
 * Referenced by `scenario_definitions.csv` through `lmt_parameter_set_id`.
-* `minimum_buffer_rate` is the only V1 source for the configured minimum buffer.
+* `minimum_buffer_rate` is the only source for the configured minimum buffer in the current workflow.
 
 
 ## JSON Files
@@ -336,12 +324,12 @@ Strategy fields:
 | `version` | Strategy version | text |
 | `name` | Strategy name | snake_case |
 | `description` | Human-readable strategy description | text |
-| `strategy_type` | Strategy type | supported V1 strategy |
+| `strategy_type` | Strategy type | supported strategy |
 | `preserve_minimum_buffer` | Whether strategy preserves configured buffer | boolean |
 | `cash_buffer_use_rate` | Optional cash use rate above configured buffer | decimal string, 0 to 1 |
 | `weights` | Custom weights by asset group | object of decimal strings summing to 1 |
 
-Supported V1 strategy types:
+Supported strategy types:
 
 * `most_liquid_first`
 * `pro_rata`
@@ -353,6 +341,59 @@ Relationships:
 * Referenced by `scenario_definitions.csv` through `liquidation_strategy_id`.
 * Custom strategy weights must appear only in this JSON file.
 * Strategy weights should reference supported asset groups.
+
+<a id="liquidity-stresses-json"></a>
+
+### liquidity_stresses.json
+
+Purpose: reusable asset-side liquidity stress assumptions with asset-group-specific execution costs.
+
+Primary identifier: `liquidity_stress_id` inside each stress object.
+
+Top-level required fields:
+
+| Field | Description | Format |
+| --- | --- | --- |
+| `liquidity_stresses` | Array of liquidity stress objects | array |
+
+Liquidity stress object fields:
+
+| Field | Description | Format |
+| --- | --- | --- |
+| `liquidity_stress_id` | Liquidity stress identifier | snake_case |
+| `version` | Assumption version | text |
+| `name` | Display/config name | snake_case |
+| `description` | Human-readable description | text |
+| `stress_horizon_days` | Scenario liquidity horizon | positive integer days |
+| `execution_assumptions_by_asset_group` | Execution assumptions per asset group | object |
+
+Execution assumptions by asset group:
+
+Current sample asset groups:
+
+* `cash`
+* `listed_equity`
+* `listed_etf`
+* `reverse_repo`
+
+Each asset group contains:
+
+| Field | Description | Format |
+| --- | --- | --- |
+| `bid_ask_spread_rate` | Bid-ask spread cost under this stress | JSON number or decimal-compatible value |
+| `transaction_cost_rate` | Transaction cost under this stress | JSON number or decimal-compatible value |
+| `market_impact_rate` | Market impact cost under this stress | JSON number or decimal-compatible value |
+| `participation_rate` | Execution participation rate under this stress | JSON number or decimal-compatible value |
+| `liquidity_haircut_rate` | Liquidity-driven haircut under this stress | JSON number or decimal-compatible value |
+
+Relationships:
+
+* Referenced by `scenario_definitions.csv` through `liquidity_stress_id`.
+* Each asset group may have different execution assumptions reflecting asset-group-specific liquidity constraints.
+* Used with position `settlement_days` and `maturity_days` to determine asset eligibility under the stress horizon.
+* Must not contain fund/date fields.
+
+**Note:** Liquidity stress assumptions define how execution costs and constraints vary by asset group under stress, complementing the market-shock assumptions in `market_stresses.csv`.
 
 ### historical_market_stress_scenarios.json
 
@@ -408,7 +449,7 @@ Relationships:
 
 * The file is a standalone historical stress library.
 * It is not referenced by `scenario_definitions.csv`.
-* V1 calculation engines do not apply these shocks.
+* The current calculation workflow does not directly apply these nested historical shock values.
 
 ## Relationship Summary
 
@@ -417,10 +458,12 @@ Relationships:
 - one fund snapshot from `funds.csv`
 - one redemption scenario from `redemption_scenarios.csv`
 - one market stress from `market_stresses.csv`
-- one liquidity stress from `liquidity_stresses.csv`
+- one liquidity stress from `liquidity_stresses.json`
 - one liquidation strategy from `liquidation_strategies.json`
 - one LMT parameter set from `lmt_parameters.csv`
 
 `positions.csv`, `investor_classes.csv`, and `lmt_parameters.csv` are fund-snapshot datasets identified by `fund_id` and `as_of_date`.
 
 Reusable assumptions are identified by their own IDs and selected through `scenario_definitions.csv`.
+
+**Liquidity stress note:** Unlike other CSV-based reusable assumptions, liquidity stresses use JSON format because execution assumptions must be specified per asset group. This allows different asset groups to have different execution costs under the same stress scenario.

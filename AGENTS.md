@@ -9,7 +9,7 @@ The project is a Python and Streamlit application for calibrating and assessing 
 - liability-side stress: investor redemptions by client class
 - asset-side stress: market shocks, liquidation capacity, haircuts, and settlement constraints
 
-The first version focuses on a realistic but narrow fund universe:
+The current implementation focuses on a realistic but narrow sample fund universe:
 
 - cash
 - listed equities
@@ -38,11 +38,11 @@ The application should answer:
 
 > Given a fund liquidity profile, investor redemption behaviour, asset market stress, and liquidity stress assumptions, what LMT thresholds are coherent for swing pricing, redemption gates, and liquidity buffers under the tested stress case, and what diagnostic warnings explain the result?
 
-The project calibrates and assesses Liquidity Management Tool thresholds for a fund under liquidity stress assumptions. Version 1 focuses on single-fund, single-period stress cases and uses liquidation outputs to assess reference thresholds for swing pricing, redemption gates, and liquidity buffers. Warning checks are diagnostic outputs that support calibration review; they are not the central product objective.
+The project calibrates and assesses Liquidity Management Tool thresholds for a fund under liquidity stress assumptions. The current implementation uses single-fund, single-period stress cases and liquidation outputs to assess reference thresholds for swing pricing, redemption gates, and liquidity buffers. Warning checks are diagnostic outputs that support calibration review; they are not the central product objective.
 
 The project does not decide whether a fund manager should activate an LMT.
 
-The first version should support:
+The current implementation supports:
 
 - investor-class redemption scenarios
 - asset-side market shocks
@@ -101,9 +101,9 @@ At the start of every coding session:
 
 ---
 
-## Module sequencing
+## Current module map
 
-Build the project in this order:
+The implemented dependency flow is:
 
 1. Project documentation
    - `ARCHITECTURE.md`
@@ -113,67 +113,37 @@ Build the project in this order:
    - `docs/DATA_CONVENTIONS.md`
    - `docs/AUDIT_TRAIL.md`
 
-2. Domain models
-   - fund snapshot
-   - asset position
-   - investor class profile
-   - redemption scenario
-   - stress scenario
-   - LMT parameters
-   - calculation result objects
+2. Domain models under `src/lmt_calibration/domain/`
+   - fund snapshots and asset positions
+   - investor class profiles
+   - redemption, market, and liquidity scenarios
+   - liquidation strategy configuration
+   - LMT parameters and result objects
 
-3. Validation layer
-   - schema validation
-   - unit validation
-   - value range validation
-   - reconciliation checks
-   - domain-specific validation errors
+3. Validation and loaders under `src/lmt_calibration/validation/` and `src/lmt_calibration/loaders/`
+   - schema, unit, range, identifier, and reconciliation validation
+   - CSV and JSON conversion into typed domain objects
 
-4. Asset-side engine
-   - market stress
-   - liquidity stress
-   - haircut adjustment
-   - liquidation capacity
-   - settlement and maturity treatment
+4. Calculation engines under `src/lmt_calibration/engines/`
+   - `liquidation_strategy.py`: cash treatment, asset eligibility, strategy allocation, haircut-adjusted cash, shortfall, dilution, and remaining liquidity
+   - `liquidity_cost.py`: asset-group liquidity cost estimates from bid-ask spread, transaction cost, market impact, participation rate, and liquidity haircut assumptions
+   - `lmt_activation.py`: reference-threshold assessment, diagnostic checks, estimated recovery, redemption deferral, and liquidity-buffer diagnostics
 
-5. Liability-side engine
-   - investor-class redemption behaviour
-   - total redemption amount
-   - client-class concentration warnings
-   - notice and settlement timing
+5. Audit trail under `src/lmt_calibration/audit/`
+   - structured scenario records and JSON output
 
-6. Liquidation strategy
-   - strategy selection
-   - cash treatment
-   - reverse repo maturity treatment
-   - eligible asset selection
-   - pro rata and weighted liquidation allocation
-   - repo liquidity effects
-   - shortfall calculation
-   - dilution calculation
+6. Application orchestration under `src/lmt_calibration/services/streamlit_mvp.py`
+   - validated sample-data loading
+   - market, liquidity, and liability stress preparation
+   - calculation-engine calls
+   - dashboard-ready scenario outcomes
 
-7. LMT calibration and diagnostic layer
-   - swing pricing threshold assessment
-   - gate threshold assessment
-   - liquidity buffer threshold assessment
-   - diagnostic warning flags
-   - explanatory messages
+7. Streamlit presentation under `app/streamlit_app.py`
+   - selectors and threshold controls
+   - scenario comparison matrix
+   - calibration diagnostics and supporting content
 
-8. Audit trail
-   - scenario run metadata
-   - input summaries
-   - parameter snapshots
-   - result records
-   - output files
-
-9. Streamlit application
-   - input controls
-   - scenario calibration
-   - result display
-   - charts and tables
-
-10. Docker
-   - only after the Streamlit application runs locally
+Standalone asset-side and liability-side engine modules are not part of the current package. Their current preparation steps belong to `services/streamlit_mvp.py` unless a dedicated engine boundary is explicitly designed and implemented.
 
 ---
 
@@ -181,6 +151,7 @@ Build the project in this order:
 
 - Keep business logic independent from Streamlit.
 - Streamlit may collect inputs, call services, and display outputs.
+- `services/streamlit_mvp.py` is the orchestration boundary between Streamlit, loaders, scenario preparation, calculation engines, and dashboard-ready outputs.
 - Streamlit must not calculate liquidation strategy logic, dilution, haircuts, trigger logic, or calibration results.
 - Calculations must operate on domain objects where practical, not raw DataFrames.
 - Raw DataFrames are allowed in loaders and validation only.
@@ -218,8 +189,8 @@ Build the project in this order:
 Before marking a task done, run:
 
 ```bash
-uv run ruff check src tests
-uv run ruff format --check src tests
+uv run ruff check src tests app
+uv run ruff format --check src tests app
 uv run mypy src
 uv run pytest
 ```
@@ -292,7 +263,7 @@ Validation errors must be explicit and domain-specific.
 
 ## Asset-side modelling rules
 
-The V1 asset universe is:
+The currently supported sample asset universe is:
 
 * cash
 * listed equities
@@ -311,15 +282,15 @@ For listed equities and ETFs, the model may use:
 * stressed liquidation capacity rate
 * settlement days
 
-The engine should separate:
+The workflow must separate:
 
 * market stress: price or market value impact
 * liquidity stress: haircut and liquidation capacity impact
 * redemption stress: liability-side outflow
 
-For V1, do not rely on live market data. Use synthetic but realistic sample data.
+`services/streamlit_mvp.py` currently prepares market-stressed values, liquidity haircuts, liquidation capacity, settlement constraints, and maturity constraints before calling the calculation engines.
 
-Optional market data enrichment can be added later, but it must not be required for the core simulator.
+Do not rely on live market data. Use synthetic but realistic sample data. Live or optional market-data enrichment is outside the current supported workflow and must not be required for the core simulator.
 
 ---
 
@@ -327,7 +298,7 @@ Optional market data enrichment can be added later, but it must not be required 
 
 Liability stress must be built from investor classes, not only a single generic redemption number.
 
-The V1 investor classes are:
+The currently supported investor classes are:
 
 * retail
 * institutional
@@ -344,7 +315,9 @@ Each investor class may have:
 * notice days
 * settlement days
 
-The engine should calculate:
+`services/streamlit_mvp.py` currently prepares investor-class redemption assumptions and aggregates total redemption pressure for the selected scenario.
+
+Liability-side calculations and result extensions should support:
 
 * redemption amount by investor class
 * total redemption amount
@@ -360,7 +333,7 @@ Platform or nominee investors should be treated as operationally concentrated bu
 
 Liquidation must be treated as a configurable strategy, not only a fixed most-liquid-first waterfall.
 
-Version 1 should support at least:
+The current implementation supports:
 
 * `most_liquid_first`: uses cash and the most liquid eligible assets first
 * `pro_rata`: preserves the configured minimum cash buffer, then sells eligible non-cash assets proportionally
@@ -385,13 +358,13 @@ The structured output may be called a waterfall result where useful, but impleme
 
 ## LMT calibration and diagnostic rules
 
-The first version should calibrate and assess LMT thresholds for:
+The current threshold assessment and diagnostic engine assesses reference thresholds for:
 
 * swing pricing
 * redemption gate
 * liquidity buffer
 
-Diagnostic outputs should support threshold calibration and reviewer interpretation. They may include:
+`engines/lmt_activation.py` provides threshold assessment and diagnostics for scenario review. Diagnostic outputs should support threshold calibration and reviewer interpretation. They may include:
 
 * reported warning flags
 * quantitative reason
@@ -470,15 +443,19 @@ Nested liquidation strategy configuration and custom weights should use JSON, su
 data/sample/liquidation_strategies.json
 ```
 
-The first version may use one fund and one snapshot. More funds and snapshots can be added later.
+Liquidity stress execution assumptions use JSON:
+
+```text
+data/sample/liquidity_stresses.json
+```
+
+The current sample uses one fund and one snapshot. Additional funds and snapshots are outside the current sample scope unless explicitly requested.
 
 ---
 
 ## Streamlit rules
 
-Streamlit code belongs outside the core package unless the project structure says otherwise.
-
-Recommended location:
+Streamlit code belongs outside the core package at the implemented entry point:
 
 ```text
 app/streamlit_app.py
@@ -487,7 +464,7 @@ app/streamlit_app.py
 Streamlit code may:
 
 * display controls
-* build scenario objects from user input
+* collect selected identifiers and parameter overrides
 * call application services
 * display result tables
 * display charts
@@ -517,6 +494,7 @@ Use:
 * `docs/DATA_SCHEMA.md` for input file fields and formats
 * `docs/DATA_CONVENTIONS.md` for shared units, naming, formats, and validation principles
 * `docs/AUDIT_TRAIL.md` for scenario-run traceability
+* `CHANGELOG.md` for release history and user-visible changes
 
 Avoid migration-style wording such as "new" or "now" in documentation intended for first-time readers.
 
@@ -548,38 +526,24 @@ Use the full phrase in README and documentation so that the regulatory and fund-
 
 ---
 
-## Current scope
+## Current supported scope
 
-The first version should remain focused.
-
-Include:
+The current implementation remains focused on:
 
 * one synthetic fund snapshot
-* one-period scenario
-* cash, listed equities, listed ETFs, reverse repo, and repo exposure
-* investor classes
-* redemption stress
-* market stress
-* liquidity stress
-* configurable liquidation strategy
-* swing pricing threshold assessment
-* gate threshold assessment
-* liquidity buffer threshold assessment
-* diagnostic warnings
-* audit trail
-* Streamlit calibration app later, after the calculation engine is stable
+* one-period scenarios
+* cash, listed equities, listed ETFs, reverse repo, and repo financing exposure
+* investor-class redemption stress
+* market stress and asset-side liquidity stress preparation in `services/streamlit_mvp.py`
+* configurable `most_liquid_first`, `pro_rata`, `hybrid`, and `custom_weights` liquidation strategies
+* strategy-dependent haircut cost, dilution, shortfall, and remaining-liquidity results
+* asset-group liquidity cost estimates for calibration context
+* swing pricing, redemption gate, and liquidity buffer reference-threshold diagnostics
+* structured audit records and JSON audit output
+* Streamlit selectors, threshold controls, market-condition comparison, diagnostic display, and supporting guidance
+* historical market stress scenario data loaded as sample and reference context, without implying that every historical-library shock is applied by the active dashboard workflow
 
-Later versions may include:
-
-* 12-month redemption path by investor class
-* stochastic redemptions by investor class
-* selected stress months
-* intra-month liquidation schedule
-* price impact comparison across liquidation strategies
-* strategy comparison view in Streamlit
-* historical or synthetic redemption-flow calibration
-
-Exclude for first version:
+Out of current scope:
 
 * corporate bonds
 * derivatives
@@ -597,7 +561,7 @@ Exclude for first version:
 * database persistence
 * Kubernetes
 * cloud deployment
-* Docker before the app runs locally
+* containerized deployment
 
 ---
 

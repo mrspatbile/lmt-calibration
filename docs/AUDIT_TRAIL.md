@@ -6,6 +6,10 @@ This document defines how scenario runs should be recorded.
 
 The audit trail allows each result to be traced back to inputs, assumptions, parameters, liquidation outputs, threshold values used or assessed, diagnostic warnings, and generated output files.
 
+## Current integration status
+
+The audit trail infrastructure is implemented as structured audit models and a JSON writer. Automatic writing during Streamlit dashboard runs is not currently integrated. Manual audit record creation is possible via the audit writer class for programmatic scenario runs or external workflows.
+
 ## Audit objective
 
 Each scenario run should answer:
@@ -49,25 +53,25 @@ Example:
     └── <run_id>_results.csv
 ```
 
-Audit records are saved as structured JSON runtime outputs under `outputs/audit/`.
+Audit records may be written as structured JSON runtime outputs under `outputs/audit/`.
 
-Scenario summaries, tables, charts, or exports are saved under `outputs/reports/`.
+Scenario summaries, tables, charts, or exports may be written under `outputs/reports/` when reporting output is implemented or explicitly produced.
 
 Generated outputs are excluded from Git.
 
-## Audit record content
+## Audit record structure
 
-Each scenario run should produce one audit record:
+An audit record can be written for any scenario run to support review and reproducibility:
 
 ```text
 outputs/audit/<run_id>_audit.json
 ```
 
-The audit record should include the information needed to review and reproduce the scenario run.
+The audit record includes the information needed to review and reproduce the scenario run. It is structured as nested summaries of input, parameters, and liquidation results, with optional threshold assessment diagnostics.
 
 ### Input summary
 
-The audit record should include:
+The audit record includes:
 
 * fund ID
 * fund name
@@ -82,62 +86,54 @@ The audit record should include:
 
 ### Parameters
 
-The audit record should include:
+The audit record includes:
 
 * scenario ID
-* redemption assumptions
-* market shock assumptions
-* liquidity stress assumptions
-* liquidation strategy
-* strategy parameters
+* redemption scenario reference
+* market stress reference
+* liquidity stress reference
+* liquidation strategy reference
 * liquidation strategy weights, if applicable
-* cash buffer rule
-* cash buffer use rate, if applicable
-* whether the minimum cash buffer should be preserved
-* swing-pricing threshold value used or assessed
+* minimum cash buffer requirement
+* whether the minimum cash buffer is preserved
+* swing-pricing threshold value
 * max swing factor
-* gate threshold value used or assessed
-* minimum buffer threshold value used or assessed
+* gate threshold value
+* minimum buffer threshold value
 
 ### Result
 
-The audit record should include:
+The audit record includes summary-level liquidation totals:
 
 * total redemption amount
-* redemption amount by investor class
 * total redemption rate
 * cash used
-* assets liquidated
 * liquidation strategy used
 * strategy allocation by asset group
 * whether the minimum cash buffer was preserved
-* gross sales
-* haircut cost
-* post-haircut cash raised
+* gross sales (total)
+* haircut cost (total)
+* post-haircut cash raised (total)
 * shortfall
 * dilution amount
 * dilution rate
 * remaining liquidity buffer
-* threshold values used or assessed
-* diagnostic warning flags or checks
-* explanatory messages, where available
+
+When threshold assessment is performed, the audit record also includes:
+
+* threshold assessment diagnostics
+* diagnostic flags (swing-pricing, redemption-gate, liquidity-buffer)
+* observed values and reference thresholds
+* explanatory messages
 
 ### Audit metadata
 
-The audit record should include:
+The audit record includes:
 
 * run ID
 * timestamp
 * package version, if available
-* input file references
-* scenario reference
-* parameter set reference
-* liquidation strategy configuration
-* validation results
-* calculation summary
-* threshold assessment summary
-* diagnostic warnings reported
-* output file paths
+* output file paths (where the audit record and related files are written)
 
 ## Audit design rules
 
@@ -150,18 +146,23 @@ The audit record should include:
 * Audit records should be generated outputs, not source files.
 * Tests should write audit records to temporary directories rather than committed output folders.
 
-## Version 1 audit scope
+## Current audit scope
 
-Version 1 should support file-based audit records for one-period scenarios with configurable liquidation strategies.
+The current audit scope supports file-based audit records for single-period scenarios with configurable liquidation strategies.
 
-Database persistence is not required for Version 1.
+Audit records are structured JSON objects containing input summaries, parameter summaries, liquidation totals, and optional threshold assessment results.
 
-Generated audit files should be saved locally under `outputs/audit/` and excluded from Git.
+Records can be written to any output directory using the JSON audit writer.
+
+Database persistence is not implemented.
 
 ## Later audit extensions
 
-Later versions may add:
+Future versions may add:
 
+* automatic audit record writing during Streamlit dashboard runs
+* per-investor-class redemption breakdowns
+* per-position liquidation details (asset-by-asset allocation and cost)
 * database persistence
 * scenario comparison history
 * parameter change log

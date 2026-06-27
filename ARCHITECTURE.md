@@ -9,7 +9,7 @@ The project is designed as a focused Liquidity Management Tools calibration appl
 ## Main layers
 
 ```text
-CSV sample data / Streamlit inputs
+CSV and JSON sample data / Streamlit inputs
         ↓
 loaders
         ↓
@@ -26,7 +26,7 @@ audit records / Streamlit display
 
 ## Package structure
 
-Implemented structure:
+Current implementation:
 
 ```text
 📁 src/lmt_calibration/
@@ -41,41 +41,32 @@ Implemented structure:
 │   ├── errors.py
 │   ├── field_checks.py
 │   ├── liquidation_config.py
-│   └── rules.py
+│   ├── rules.py
+│   └── historical_market_stress.py
 ├── 📁 loaders/
 │   ├── csv_loaders.py
 │   └── json_loaders.py
-```
-
-Planned later:
-
-```text
-📁 src/lmt_calibration/
 ├── 📁 engines/
-│   ├── asset_stress.py
-│   ├── liability_stress.py
 │   ├── liquidation_strategy.py
-│   └── lmt_calibration.py
+│   ├── liquidity_cost.py
+│   └── lmt_activation.py
 ├── 📁 audit/
 │   ├── records.py
 │   └── writer.py
-└── 📁 reporting/
-    └── summaries.py
+└── 📁 services/
+    └── streamlit_mvp.py
 
 📁 app/
-└── streamlit_app.py
-```
+├── streamlit_app.py
+└── content.py
 
-Sample data:
-
-```text
 📁 data/sample/
 ├── funds.csv
 ├── positions.csv
 ├── investor_classes.csv
 ├── redemption_scenarios.csv
 ├── market_stresses.csv
-├── liquidity_stresses.csv
+├── liquidity_stresses.json
 ├── scenario_definitions.csv
 ├── lmt_parameters.csv
 ├── liquidation_strategies.json
@@ -83,8 +74,8 @@ Sample data:
 ```
 
 `historical_market_stress_scenarios.json` is a loader-ready sample library for
-future market stress selection. The V1 calculation engines do not apply the
-historical shocks.
+historical market stress selection. Version 1 calculation engines do not apply
+historical shocks; they are reserved for future scenario comparison views.
 
 ## Dependency direction
 
@@ -137,29 +128,6 @@ Validation errors must explain what failed and where.
 
 ## Engine responsibilities
 
-### Asset stress engine
-
-Applies market and liquidity stress to asset positions.
-
-It handles:
-
-* market shock effects
-* beta-based sensitivity where provided
-* stressed haircut rates
-* stressed liquidation capacity
-* settlement and maturity treatment
-
-### Liability stress engine
-
-Calculates redemption pressure from investor classes.
-
-It handles:
-
-* redemption amount by client class
-* total redemption amount
-* concentration warnings
-* notice-period effects where relevant
-
 ### Liquidation strategy engine
 
 Calculates how redemption needs are met under the selected liquidation strategy.
@@ -178,21 +146,46 @@ It handles:
 * shortfall
 * dilution cost
 
-The engine handles strategy-specific liquidation allocation and returns a consistent liquidation result object regardless of selected strategy. The structured output may be called a liquidation result or waterfall result, but the engine must not assume that selling the most liquid assets first is the only valid method.
+The engine handles strategy-specific liquidation allocation and returns a consistent liquidation result object regardless of selected strategy.
 
-### LMT calibration and diagnostic layer
+### Liquidity cost engine
 
-Uses stress and liquidation outputs to assess reference LMT thresholds in Version 1. Diagnostic checks compare observed stress metrics against threshold values and explain warning flags where relevant.
+Estimates liquidation costs decomposed by asset group.
 
-Conceptually, this layer supports:
+It handles:
+
+* bid-ask spread costs
+* transaction costs
+* market impact costs
+* participation-rate haircuts
+* cost breakdown by asset group
+
+### LMT activation and diagnostic engine
+
+Assesses which LMT tools activate under stress and provides diagnostic threshold comparisons.
+
+It handles:
 
 * swing-pricing threshold assessment
 * redemption-gate threshold assessment
 * liquidity-buffer threshold assessment
-* diagnostic warnings, breach flags, and explanatory messages
+* estimated swing recovery and redemption deferral
+* diagnostic warnings and explanatory messages
 * comparison of observed stress metrics against threshold values
 
-Warnings and breach checks are diagnostic support for calibration and review; they are not the main architectural output. The project does not decide whether a fund manager should activate an LMT.
+Warnings and diagnostic checks support calibration review; they do not decide whether a fund manager should activate an LMT.
+
+## Services layer
+
+The `services/streamlit_mvp.py` module orchestrates the complete workflow:
+
+* loads and caches sample data files
+* validates inputs and creates domain objects
+* applies scenario assumptions (market stress, liquidity stress, redemption stress)
+* calls liquidation, liquidity cost, and LMT activation engines
+* returns dashboard-ready result objects for presentation
+
+This layer decouples the Streamlit UI from core calculation engines, allowing engines to be tested and reused independently.
 
 ## Streamlit responsibilities
 
@@ -208,7 +201,7 @@ Streamlit must not:
 * calculate haircuts
 * calculate market stress
 * calculate liquidation strategy results
-* calculate dilution
+* calculate liquidity costs or dilution
 * decide whether an LMT should be activated
 * validate raw CSV schemas directly
 
@@ -228,29 +221,29 @@ Every scenario run should be traceable to:
 
 Audit output should be structured data, not prose only.
 
-## Version scope
+## Current implementation
 
-Version 1 includes:
+The current implementation includes:
 
 * one-period scenario calibration
-* configurable liquidation strategy
+* configurable liquidation strategy (most_liquid_first, pro_rata, hybrid, custom_weights)
 * investor-class redemption stress
-* asset market stress
-* asset liquidity stress
+* asset market stress and liquidity stress assumptions
 * cash, listed equities, listed ETFs, reverse repos, and repo financing exposures
-* LMT threshold assessment diagnostics
-* file-based audit records
-* Streamlit calibration interface later, after the calculation engine is stable
+* liquidity cost breakdown by asset group
+* LMT threshold assessment and diagnostic warnings
+* structured audit record models and a JSON writer; automatic writing from the Streamlit application is not integrated
+* Streamlit calibration dashboard with scenario comparison across market conditions
+* theme toggle and interactive parameter adjustment
 
-Later versions may include:
+Future versions may include:
 
 * 12-month redemption paths by investor class
 * stochastic redemptions by investor class
-* selected stress months
-* intra-month liquidation schedules
-* price impact comparison across liquidation strategies
-* strategy comparison views in Streamlit
-* historical or synthetic redemption-flow calibration
+* reverse stress testing
+* strategy comparison views
+* historical scenario application
+* enhanced price-impact modelling
 
 ## Design rules
 

@@ -4,395 +4,298 @@
 
 This document defines the simplified Liquidity Management Tools calibration methodology used in this project.
 
-The project is a methodology prototype for structured liquidity stress testing, configurable liquidation strategies, and LMT calibration analysis. It does not replicate a production ManCo risk framework and does not provide regulatory advice.
+The project supports structured liquidity stress testing, configurable liquidation strategies, and LMT threshold analysis. It does not replicate a production ManCo risk framework, provide regulatory advice, or make fund-manager activation decisions.
 
 ## Core question
 
 The application should answer:
 
 ```text
-Given a fund liquidity profile, investor redemption behaviour, asset market stress, and liquidity stress assumptions, what LMT thresholds are coherent for swing pricing, redemption gates, and liquidity buffers under the tested stress case, and what diagnostic warnings explain the result?
+Given a fund liquidity profile, investor redemption behaviour, asset market stress,
+and liquidity stress assumptions, what LMT thresholds are coherent for swing pricing,
+redemption gates, and liquidity buffers under the tested stress case, and what
+diagnostic warnings explain the result?
 ```
 
-## Methodology roadmap
+## Current methodology scope
 
-| Version   | Horizon                      | Main objective                                                | Included methodology                                                                                                                                                                             | Not included                                                                                                     |
-| --------- | ---------------------------- | ------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------- |
-| Version 1 | One-period stress event      | Calibrate and assess LMT thresholds under a single redemption shock      | Investor-class redemption stress, asset market stress, asset liquidity stress, configurable liquidation strategy, dilution estimate, shortfall analysis, cash-buffer analysis, threshold assessment diagnostics | Redemption path, deferred redemption backlog, behavioural feedback, asset-side contagion, reverse stress testing |
-| Version 2 | Multi-period redemption path | Track liquidity and LMT pressure through time                 | Monthly redemption path, repeated threshold assessment diagnostics, deferred redemptions, behavioural redemption feedback, liquidity-management response through time                                                  | Full reverse stress testing, advanced market contagion model                                                     |
-| Version 3 | Reverse stress and contagion | Identify the shocks that first breach selected LMT thresholds | Reverse stress testing, richer market/liquidity contagion, strategy comparison under breach conditions                                                                                           | Production ManCo workflow, live market-data dependency                                                           |
-
-## Version 1 scope
-
-Version 1 is a one-period liquidity stress and LMT calibration workflow.
-
-It includes:
+The current methodology is a single-period liquidity stress workflow. It includes:
 
 * investor-class redemption stress
-* asset market stress
-* asset liquidity stress
-* configurable liquidation strategy
-* dilution estimate
-* shortfall analysis
-* cash-buffer analysis
-* swing-pricing threshold assessment
-* redemption-gate threshold assessment
-* liquidity-buffer threshold assessment
-* diagnostic warning checks that support calibration review
-* structured audit trail for scenario runs
+* direct asset market shocks
+* per-asset-group liquidity stress assumptions
+* configurable liquidation strategies
+* liquidation capacity, settlement, and maturity constraints
+* realised haircut and dilution cost
+* shortfall and remaining-liquidity analysis
+* swing-pricing, redemption-gate, and liquidity-buffer threshold diagnostics
+* structured audit record models and JSON output support
 
-## Version 1 exclusions
+## Out of current scope
 
-Version 1 does not include:
+The current methodology does not include:
 
-* 12-month redemption paths
+* multi-period or 12-month redemption paths
 * stochastic redemption simulation
-* intra-month liquidation schedules
-* deferred redemption backlog
-* behavioural redemption feedback
-* asset-side contagion effects
-* reverse stress testing
-* full price-impact modelling
+* intra-period liquidation schedules
+* deferred-redemption backlogs across periods
+* behavioural feedback after an LMT diagnostic state
+* reverse stress testing or asset-side contagion
+* nonlinear price-impact or market-volume models
 * live market data
-* database persistence
-* Docker
-* Kubernetes
-* cloud deployment
+* production legal, tax, or regulatory decision rules
+* database or cloud persistence
 
-## Scenario horizon
+## Scenario design
 
-Version 1 uses a one-period stress horizon.
+A scenario combines one fund snapshot with a redemption scenario, market stress, liquidity stress, liquidation strategy, and LMT parameter set.
 
-The one-period design represents a single redemption event under stressed market and liquidity assumptions. It is suitable for calibrating and assessing LMT parameter sensitivity, liquidation strategy outcomes, dilution estimates, shortfall risk, and liquidity-buffer pressure at one scenario date.
-
-Version 1 does not model a redemption path through time. It does not include monthly redemption dynamics, deferred redemption backlogs, repeated gate decisions, investor behavioural feedback, or asset-side contagion effects across multiple periods.
+The single-period design represents one redemption event under selected market and liquidity conditions. Market valuation stress is applied before the redemption-rate diagnostics. Liquidation then determines whether redemption requests can be met, the realised cost of asset sales, and the remaining liquidity position.
 
 ## Stress dimensions
 
-The methodology uses three stress dimensions:
+The methodology separates three stress dimensions:
 
-* liability-side stress
-* asset market stress
-* asset liquidity stress
+* liability-side redemption stress
+* asset-side market valuation stress
+* asset-side liquidity and execution stress
 
-## Liability-side stress
+### Liability-side redemption stress
 
-Liability-side stress models investor redemptions.
-
-Version 1 uses investor classes:
-
-* retail
-* institutional
-* platform
-* fund_of_funds
-* seed_capital
-
-Each investor class has a NAV share and stressed redemption behaviour.
-
-Total redemption pressure is calculated from investor-class assumptions.
+Redemption pressure is assembled from investor-class assumptions:
 
 ```text
-redemption_amount_by_class = NAV × nav_share_rate × stress_redemption_rate × redemption_multiplier
+redemption_amount_by_class =
+    fund_snapshot_NAV
+    × nav_share_rate
+    × stress_redemption_rate
+    × redemption_multiplier
 
-total_redemption_amount = sum(redemption_amount_by_class)
-
-total_redemption_rate = total_redemption_amount / NAV
+gross_redemption_amount = sum(redemption_amount_by_class)
 ```
 
-## Asset market stress
+The supported investor classes are retail, institutional, platform, fund of funds, and seed capital.
 
-Asset market stress models price pressure before or during the redemption event.
-
-For listed equities and listed ETFs, market stress may use beta:
+The redemption rate used for swing-pricing and gate threshold diagnostics is:
 
 ```text
-stressed_market_value = market_value × (1 + beta × benchmark_shock_rate)
+redemption_rate =
+    gross_redemption_amount
+    / current_NAV_before_LMT_effects
 ```
 
-If beta is not provided, a direct asset-class shock may be used.
+`current_NAV_before_LMT_effects` reflects the market valuation shock but does not include redemption payment, liquidation cost, or LMT effects.
 
-Cash is not market-stressed.
+### Asset-side market valuation stress
 
-Reverse repos are not market-stressed in Version 1 unless explicitly configured later.
+The methodology applies a direct market shock to listed equities and listed ETFs:
 
-Repo financing exposures are treated as liquidity obligations, not ordinary liquid assets.
+```text
+stressed_market_value = market_value × (1 + market_shock_rate)
+```
 
-## Asset liquidity stress
+Cash and reverse repos are not market-stressed. Repo financing exposures are treated as liquidity obligations rather than ordinary liquid assets.
 
-Asset liquidity stress models reduced ability to sell assets and higher sale costs.
+Beta-based revaluation is not part of the active methodology.
 
-The model uses:
+### Asset-side liquidity and execution stress
 
-* haircut rate
-* liquidity capacity rate
+Liquidity stress is specified by asset group. The methodology distinguishes:
+
+* participation rate, which reduces liquidation capacity
+* liquidity haircut, which increases stressed haircut treatment
+* bid-ask spread, transaction-cost, and market-impact assumptions
 * settlement days
-* maturity days for reverse repos
-* repo liquidity obligations where applicable
+* reverse-repo maturity days
+* the scenario stress horizon
 
-Example haircut stress:
-
-```text
-stressed_haircut_rate = base_haircut_rate × liquidity_stress_multiplier
-```
-
-The stressed haircut rate must be capped at 1.
-
-Example liquidity-capacity stress:
+Current stressed liquidation capacity is:
 
 ```text
-stressed_liquidity_capacity_rate = base_liquidity_capacity_rate / liquidity_stress_multiplier
+stressed_liquidity_capacity_rate =
+    base_liquidity_capacity_rate × participation_rate
+
+available_liquidation_amount =
+    stressed_market_value × stressed_liquidity_capacity_rate
 ```
 
-The stressed liquidity capacity rate must remain between 0 and 1.
+Current stressed haircut treatment is:
+
+```text
+stressed_haircut_rate =
+    min(base_haircut_rate + liquidity_haircut_rate, 1)
+```
+
+Listed assets are eligible when their settlement period is within the stress horizon. A reverse repo is eligible when maturity days plus settlement days are within the stress horizon. Cash remains immediately available, subject to the minimum cash-buffer rule.
 
 ## Liquidation strategy
 
-Liquidation is configurable. The model must not assume that a fund automatically depletes the most liquid assets first.
+Liquidation is configurable and does not assume that the fund always depletes its most liquid assets first.
 
-Version 1 supports:
+The implemented strategies are:
 
-* `most_liquid_first`
-* `pro_rata`
-* `hybrid`
-* `custom_weights`
+* `most_liquid_first`: uses cash above the minimum buffer, then the most liquid eligible assets
+* `pro_rata`: sells eligible non-cash assets proportionally
+* `hybrid`: uses a configured share of cash above the minimum buffer, then sells eligible assets proportionally
+* `custom_weights`: allocates liquidation needs by configured asset-group weights
 
-The structured output may be called a liquidation result or waterfall result, but the methodology remains strategy-based, not fixed waterfall-based.
+Each strategy respects available cash, the minimum cash buffer, stressed capacity, stressed haircuts, settlement, reverse-repo maturity, and the stress horizon.
 
-## Minimum cash buffer
+### Minimum cash buffer
 
-Version 1 uses `minimum_buffer_rate` from LMT parameters as the only source for the minimum cash buffer.
+`minimum_buffer_rate` from the selected LMT parameter set is the source of the minimum cash-buffer requirement:
 
-All liquidation strategies must preserve the configured minimum cash buffer by default.
+```text
+minimum_cash_buffer = fund_snapshot_NAV × minimum_buffer_rate
+```
 
-The model must not automatically drain all cash or all liquid assets.
+Cash below this amount is not available to the implemented strategies.
 
-Cash below the configured minimum buffer must not be used unless a later explicit override is designed.
-
-## Strategy definitions
-
-### `most_liquid_first`
-
-`most_liquid_first` uses only cash above the configured minimum buffer first, then liquidates the most liquid eligible non-cash assets.
-
-It must not use cash below the configured minimum buffer.
-
-### `pro_rata`
-
-`pro_rata` preserves the configured minimum cash buffer, then sells eligible non-cash assets proportionally to preserve the portfolio liquidity profile.
-
-Cash is not part of the proportional sale allocation.
-
-Cash above the minimum buffer may be available only when the strategy configuration allows it.
-
-### `hybrid`
-
-`hybrid` uses part of available cash above the configured minimum buffer, then sells eligible non-cash assets proportionally.
-
-For `hybrid`, `cash_buffer_use_rate` means the percentage of available cash above the configured minimum buffer that may be used before proportional asset sales.
-
-### `custom_weights`
-
-`custom_weights` allocates liquidation needs according to user-defined weights by asset group.
-
-Custom weights must be stored in JSON strategy configuration, not in redemption scenario CSV files.
-
-## Strategy constraints
-
-Each strategy must respect:
-
-* available cash
-* minimum cash buffer
-* reverse repo maturity
-* settlement days
-* stressed liquidity capacity
-* stressed haircut rate
-* asset eligibility under the stress horizon
-
-Eligible assets are assets that can provide usable liquidity within the scenario stress horizon after maturity and settlement constraints.
-
-Repo financing exposures are treated separately as liquidity obligations.
-
-## Scenario to strategy mapping
-
-Each scenario definition in `scenario_definitions.csv` references exactly one `liquidation_strategy_id` in Version 1.
-
-Redemption scenarios remain reusable liability-side assumptions and do not reference liquidation strategies.
-
-Nested liquidation strategy configuration and custom strategy weights belong in `data/sample/liquidation_strategies.json`, not in scenario definition or redemption scenario CSV files.
-
-Future scenario comparison runs can be handled by a separate run configuration or scenario pack.
-
-## Cash raised
+### Cash raised and shortfall
 
 For each liquidated asset:
 
 ```text
-available_liquidation_amount = stressed_market_value × stressed_liquidity_capacity_rate
+gross_sale_amount =
+    min(strategy_allocated_sale_amount, available_liquidation_amount)
 
-gross_sale_amount = min(strategy_allocated_sale_amount, available_liquidation_amount)
+post_haircut_cash_raised =
+    gross_sale_amount × (1 - stressed_haircut_rate)
 
-post_haircut_cash_raised = gross_sale_amount × (1 - stressed_haircut_rate)
-
-dilution_cost = gross_sale_amount - post_haircut_cash_raised
+realised_haircut_cost =
+    gross_sale_amount - post_haircut_cash_raised
 ```
 
-Strategy allocation must be capped by available liquidity and by the remaining redemption need.
-
-## Shortfall
+The scenario shortfall is:
 
 ```text
-shortfall = redemption_amount - cash_used - post_haircut_cash_raised
+shortfall = max(
+    gross_redemption_amount
+    - cash_used
+    - total_post_haircut_cash_raised,
+    0,
+)
 ```
 
-Final reported shortfall cannot be negative.
+Shortfall is a liquidation result. It is not a redemption-gate trigger in the current threshold logic.
 
-If more cash is raised than needed, liquidation should be capped or excess cash should be reported separately.
+## Realised cost and estimated execution-cost context
 
-## Dilution
-
-Dilution represents the estimated cost created by liquidating assets under stress.
+Realised liquidation cost is strategy-dependent. It is the total haircut cost produced by the selected asset sales and is also reported as dilution amount:
 
 ```text
-dilution_rate = total_dilution_cost / NAV
+dilution_amount = total_realised_haircut_cost
+dilution_rate = dilution_amount / fund_snapshot_NAV
 ```
 
-Dilution is used to calibrate and assess swing-pricing thresholds. Breach checks against current or reference thresholds are diagnostic outputs.
+The matrix uses realised haircut cost when reporting asset-side liquidity impact and fund state before and after LMT effects.
+
+Estimated execution cost is separate calibration context. It combines scenario-level bid-ask spread, transaction cost, and market impact assumptions:
+
+```text
+estimated_execution_cost_rate =
+    bid_ask_spread_rate
+    + transaction_cost_rate
+    + market_impact_rate
+
+estimated_execution_cost_amount =
+    gross_redemption_amount × estimated_execution_cost_rate
+```
+
+This estimate supports swing-factor context and calibration review. It is not the realised strategy outcome.
 
 ## Remaining liquidity buffer
 
-The remaining liquidity buffer compares liquid resources after the redemption event with NAV.
-
-Version 1 may define liquid resources as:
+Remaining liquid resources include remaining cash and the post-haircut capacity of eligible assets after sales:
 
 ```text
-remaining_liquid_resources = remaining_cash + remaining_assets_available_within_stress_horizon
+remaining_liquid_resources =
+    remaining_cash
+    + remaining_post_haircut_eligible_capacity
 
-remaining_liquid_buffer_rate = remaining_liquid_resources / NAV
+remaining_liquid_buffer_rate =
+    remaining_liquid_resources / fund_snapshot_NAV
 ```
 
-The remaining cash amount must reflect the configured minimum cash buffer rule.
+The remaining-cash amount reflects the configured minimum cash-buffer rule.
 
-## LMT threshold calibration and diagnostics
+## LMT threshold diagnostics
 
-Version 1 calibrates and assesses thresholds using one-period stress outputs. It also reports diagnostic checks against current or reference thresholds. These diagnostics support reviewer interpretation and audit evidence; they do not decide whether a fund manager should activate an LMT.
+Threshold results are diagnostic scenario states. They support calibration review and do not decide whether a fund manager should activate an LMT.
 
-### Swing-pricing threshold assessment
-
-Swing-pricing threshold assessment compares estimated dilution with the reference threshold. A diagnostic breach is reported when estimated dilution exceeds the configured threshold.
+### Swing-pricing threshold diagnostic
 
 ```text
-dilution_rate > swing_threshold_rate
+swing_threshold_diagnostic =
+    redemption_rate >= swing_threshold_rate
 ```
 
-The diagnostic output should report:
+The diagnostic reports the observed redemption rate and selected reference threshold. Estimated execution cost and realised haircut cost provide supporting calibration context.
 
-* observed dilution rate
-* reference threshold
-* estimated dilution cost
-* liquidation strategy used
-* diagnostic reason for any breach
-
-### Redemption-gate threshold assessment
-
-Redemption-gate threshold assessment compares redemption pressure and liquidation shortfall with the reference gate threshold. A diagnostic breach may be reported when redemption pressure exceeds the configured gate threshold or when the liquidation strategy produces a shortfall.
+### Redemption-gate threshold diagnostic
 
 ```text
-total_redemption_rate > gate_threshold_rate
+gate_threshold_diagnostic =
+    redemption_rate >= gate_threshold_rate
 ```
 
-or:
+When the scenario crosses the gate threshold, the current model calculates paid and deferred redemption amounts for that single period. It does not model a deferred-redemption backlog through time.
+
+Shortfall remains a separate liquidation result and does not independently trigger the gate diagnostic.
+
+### Liquidity-buffer threshold diagnostic
 
 ```text
-shortfall > 0
+buffer_threshold_diagnostic =
+    remaining_liquid_buffer_rate < minimum_buffer_rate
 ```
 
-The diagnostic output should report:
-
-* total redemption rate
-* reference gate threshold
-* shortfall, if any
-* main driver of redemption pressure
-
-### Liquidity-buffer threshold assessment
-
-Liquidity-buffer threshold assessment compares remaining liquid resources with the reference minimum buffer. A diagnostic breach is reported when remaining liquid resources fall below the configured minimum buffer.
-
-```text
-remaining_liquid_buffer_rate < minimum_buffer_rate
-```
-
-The diagnostic output should report:
-
-* remaining buffer
-* reference minimum
-* assets consumed by the liquidation strategy
-* whether the configured minimum cash buffer was preserved
+The diagnostic reports the remaining liquidity rate and whether the minimum cash buffer was preserved.
 
 ## Calibration approach
 
-Version 1 calibration is scenario-based.
+The application allows the user to select or adjust:
 
-The user changes:
-
-* investor-class redemption assumptions
-* market shock assumptions
-* liquidity stress assumptions
+* fund
+* redemption scenario
 * liquidation strategy
 * swing-pricing threshold
-* gate threshold
-* minimum liquidity buffer
+* redemption-gate threshold
+* internal liquidity-buffer threshold
 
-The app reports how threshold values, diagnostic breaches, dilution estimates, cash-buffer usage, and shortfall change under those assumptions.
+The dashboard compares fixed market-condition columns using the same selected fund, redemption scenario, liquidation strategy, and LMT thresholds. Liquidity stress comes from the selected scenario configuration rather than a separate dashboard control.
+
+The resulting matrix compares market-stressed NAV, redemption need, realised liquidation cost, fund state before and after LMT effects, and remaining liquidity.
 
 ## Audit trail
 
-Each scenario run should produce a structured audit record.
+Structured audit domain models and a JSON audit writer are implemented. They support:
 
-The audit record should include:
+* run metadata and output paths
+* validated input summaries
+* scenario, strategy, and threshold parameter summaries
+* liquidation amounts, costs, shortfall, and remaining liquidity
+* asset-group allocations
+* optional threshold-assessment diagnostics
 
-* selected liquidation strategy
-* strategy parameters
-* cash buffer rule
-* custom weights, if used
-* whether the minimum cash buffer was preserved
-* liquidation allocation by asset group
-* input files
-* scenario parameters
-* LMT threshold values used or assessed
-* diagnostic checks and reasons
-* output file paths
+The writer creates `<run_id>_audit.json` in a selected output directory. Automatic construction and writing of an audit record for every application scenario run is not currently integrated.
 
-Audit records are saved as generated runtime outputs, not source files.
+## Out-of-scope methodology extensions
 
-## Later methodology extensions
+Potential extensions outside the current methodology include:
 
-Later versions may extend the one-period methodology into a multi-period redemption path.
-
-The path-based version should track redemptions, deferred amounts, repeated threshold assessment diagnostics, behavioural redemption feedback, and liquidity-management response through time.
-
-Reverse stress testing may then be added to identify the redemption rate, market shock, haircut, or liquidation capacity shock that first breaches a selected LMT threshold.
-
-Asset-side contagion may be added to model how stressed liquidation or wider market pressure may increase haircuts, reduce liquidation capacity, or apply additional shocks to related assets.
-
-Future phases may also add market stress scenario variations, participation-rate assumptions, market volume assumptions, price-impact assumptions, random sampling from beta distributions by investor type, fixed stress months by investor type, and behavioural feedback after LMT activation.
+* multi-period redemption paths and deferred-redemption backlogs
+* stochastic redemption behaviour
+* intra-period liquidation schedules
+* reverse stress testing
+* behavioural feedback after threshold diagnostics
+* nonlinear or volume-based market impact
+* asset-side contagion
+* simultaneous liquidation-strategy comparison
+* live market-data calibration
 
 ## Methodology limits
 
-The model is simplified.
+The model uses synthetic sample data and simplified rate-based stress assumptions. It does not model full trading-volume curves, order-book depth, legal fund-document constraints, tax effects, or production management decisions.
 
-Version 1 does not cover:
-
-* corporate bonds
-* derivatives
-* private assets
-* side pockets
-* live market data
-* tax effects
-* full transaction cost models
-* legal fund-document constraints
-* 12-month redemption paths
-* stochastic redemption simulation
-* intra-month liquidation schedules
-* full price-impact modelling
-
-The project should state these limits clearly in README and methodology documentation.
+The active liquidation workflow is limited to cash, listed equities, listed ETFs, reverse repos, and repo financing exposures. Additional modelled asset categories do not imply active methodology support.

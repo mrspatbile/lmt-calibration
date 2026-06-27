@@ -6,7 +6,7 @@ This document defines shared data conventions for the Liquidity Management Tools
 
 Use it for naming, units, date formats, decimal representation, validation principles, missing-value handling, and synthetic data rules.
 
-For the V1 data workflow, see [DATA_REFERENCE.md](DATA_REFERENCE.md).
+For the current data workflow, see [DATA_REFERENCE.md](DATA_REFERENCE.md).
 
 For field-level input schemas, see [DATA_SCHEMA.md](DATA_SCHEMA.md).
 
@@ -44,6 +44,13 @@ settlement_days
 notice_days
 spread_bps
 cash_buffer_use_rate
+bid_ask_spread_rate
+transaction_cost_rate
+market_impact_rate
+participation_rate
+liquidity_haircut_rate
+stress_horizon_days
+maturity_days
 ```
 
 Avoid vague names such as:
@@ -58,9 +65,19 @@ threshold
 
 Use them only where the surrounding dataset makes the meaning explicit.
 
+Use **asset group** consistently for the classification represented by `asset_group` and for asset-group-specific assumptions.
+
+## Input Formats
+
+Use CSV for flat tabular datasets.
+
+Use JSON where configuration is nested, including liquidation strategy weights, asset-group execution assumptions, and historical stress scenario libraries.
+
+Each input file must follow its documented schema. Shared conventions do not replace the field-level requirements in [DATA_SCHEMA.md](DATA_SCHEMA.md).
+
 ## Decimal Representation
 
-Rates, ratios, sensitivities, haircuts, thresholds, weights, and money-like values should become `Decimal` values in domain models.
+Rates, ratios, sensitivities, haircuts, thresholds, weights, and monetary values become `Decimal` values in domain models.
 
 Examples:
 
@@ -70,7 +87,7 @@ Decimal("0.005") = 50 bps
 Decimal("1.25") = 125%
 ```
 
-External CSV and JSON files may store decimal values as strings. Raw percentage strings such as `5%` are not allowed.
+CSV values use decimal notation. JSON values use the numeric or string representation required by the relevant schema. Raw percentage strings such as `5%` are not allowed in either format.
 
 For historical market stress JSON, `unit: "pct"` uses the same decimal-rate convention. For example, `-0.4` means a 40% decline.
 
@@ -89,6 +106,22 @@ Use decimal representation for:
 * liquidation strategy weights
 * beta, duration, spread duration, and delta
 
+## Shared Rate Conventions
+
+Rates use decimal representation:
+
+```text
+0.05 = 5%
+0.005 = 50 basis points
+-0.20 = a 20% decline
+```
+
+Market shock rates may be negative. Execution-cost rates represent proportions of the relevant amount. Participation rates represent the usable share of liquidation capacity. Liquidity haircut rates represent additional stressed haircuts.
+
+Swing-pricing, redemption-gate, and liquidity-buffer thresholds use decimal rates.
+
+Exact field requirements and permitted ranges belong in [DATA_SCHEMA.md](DATA_SCHEMA.md), not in this conventions document.
+
 ## Monetary Values
 
 Use `Decimal` for monetary values in domain models.
@@ -106,11 +139,11 @@ Examples:
 * entry price
 * strike price
 
-Monetary fields should be non-negative unless a dataset explicitly represents liabilities or obligations.
+Monetary values and obligation amounts should be non-negative unless a dataset explicitly defines a signed field.
 
 ## Basis Points
 
-Store basis points as `int` only when the source field is naturally expressed in basis points.
+Basis points are reserved guidance for fields naturally expressed in basis points. Store such fields as `int` and use a `_bps` suffix.
 
 Examples:
 
@@ -142,13 +175,15 @@ Example:
 
 Domain models should use date objects after validation and loading.
 
+Descriptive historical periods may remain text when explicitly defined that way by the relevant schema.
+
 ## Missing Values
 
 Blank cells in flat files mean missing values.
 
 Loaders may normalize blank CSV cells to `None` at the file boundary before validation and domain object creation.
 
-Missing required values should fail validation. Optional fields may remain missing when they are not required for the relevant dataset or instrument subtype.
+In JSON inputs, an omitted field or `null` value means missing. Missing required values should fail validation. Optional values may remain blank, absent, or `null` when allowed by the relevant schema.
 
 Do not use hidden defaults for required methodology parameters.
 
@@ -157,6 +192,8 @@ Do not use hidden defaults for required methodology parameters.
 External data must be validated before domain object creation.
 
 Validation should check structure, units, ranges, identifiers, missing values, and documented relationships. Validation errors should state what failed and where.
+
+Field-level requirements, conditional rules, and ranges belong in [DATA_SCHEMA.md](DATA_SCHEMA.md) and the validation layer.
 
 Validation must not silently coerce invalid dates, invalid percentages, malformed monetary values, or missing required fields.
 
@@ -185,11 +222,11 @@ EUR Overnight Reverse Repo BNP Paribas Synthetic
 Platform Distribution Channel
 ```
 
-Sample data should be small enough for demonstrations and tests while still reflecting the V1 data relationships.
+Sample data should be small enough for demonstrations and tests while still reflecting the current data relationships.
 
 ## Related Documents
 
-* [DATA_REFERENCE.md](DATA_REFERENCE.md) explains the V1 data flow and dataset relationships.
-* [DATA_SCHEMA.md](DATA_SCHEMA.md) documents the field-level schema for each V1 input file.
+* [DATA_REFERENCE.md](DATA_REFERENCE.md) explains the current data flow and dataset relationships.
+* [DATA_SCHEMA.md](DATA_SCHEMA.md) documents the field-level schema for each current input file.
 * [METHODOLOGY.md](METHODOLOGY.md) defines the finance methodology and assumptions.
 * [AUDIT_TRAIL.md](AUDIT_TRAIL.md) defines generated audit records and output traceability.

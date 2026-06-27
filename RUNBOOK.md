@@ -48,25 +48,25 @@ uv add --dev pre-commit
 Check linting:
 
 ```bash
-uv run ruff check src tests
+uv run ruff check src tests app
 ```
 
 Auto-fix what Ruff can fix:
 
 ```bash
-uv run ruff check --fix src tests
+uv run ruff check --fix src tests app
 ```
 
 Check formatting:
 
 ```bash
-uv run ruff format --check src tests
+uv run ruff format --check src tests app
 ```
 
 Fix formatting:
 
 ```bash
-uv run ruff format src tests
+uv run ruff format src tests app
 ```
 
 Type check:
@@ -102,8 +102,8 @@ uv run streamlit run app/streamlit_app.py
 Before asking for review, run:
 
 ```bash
-uv run ruff check src tests
-uv run ruff format --check src tests
+uv run ruff check src tests app
+uv run ruff format --check src tests app
 uv run mypy src
 uv run pytest tests/
 ```
@@ -113,8 +113,11 @@ For changes involving methodology, validation, or audit records, also review:
 ```text
 ARCHITECTURE.md
 docs/METHODOLOGY.md
+docs/DATA_SCHEMA.md
+docs/DATA_REFERENCE.md
 docs/DATA_CONVENTIONS.md
 docs/AUDIT_TRAIL.md
+CHANGELOG.md
 ```
 
 ## Pre-commit
@@ -166,7 +169,7 @@ Pre-commit runs automatically before the commit is created.
 
 * `F401` unused import: remove the import
 * `F841` assigned but unused variable: remove the variable
-* `I001` import order: run `uv run ruff check --fix src tests`
+* `I001` import order: run `uv run ruff check --fix src tests app`
 
 ## Sample data
 
@@ -179,8 +182,12 @@ data/sample/funds.csv
 data/sample/positions.csv
 data/sample/investor_classes.csv
 data/sample/redemption_scenarios.csv
+data/sample/market_stresses.csv
+data/sample/liquidity_stresses.json
+data/sample/scenario_definitions.csv
 data/sample/lmt_parameters.csv
 data/sample/liquidation_strategies.json
+data/sample/historical_market_stress_scenarios.json
 ```
 
 Sample data must cover:
@@ -210,39 +217,14 @@ uv run python scripts/generate_sample_data.py
 ```
 -->
 
-<!--
-## Streamlit app
-
-Run the local application:
-
-```bash
-uv run streamlit run app/streamlit_app.py
-```
--->
-
-<!--
-## Docker
-
-Build the application image:
-
-```bash
-docker build -t lmt-calibration .
-```
-
-Run the application container:
-
-```bash
-docker run --rm -p 8501:8501 lmt-calibration
-```
--->
-
 ## Common commands
 
 ```bash
 uv sync
-uv run ruff check src tests
-uv run ruff check --fix src tests
-uv run ruff format src tests
+uv run ruff check src tests app
+uv run ruff check --fix src tests app
+uv run ruff format --check src tests app
+uv run ruff format src tests app
 uv run mypy src
 uv run pytest tests/
 uv run pre-commit run --all-files
@@ -261,11 +243,15 @@ uv run pre-commit run --all-files
 
 If `ipykernel` is already installed in the project environment:
 
+```bash
 uv run python3 -m ipykernel install --user --name lmt-calibration --display-name "lmt-calibration"
+```
 
 If `ipykernel` is not installed:
 
+```bash
 uv add --dev ipykernel
 uv run python3 -m ipykernel install --user --name lmt-calibration --display-name "lmt-calibration"
+```
 
 Then reload VS Code and select the `lmt-calibration` kernel in the notebook picker.
