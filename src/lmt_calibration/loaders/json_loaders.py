@@ -3,12 +3,17 @@
 import json
 from pathlib import Path
 
-from lmt_calibration.domain import HistoricalMarketStressScenarioLibrary, LiquidationStrategyConfig
+from lmt_calibration.domain import (
+    HistoricalMarketStressScenarioLibrary,
+    LiquidationStrategyConfig,
+    LiquidityStress,
+)
 from lmt_calibration.validation import (
     DataValidationError,
     ValidationIssue,
     validate_historical_market_stress_scenarios_config,
     validate_liquidation_strategy_config,
+    validate_liquidity_stress_records,
 )
 
 
@@ -29,6 +34,27 @@ def load_liquidation_strategies_json(path: Path) -> list[LiquidationStrategyConf
             ]
         )
     return [LiquidationStrategyConfig.model_validate(strategy) for strategy in strategies]
+
+
+def load_liquidity_stresses_json(path: Path) -> list[LiquidityStress]:
+    """Load validated liquidity stress configurations from JSON."""
+
+    config = _read_json_config(path)
+    liquidity_stresses = config.get("liquidity_stresses")
+    if not isinstance(liquidity_stresses, list):
+        raise DataValidationError(
+            [
+                ValidationIssue(
+                    location=str(path),
+                    field="liquidity_stresses",
+                    message="must be a list",
+                )
+            ]
+        )
+
+    # Validate using existing validation logic
+    validated_records = validate_liquidity_stress_records(liquidity_stresses)
+    return [LiquidityStress.model_validate(record) for record in validated_records]
 
 
 def load_historical_market_stress_scenarios_json(
