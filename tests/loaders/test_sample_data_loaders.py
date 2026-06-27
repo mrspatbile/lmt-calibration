@@ -7,7 +7,7 @@ from lmt_calibration.loaders import (
     load_historical_market_stress_scenarios_json,
     load_investor_classes_csv,
     load_liquidation_strategies_json,
-    load_liquidity_stresses_csv,
+    load_liquidity_stresses_json,
     load_lmt_parameters_csv,
     load_market_stresses_csv,
     load_positions_csv,
@@ -26,7 +26,7 @@ def test_sample_files_load_through_v1_loaders() -> None:
         SAMPLE_DATA_DIR / "redemption_scenarios.csv"
     )
     market_stresses = load_market_stresses_csv(SAMPLE_DATA_DIR / "market_stresses.csv")
-    liquidity_stresses = load_liquidity_stresses_csv(SAMPLE_DATA_DIR / "liquidity_stresses.csv")
+    liquidity_stresses = load_liquidity_stresses_json(SAMPLE_DATA_DIR / "liquidity_stresses.json")
     scenario_definitions = load_scenario_definitions_csv(
         SAMPLE_DATA_DIR / "scenario_definitions.csv"
     )

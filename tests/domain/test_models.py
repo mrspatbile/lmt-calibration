@@ -110,6 +110,11 @@ def test_market_stress_decimal_string_is_stored_as_decimal() -> None:
         name="europe_equity_downturn",
         description="Synthetic European equity benchmark decline.",
         market_shock_rate="-0.12",
+        bid_ask_spread_rate="0.0050",
+        transaction_cost_rate="0.0020",
+        market_impact_rate="0.0030",
+        participation_rate="0.15",
+        liquidity_haircut_rate="0.15",
     )
 
     assert market_stress.market_shock_rate == Decimal("-0.12")

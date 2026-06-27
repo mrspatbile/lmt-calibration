@@ -17,6 +17,7 @@ from lmt_calibration.loaders import (
     load_funds_csv,
     load_investor_classes_csv,
     load_liquidity_stresses_csv,
+    load_liquidity_stresses_json,
     load_lmt_parameters_csv,
     load_market_stresses_csv,
     load_positions_csv,
@@ -98,21 +99,31 @@ def test_csv_loaders_return_typed_domain_objects(tmp_path: Path) -> None:
                 "name": "europe_equity_downturn",
                 "description": "Reusable market shock.",
                 "market_shock_rate": "-0.12",
+                "bid_ask_spread_rate": "0.0050",
+                "transaction_cost_rate": "0.0020",
+                "market_impact_rate": "0.0030",
+                "participation_rate": "0.15",
+                "liquidity_haircut_rate": "0.15",
             }
         ],
     )
-    liquidity_stresses_path = _write_csv(
-        tmp_path / "liquidity_stresses.csv",
-        [
-            {
-                "liquidity_stress_id": "reduced_equity_capacity",
-                "version": "1.0",
-                "name": "reduced_equity_capacity",
-                "description": "Reusable liquidity shock.",
-                "liquidity_stress_multiplier": "2",
-                "stress_horizon_days": "5",
-            }
-        ],
+    liquidity_stresses_path = tmp_path / "liquidity_stresses.json"
+    liquidity_stresses_path.write_text(
+        """{
+  "liquidity_stresses": [
+    {
+      "liquidity_stress_id": "reduced_equity_capacity",
+      "version": "1.0",
+      "name": "reduced_equity_capacity",
+      "description": "Reusable liquidity shock.",
+      "stress_horizon_days": 5,
+      "execution_assumptions_by_asset_group": {
+        "cash": {"bid_ask_spread_rate": 0.0, "transaction_cost_rate": 0.0, "market_impact_rate": 0.0, "participation_rate": 1.0, "liquidity_haircut_rate": 0.0},
+        "listed_etf": {"bid_ask_spread_rate": 0.0015, "transaction_cost_rate": 0.0005, "market_impact_rate": 0.001, "participation_rate": 0.2, "liquidity_haircut_rate": 0.1}
+      }
+    }
+  ]
+}"""
     )
     scenario_definitions_path = _write_csv(
         tmp_path / "scenario_definitions.csv",
@@ -151,7 +162,7 @@ def test_csv_loaders_return_typed_domain_objects(tmp_path: Path) -> None:
         load_redemption_scenarios_csv(redemption_scenarios_path)[0], RedemptionScenario
     )
     assert isinstance(load_market_stresses_csv(market_stresses_path)[0], MarketStress)
-    assert isinstance(load_liquidity_stresses_csv(liquidity_stresses_path)[0], LiquidityStress)
+    assert isinstance(load_liquidity_stresses_json(liquidity_stresses_path)[0], LiquidityStress)
     assert isinstance(
         load_scenario_definitions_csv(scenario_definitions_path)[0], ScenarioDefinition
     )
