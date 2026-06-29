@@ -6,11 +6,9 @@
 [![CSSF](https://img.shields.io/badge/CSSF-26%2F910-blueviolet)](https://www.cssf.lu/wp-content/uploads/cssf26_910eng.pdf)
 
 
-`lmt-calibration` is a fund liquidity risk project for calibrating Liquidity Management Tools under fund liquidity stress scenarios.
+`lmt-calibration` is a fund liquidity risk project for calibrating Liquidity Management Tools under stressed redemption and market conditions.
 
-The parameters under review are swing-pricing thresholds, redemption-gate thresholds, and liquidity-buffer thresholds.
-
-Calibration results are assessed across configurable liquidation strategies and supported by dilution estimates, cash-buffer usage, shortfall analysis, threshold comparisons, and diagnostic warning flags.
+![LMT calibration dashboard](figs/LMT-darkmode.png)
 
 The stress framework combines:
 
@@ -31,9 +29,7 @@ It is a non-production portfolio implementation for structured liquidity stress 
 
 ## Current scope
 
-The current application is a one-period liquidity stress and LMT calibration workflow.
-
-It combines investor-base redemption assumptions, asset market shocks, liquidity haircuts, liquidation limits, settlement constraints, configurable liquidation strategies, dilution costs, shortfall analysis, cash-buffer usage, and diagnostic threshold checks for swing pricing, redemption gates, and liquidity-buffer monitoring.
+The current application is a one-period liquidity stress and LMT calibration tool. It combines investor-base redemption assumptions, asset market shocks, liquidity haircuts, liquidation limits, settlement constraints, configurable liquidation strategies, dilution costs, shortfall analysis, cash-buffer usage, and diagnostic threshold checks for swing pricing, redemption gates, and liquidity-buffer monitoring.
 
 <details>
 <summary>Click for a brief overview of the features listed above</summary>
