@@ -2,6 +2,7 @@
 
 from datetime import date
 from decimal import Decimal
+from enum import StrEnum
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
@@ -11,6 +12,16 @@ from lmt_calibration.domain.results import LiquidationResult
 
 ZERO = Decimal("0")
 ONE = Decimal("1")
+
+
+class PathLmtOutcome(StrEnum):
+    """LMT outcome used for one-month investor behaviour feedback."""
+
+    SUSPENSION = "suspension"
+    REDEMPTION_GATE = "redemption_gate"
+    LIQUIDITY_BUFFER_BREACH = "liquidity_buffer_breach"
+    SWING_PRICING = "swing_pricing"
+    NONE = "none"
 
 
 class MonthlySimulationPeriod(BaseModel):
@@ -82,6 +93,10 @@ class RedemptionPathAssumptions(BaseModel):
     random_seed: int = Field(ge=0)
     behavioural_multipliers: dict[ClientClass, Decimal] = Field(default_factory=dict)
     contagion_multiplier: Decimal = Field(default=ONE, ge=ZERO)
+    behavioural_feedback_multipliers: dict[PathLmtOutcome, dict[ClientClass, Decimal]] = Field(
+        default_factory=dict
+    )
+    contagion_multipliers_by_outcome: dict[PathLmtOutcome, Decimal] = Field(default_factory=dict)
     days_per_month: int = Field(default=30, gt=0)
 
     @field_validator("behavioural_multipliers")
@@ -94,6 +109,33 @@ class RedemptionPathAssumptions(BaseModel):
         for multiplier in value.values():
             if multiplier < ZERO:
                 raise ValueError("behavioural multipliers must be non-negative")
+        return value
+
+    @field_validator("behavioural_feedback_multipliers")
+    @classmethod
+    def validate_behavioural_feedback_multipliers(
+        cls,
+        value: dict[PathLmtOutcome, dict[ClientClass, Decimal]],
+    ) -> dict[PathLmtOutcome, dict[ClientClass, Decimal]]:
+        """Require non-negative feedback multipliers."""
+
+        for multipliers_by_class in value.values():
+            for multiplier in multipliers_by_class.values():
+                if multiplier < ZERO:
+                    raise ValueError("behavioural feedback multipliers must be non-negative")
+        return value
+
+    @field_validator("contagion_multipliers_by_outcome")
+    @classmethod
+    def validate_contagion_multipliers_by_outcome(
+        cls,
+        value: dict[PathLmtOutcome, Decimal],
+    ) -> dict[PathLmtOutcome, Decimal]:
+        """Require non-negative contagion multipliers."""
+
+        for multiplier in value.values():
+            if multiplier < ZERO:
+                raise ValueError("contagion multipliers must be non-negative")
         return value
 
     @model_validator(mode="after")
@@ -153,6 +195,28 @@ class InvestorClassMonthlyState(BaseModel):
     redemption_rate: Decimal = Field(ge=ZERO, le=ONE)
 
 
+class MonthlyBehaviourAdjustment(BaseModel):
+    """Behaviour and contagion multipliers applied to new demand in one month."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True, str_strip_whitespace=True)
+
+    source_outcome: PathLmtOutcome
+    behavioural_multipliers: dict[ClientClass, Decimal]
+    contagion_multiplier: Decimal = Field(ge=ZERO)
+
+    @field_validator("behavioural_multipliers")
+    @classmethod
+    def validate_monthly_behavioural_multipliers(
+        cls, value: dict[ClientClass, Decimal]
+    ) -> dict[ClientClass, Decimal]:
+        """Require non-negative monthly behavioural multipliers."""
+
+        for multiplier in value.values():
+            if multiplier < ZERO:
+                raise ValueError("monthly behavioural multipliers must be non-negative")
+        return value
+
+
 class MonthlyPathLmtAssessment(BaseModel):
     """Monthly threshold assessment and paid/deferred redemption split."""
 
@@ -161,6 +225,9 @@ class MonthlyPathLmtAssessment(BaseModel):
     swing_activated: bool
     gate_activated: bool
     buffer_breached: bool
+    suspension_applied: bool = False
+    outcomes: tuple[PathLmtOutcome, ...] = ()
+    priority_outcome: PathLmtOutcome = PathLmtOutcome.NONE
     effective_redemption_rate: Decimal = Field(ge=ZERO)
     paid_redemption_amount: Decimal = Field(ge=ZERO)
     deferred_redemption_amount: Decimal = Field(ge=ZERO)
@@ -182,6 +249,7 @@ class MonthlyRedemptionPathResult(BaseModel):
     opening_cash: Decimal = Field(ge=ZERO)
     closing_cash: Decimal = Field(ge=ZERO)
     contractual_cashflow_amount: Decimal = Field(ge=ZERO)
+    behaviour_adjustment: MonthlyBehaviourAdjustment
     investor_class_states: tuple[InvestorClassMonthlyState, ...]
     backlog: tuple[DeferredRedemptionBacklogEntry, ...]
     positions: tuple[PathPositionState, ...]

@@ -13,6 +13,7 @@ from lmt_calibration.domain import (
     LiquidityStress,
     LmtParameters,
     MarketStress,
+    PathLmtOutcome,
     RedemptionPathAssumptions,
 )
 from lmt_calibration.engines.redemption_path import run_redemption_path
@@ -145,6 +146,233 @@ def test_gate_paid_redemptions_are_allocated_pro_rata_and_backlog_carries_forwar
         "400.00"
     )
     assert result.monthly_results[1].investor_class_states[0].opening_backlog_amount > Decimal("0")
+
+
+def test_swing_outcome_applies_next_month_behavioural_multiplier() -> None:
+    result = run_redemption_path(
+        fund=_fund(),
+        positions=(_cash("1000"),),
+        investor_profiles=(_investor(ClientClass.RETAIL, "1", "0", "0.10"),),
+        liquidity_stress=_liquidity_stress(),
+        liquidation_strategy=_strategy(),
+        lmt_parameters=_parameters(swing_threshold="0.05", gate_threshold="1"),
+        assumptions=RedemptionPathAssumptions(
+            scenario_id="swing_feedback",
+            start_date="2026-01-01",
+            random_seed=3,
+            stress_months=(1, 2),
+            behavioural_feedback_multipliers={
+                PathLmtOutcome.SWING_PRICING: {ClientClass.RETAIL: Decimal("2")}
+            },
+        ),
+    )
+
+    assert result.monthly_results[0].behaviour_adjustment.source_outcome is PathLmtOutcome.NONE
+    assert result.monthly_results[0].investor_class_states[0].redemption_rate == Decimal("0.10")
+    assert result.monthly_results[0].lmt_assessment.priority_outcome is PathLmtOutcome.SWING_PRICING
+    assert (
+        result.monthly_results[1].behaviour_adjustment.source_outcome
+        is PathLmtOutcome.SWING_PRICING
+    )
+    assert result.monthly_results[1].investor_class_states[0].redemption_rate == Decimal("0.20")
+
+
+def test_gate_outcome_applies_next_month_behavioural_multiplier() -> None:
+    result = run_redemption_path(
+        fund=_fund(),
+        positions=(_cash("1000"),),
+        investor_profiles=(_investor(ClientClass.RETAIL, "1", "0", "0.50"),),
+        liquidity_stress=_liquidity_stress(),
+        liquidation_strategy=_strategy(),
+        lmt_parameters=_parameters(swing_threshold="1", gate_threshold="0.10"),
+        assumptions=RedemptionPathAssumptions(
+            scenario_id="gate_feedback",
+            start_date="2026-01-01",
+            random_seed=3,
+            stress_months=(1, 2),
+            behavioural_feedback_multipliers={
+                PathLmtOutcome.REDEMPTION_GATE: {ClientClass.RETAIL: Decimal("0.50")}
+            },
+        ),
+    )
+
+    assert (
+        result.monthly_results[0].lmt_assessment.priority_outcome is PathLmtOutcome.REDEMPTION_GATE
+    )
+    assert (
+        result.monthly_results[1].behaviour_adjustment.source_outcome
+        is PathLmtOutcome.REDEMPTION_GATE
+    )
+    assert result.monthly_results[1].investor_class_states[0].redemption_rate == Decimal("0.250")
+
+
+def test_liquidity_buffer_breach_applies_behaviour_only_when_configured() -> None:
+    unconfigured = _buffer_breach_path({})
+    configured = _buffer_breach_path(
+        {PathLmtOutcome.LIQUIDITY_BUFFER_BREACH: {ClientClass.RETAIL: Decimal("1.50")}}
+    )
+
+    assert (
+        unconfigured.monthly_results[0].lmt_assessment.priority_outcome
+        is PathLmtOutcome.LIQUIDITY_BUFFER_BREACH
+    )
+    assert unconfigured.monthly_results[1].investor_class_states[0].redemption_rate == Decimal(
+        "0.10"
+    )
+    assert configured.monthly_results[1].investor_class_states[0].redemption_rate == Decimal(
+        "0.150"
+    )
+
+
+def test_contagion_applies_after_configured_outcome() -> None:
+    result = run_redemption_path(
+        fund=_fund(),
+        positions=(_cash("1000"),),
+        investor_profiles=(_investor(ClientClass.RETAIL, "1", "0", "0.10"),),
+        liquidity_stress=_liquidity_stress(),
+        liquidation_strategy=_strategy(),
+        lmt_parameters=_parameters(swing_threshold="0.05", gate_threshold="1"),
+        assumptions=RedemptionPathAssumptions(
+            scenario_id="swing_contagion",
+            start_date="2026-01-01",
+            random_seed=3,
+            stress_months=(1, 2),
+            contagion_multipliers_by_outcome={PathLmtOutcome.SWING_PRICING: Decimal("1.50")},
+        ),
+    )
+
+    assert result.monthly_results[1].behaviour_adjustment.contagion_multiplier == Decimal("1.50")
+    assert result.monthly_results[1].investor_class_states[0].redemption_rate == Decimal("0.150")
+
+
+def test_no_outcome_gives_neutral_next_month_multipliers() -> None:
+    result = run_redemption_path(
+        fund=_fund(),
+        positions=(_cash("1000"),),
+        investor_profiles=(_investor(ClientClass.RETAIL, "1", "0", "0"),),
+        liquidity_stress=_liquidity_stress(),
+        liquidation_strategy=_strategy(),
+        lmt_parameters=_parameters(gate_threshold="1"),
+        assumptions=RedemptionPathAssumptions(
+            scenario_id="neutral_feedback",
+            start_date="2026-01-01",
+            random_seed=3,
+        ),
+    )
+
+    assert result.monthly_results[0].lmt_assessment.priority_outcome is PathLmtOutcome.NONE
+    assert result.monthly_results[1].behaviour_adjustment.source_outcome is PathLmtOutcome.NONE
+    assert result.monthly_results[1].behaviour_adjustment.contagion_multiplier == Decimal("1")
+    assert result.monthly_results[1].behaviour_adjustment.behavioural_multipliers[
+        ClientClass.RETAIL
+    ] == Decimal("1")
+
+
+def test_multiple_outcomes_use_priority_order() -> None:
+    result = run_redemption_path(
+        fund=_fund(),
+        positions=(_cash("1000"),),
+        investor_profiles=(_investor(ClientClass.RETAIL, "1", "0", "0.50"),),
+        liquidity_stress=_liquidity_stress(),
+        liquidation_strategy=_strategy(),
+        lmt_parameters=_parameters(
+            swing_threshold="0.05",
+            gate_threshold="0.10",
+            minimum_buffer="0.50",
+        ),
+        assumptions=RedemptionPathAssumptions(
+            scenario_id="priority_feedback",
+            start_date="2026-01-01",
+            random_seed=3,
+            stress_months=(1, 2),
+            behavioural_feedback_multipliers={
+                PathLmtOutcome.SWING_PRICING: {ClientClass.RETAIL: Decimal("2")},
+                PathLmtOutcome.REDEMPTION_GATE: {ClientClass.RETAIL: Decimal("0.50")},
+            },
+        ),
+    )
+
+    first_assessment = result.monthly_results[0].lmt_assessment
+    assert first_assessment.swing_activated is True
+    assert first_assessment.gate_activated is True
+    assert first_assessment.priority_outcome is PathLmtOutcome.REDEMPTION_GATE
+    assert result.monthly_results[1].investor_class_states[0].redemption_rate == Decimal("0.250")
+
+
+def test_feedback_lasts_one_month_only() -> None:
+    result = run_redemption_path(
+        fund=_fund(),
+        positions=(_cash("1000"),),
+        investor_profiles=(_investor(ClientClass.RETAIL, "1", "0", "0.20"),),
+        liquidity_stress=_liquidity_stress(),
+        liquidation_strategy=_strategy(),
+        lmt_parameters=_parameters(swing_threshold="0.15", gate_threshold="1"),
+        assumptions=RedemptionPathAssumptions(
+            scenario_id="one_month_feedback",
+            start_date="2026-01-01",
+            random_seed=3,
+            stress_months=(1, 2, 3),
+            behavioural_feedback_multipliers={
+                PathLmtOutcome.SWING_PRICING: {ClientClass.RETAIL: Decimal("0.50")}
+            },
+        ),
+    )
+
+    assert result.monthly_results[0].lmt_assessment.priority_outcome is PathLmtOutcome.SWING_PRICING
+    assert result.monthly_results[1].investor_class_states[0].redemption_rate == Decimal("0.100")
+    assert result.monthly_results[1].lmt_assessment.priority_outcome is PathLmtOutcome.NONE
+    assert result.monthly_results[2].behaviour_adjustment.source_outcome is PathLmtOutcome.NONE
+    assert result.monthly_results[2].investor_class_states[0].redemption_rate == Decimal("0.20")
+
+
+def test_backlog_is_not_multiplied_by_feedback_or_contagion() -> None:
+    result = run_redemption_path(
+        fund=_fund(),
+        positions=(_cash("1000"),),
+        investor_profiles=(_investor(ClientClass.RETAIL, "1", "0", "0.50"),),
+        liquidity_stress=_liquidity_stress(),
+        liquidation_strategy=_strategy(),
+        lmt_parameters=_parameters(swing_threshold="1", gate_threshold="0.10"),
+        assumptions=RedemptionPathAssumptions(
+            scenario_id="backlog_not_multiplied",
+            start_date="2026-01-01",
+            random_seed=3,
+            stress_months=(1, 2),
+            behavioural_feedback_multipliers={
+                PathLmtOutcome.REDEMPTION_GATE: {ClientClass.RETAIL: Decimal("2")}
+            },
+            contagion_multipliers_by_outcome={PathLmtOutcome.REDEMPTION_GATE: Decimal("2")},
+        ),
+    )
+
+    first_backlog = result.monthly_results[0].backlog[0].remaining_amount
+    second_state = result.monthly_results[1].investor_class_states[0]
+
+    assert first_backlog == Decimal("400.0")
+    assert second_state.opening_backlog_amount == first_backlog
+    assert second_state.new_redemption_amount == Decimal("900.0")
+
+
+def test_liquidation_still_uses_paid_redemption_only() -> None:
+    result = run_redemption_path(
+        fund=_fund(),
+        positions=(_cash("300"), _equity("euro_equity", "700")),
+        investor_profiles=(_investor(ClientClass.RETAIL, "1", "0", "0.50"),),
+        liquidity_stress=_liquidity_stress(),
+        liquidation_strategy=_strategy(),
+        lmt_parameters=_parameters(swing_threshold="1", gate_threshold="0.10"),
+        assumptions=RedemptionPathAssumptions(
+            scenario_id="paid_only_liquidation",
+            start_date="2026-01-01",
+            random_seed=3,
+            stress_months=(1,),
+        ),
+    )
+
+    first_month = result.monthly_results[0]
+    assert first_month.lmt_assessment.paid_redemption_amount == Decimal("100.0")
+    assert first_month.liquidation_result.total_redemption_amount == Decimal("100.0")
+    assert first_month.lmt_assessment.deferred_redemption_amount == Decimal("400.0")
 
 
 def _fund() -> FundSnapshot:
@@ -290,19 +518,62 @@ def _strategy() -> LiquidationStrategyConfig:
     )
 
 
-def _parameters(gate_threshold: str) -> LmtParameters:
+def _parameters(
+    gate_threshold: str,
+    *,
+    swing_threshold: str = "1",
+    minimum_buffer: str = "0",
+) -> LmtParameters:
     return LmtParameters(
         fund_id="lux_dynamic_allocation",
         as_of_date="2026-01-01",
         parameter_set_id="path_parameters",
-        swing_threshold_rate=Decimal("1"),
+        swing_threshold_rate=Decimal(swing_threshold),
         max_swing_factor_rate=Decimal("0.03"),
         gate_threshold_rate=Decimal(gate_threshold),
-        minimum_buffer_rate=Decimal("0"),
+        minimum_buffer_rate=Decimal(minimum_buffer),
     )
 
 
 def _position_value(positions: tuple, position_id: str) -> Decimal:
     return next(
         position.market_value for position in positions if position.position_id == position_id
+    )
+
+
+def _buffer_breach_path(feedback_multipliers):
+    return run_redemption_path(
+        fund=_fund(),
+        positions=(_cash("0"), _equity("euro_equity", "1000")),
+        investor_profiles=(_investor(ClientClass.RETAIL, "1", "0", "0.10"),),
+        liquidity_stress=LiquidityStress(
+            liquidity_stress_id="constrained_liquidity",
+            version="1.0",
+            name="constrained_liquidity",
+            description="Synthetic constrained liquidity.",
+            stress_horizon_days=5,
+            execution_assumptions_by_asset_group={
+                AssetGroup.CASH: _execution_assumption(),
+                AssetGroup.LISTED_EQUITY: LiquidityExecutionAssumption(
+                    bid_ask_spread_rate=Decimal("0"),
+                    transaction_cost_rate=Decimal("0"),
+                    market_impact_rate=Decimal("0"),
+                    participation_rate=Decimal("0.20"),
+                    liquidity_haircut_rate=Decimal("0"),
+                ),
+            },
+        ),
+        liquidation_strategy=_strategy(),
+        lmt_parameters=_parameters(
+            swing_threshold="1",
+            gate_threshold="1",
+            minimum_buffer="0.50",
+        ),
+        assumptions=RedemptionPathAssumptions(
+            scenario_id="buffer_feedback",
+            start_date="2026-01-01",
+            random_seed=3,
+            stress_months=(1, 2),
+            behavioural_feedback_multipliers=feedback_multipliers,
+        ),
     )

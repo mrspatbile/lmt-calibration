@@ -20,9 +20,11 @@ from lmt_calibration.domain import (
     LiquidityStress,
     LmtParameters,
     MarketStress,
+    MonthlyBehaviourAdjustment,
     MonthlyPathLmtAssessment,
     MonthlyRedemptionPathResult,
     MonthlySimulationPeriod,
+    PathLmtOutcome,
     PathPositionState,
     RedemptionPathAssumptions,
     RedemptionPathResult,
@@ -37,6 +39,13 @@ from lmt_calibration.engines.redemption_behaviour import calculate_monthly_redem
 ZERO = Decimal("0")
 ONE = Decimal("1")
 CASH_POSITION_ID = "path_cash_balance"
+OUTCOME_PRIORITY = (
+    PathLmtOutcome.SUSPENSION,
+    PathLmtOutcome.REDEMPTION_GATE,
+    PathLmtOutcome.LIQUIDITY_BUFFER_BREACH,
+    PathLmtOutcome.SWING_PRICING,
+    PathLmtOutcome.NONE,
+)
 
 
 class RedemptionPathError(ValueError):
@@ -64,6 +73,7 @@ def run_redemption_path(
     investor_balances = _initial_investor_balances(fund, investor_profiles)
     backlog: tuple[DeferredRedemptionBacklogEntry, ...] = ()
     monthly_results: list[MonthlyRedemptionPathResult] = []
+    behaviour_adjustment = _neutral_behaviour_adjustment(investor_profiles)
 
     for month_number in range(1, assumptions.horizon_months + 1):
         period = _monthly_period(assumptions.start_date, month_number)
@@ -89,8 +99,8 @@ def run_redemption_path(
             investor_balances=investor_balances,
             month_number=month_number,
             stress_months=assumptions.stress_months,
-            behavioural_multipliers=assumptions.behavioural_multipliers,
-            contagion_multiplier=assumptions.contagion_multiplier,
+            behavioural_multipliers=behaviour_adjustment.behavioural_multipliers,
+            contagion_multiplier=behaviour_adjustment.contagion_multiplier,
             rng=rng,
         )
         effective_total = _effective_redemption_total(demands, backlog)
@@ -153,12 +163,15 @@ def run_redemption_path(
             closing_cash=closing_cash,
         )
         closing_nav = _position_nav(carried_positions)
-        lmt_assessment = lmt_assessment.model_copy(
-            update={
-                "buffer_breached": (
-                    lmt_assessment.remaining_liquid_buffer_rate < lmt_parameters.minimum_buffer_rate
-                )
-            }
+        lmt_assessment = _assessment_with_outcomes(
+            lmt_assessment.model_copy(
+                update={
+                    "buffer_breached": (
+                        lmt_assessment.remaining_liquid_buffer_rate
+                        < lmt_parameters.minimum_buffer_rate
+                    )
+                }
+            )
         )
 
         monthly_results.append(
@@ -171,6 +184,7 @@ def run_redemption_path(
                 opening_cash=opening_cash,
                 closing_cash=closing_cash,
                 contractual_cashflow_amount=contractual_cashflow_amount,
+                behaviour_adjustment=behaviour_adjustment,
                 investor_class_states=investor_states,
                 backlog=backlog,
                 positions=carried_positions,
@@ -178,11 +192,49 @@ def run_redemption_path(
                 lmt_assessment=lmt_assessment,
             )
         )
+        behaviour_adjustment = _next_behaviour_adjustment(
+            assumptions=assumptions,
+            investor_profiles=investor_profiles,
+            source_outcome=lmt_assessment.priority_outcome,
+        )
 
     return RedemptionPathResult(
         scenario_id=assumptions.scenario_id,
         random_seed=assumptions.random_seed,
         monthly_results=tuple(monthly_results),
+    )
+
+
+def _neutral_behaviour_adjustment(
+    investor_profiles: Sequence[InvestorClassProfile],
+) -> MonthlyBehaviourAdjustment:
+    return MonthlyBehaviourAdjustment(
+        source_outcome=PathLmtOutcome.NONE,
+        behavioural_multipliers={investor.client_class: ONE for investor in investor_profiles},
+        contagion_multiplier=ONE,
+    )
+
+
+def _next_behaviour_adjustment(
+    *,
+    assumptions: RedemptionPathAssumptions,
+    investor_profiles: Sequence[InvestorClassProfile],
+    source_outcome: PathLmtOutcome,
+) -> MonthlyBehaviourAdjustment:
+    feedback_multipliers = assumptions.behavioural_feedback_multipliers.get(
+        source_outcome,
+        {},
+    )
+    return MonthlyBehaviourAdjustment(
+        source_outcome=source_outcome,
+        behavioural_multipliers={
+            investor.client_class: feedback_multipliers.get(investor.client_class, ONE)
+            for investor in investor_profiles
+        },
+        contagion_multiplier=assumptions.contagion_multipliers_by_outcome.get(
+            source_outcome,
+            ONE,
+        ),
     )
 
 
@@ -464,6 +516,30 @@ def _monthly_lmt_assessment(
         applied_swing_factor_rate=applied_swing_factor_rate,
         swing_recovery_amount=swing_recovery_amount,
         remaining_liquid_buffer_rate=remaining_liquid_buffer_rate,
+    )
+
+
+def _assessment_with_outcomes(
+    assessment: MonthlyPathLmtAssessment,
+) -> MonthlyPathLmtAssessment:
+    outcomes: list[PathLmtOutcome] = []
+    if assessment.suspension_applied:
+        outcomes.append(PathLmtOutcome.SUSPENSION)
+    if assessment.gate_activated:
+        outcomes.append(PathLmtOutcome.REDEMPTION_GATE)
+    if assessment.buffer_breached:
+        outcomes.append(PathLmtOutcome.LIQUIDITY_BUFFER_BREACH)
+    if assessment.swing_activated:
+        outcomes.append(PathLmtOutcome.SWING_PRICING)
+    if not outcomes:
+        outcomes.append(PathLmtOutcome.NONE)
+
+    priority_outcome = next(outcome for outcome in OUTCOME_PRIORITY if outcome in outcomes)
+    return assessment.model_copy(
+        update={
+            "outcomes": tuple(outcomes),
+            "priority_outcome": priority_outcome,
+        }
     )
 
 
