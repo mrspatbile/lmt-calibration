@@ -150,15 +150,14 @@ The engine handles strategy-specific liquidation allocation and returns a consis
 
 ### Liquidity cost engine
 
-Estimates liquidation costs decomposed by asset group.
+Estimates portfolio-weighted ex-ante execution cost from per-asset-group liquidity-stress assumptions and stressed market values. This calibration context is separate from strategy-dependent realised liquidation cost.
 
 It handles:
 
 * bid-ask spread costs
 * transaction costs
 * market impact costs
-* participation-rate haircuts
-* cost breakdown by asset group
+* component and total estimated execution cost
 
 ### LMT activation-assessment and diagnostic engine
 
@@ -170,6 +169,8 @@ It handles:
 * redemption-gate threshold assessment
 * liquidity-buffer threshold assessment
 * estimated swing recovery and redemption deferral
+* applied swing factor capped by the configured maximum
+* applied cost recovery capped by realised liquidation cost
 * diagnostic warnings and explanatory messages
 * comparison of observed stress metrics against threshold values
 
@@ -186,6 +187,8 @@ The `services/streamlit_mvp.py` module orchestrates the complete workflow:
 * returns dashboard-ready result objects for presentation
 
 This layer decouples the Streamlit UI from core calculation engines, allowing engines to be tested and reused independently.
+
+Swing recovery is calculated in the activation-assessment engine and passed through service result objects. Streamlit displays these returned values and does not recalculate recovery.
 
 ## Streamlit responsibilities
 
@@ -221,6 +224,8 @@ Every scenario run should be traceable to:
 
 Audit output should be structured data, not prose only.
 
+Scenario engines and services do not write audit files automatically. Audit writing remains an explicit application or export action through the JSON writer.
+
 ## Current implementation
 
 The current implementation includes:
@@ -230,7 +235,7 @@ The current implementation includes:
 * investor-class redemption stress
 * asset market stress and liquidity stress assumptions
 * cash, listed equities, listed ETFs, reverse repos, and repo financing exposures
-* liquidity cost breakdown by asset group
+* portfolio-weighted estimated execution-cost breakdown by bid-ask spread, transaction cost, and market impact
 * LMT threshold assessment and diagnostic warnings
 * structured audit record models and a JSON writer; automatic writing from the Streamlit application is not integrated
 * Streamlit calibration dashboard with scenario comparison across market conditions
@@ -239,7 +244,7 @@ The current implementation includes:
 Future versions may include:
 
 * 12-month redemption paths by investor class
-* stochastic redemptions by investor class
+* stochastic redemptions by investor class with explicit deterministic random seeds
 * reverse stress testing
 * strategy comparison views
 * historical scenario application

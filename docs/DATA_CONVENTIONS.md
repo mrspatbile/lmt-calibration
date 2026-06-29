@@ -73,6 +73,8 @@ Use CSV for flat tabular datasets.
 
 Use JSON where configuration is nested, including liquidation strategy weights, asset-group execution assumptions, and historical stress scenario libraries.
 
+Market stress inputs contain valuation shocks. Liquidity stress inputs contain asset-group bid-ask spread, transaction-cost, market-impact, participation-rate, and liquidity-haircut assumptions.
+
 Each input file must follow its documented schema. Shared conventions do not replace the field-level requirements in [DATA_SCHEMA.md](DATA_SCHEMA.md).
 
 ## Decimal Representation

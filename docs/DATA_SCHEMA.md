@@ -233,21 +233,11 @@ Required fields:
 | `description` | Human-readable description | text |
 | `market_shock_rate` | Market shock rate | decimal string; may be negative |
 
-Optional execution-cost fields:
-
-| Field | Description | Format |
-| --- | --- | --- |
-| `bid_ask_spread_rate` | Bid-ask spread cost under stress | decimal string, 0 to 1 |
-| `transaction_cost_rate` | Transaction cost under stress | decimal string, 0 to 1 |
-| `market_impact_rate` | Market impact cost under stress | decimal string, 0 to 1 |
-| `participation_rate` | Execution participation rate under stress | decimal string, >0 to 1 |
-| `liquidity_haircut_rate` | Market-driven liquidity haircut | decimal string, 0 to 1 |
-
 Relationships:
 
 * Referenced by `scenario_definitions.csv`.
 * Must not contain fund/date fields.
-* Optional fields are provided in the current sample data but are not required for basic use.
+* Market stress defines valuation shocks only. Liquidity and execution assumptions belong in `liquidity_stresses.json`.
 
 
 ### scenario_definitions.csv
@@ -346,7 +336,7 @@ Relationships:
 
 ### liquidity_stresses.json
 
-Purpose: reusable asset-side liquidity stress assumptions with asset-group-specific execution costs.
+Purpose: reusable asset-side liquidity-capacity, haircut, and execution-cost assumptions by asset group.
 
 Primary identifier: `liquidity_stress_id` inside each stress object.
 
@@ -365,7 +355,7 @@ Liquidity stress object fields:
 | `name` | Display/config name | snake_case |
 | `description` | Human-readable description | text |
 | `stress_horizon_days` | Scenario liquidity horizon | positive integer days |
-| `execution_assumptions_by_asset_group` | Execution assumptions per asset group | object |
+| `execution_assumptions_by_asset_group` | Liquidity and execution assumptions per asset group | object |
 
 Execution assumptions by asset group:
 
@@ -380,20 +370,20 @@ Each asset group contains:
 
 | Field | Description | Format |
 | --- | --- | --- |
-| `bid_ask_spread_rate` | Bid-ask spread cost under this stress | JSON number or decimal-compatible value |
-| `transaction_cost_rate` | Transaction cost under this stress | JSON number or decimal-compatible value |
-| `market_impact_rate` | Market impact cost under this stress | JSON number or decimal-compatible value |
+| `bid_ask_spread_rate` | Bid-ask spread cost assumption | JSON number or decimal-compatible value |
+| `transaction_cost_rate` | Transaction cost assumption | JSON number or decimal-compatible value |
+| `market_impact_rate` | Market impact cost assumption | JSON number or decimal-compatible value |
 | `participation_rate` | Execution participation rate under this stress | JSON number or decimal-compatible value |
 | `liquidity_haircut_rate` | Liquidity-driven haircut under this stress | JSON number or decimal-compatible value |
 
 Relationships:
 
 * Referenced by `scenario_definitions.csv` through `liquidity_stress_id`.
-* Each asset group may have different execution assumptions reflecting asset-group-specific liquidity constraints.
+* Each asset group may have different execution-cost, participation, and haircut assumptions reflecting asset-group-specific liquidity constraints.
 * Used with position `settlement_days` and `maturity_days` to determine asset eligibility under the stress horizon.
 * Must not contain fund/date fields.
 
-**Note:** Liquidity stress assumptions define how execution costs and constraints vary by asset group under stress, complementing the market-shock assumptions in `market_stresses.csv`.
+**Note:** Liquidity stress assumptions are the source for asset-group execution costs, liquidation capacity, and stressed haircut treatment. Market stress defines valuation shocks only.
 
 ### historical_market_stress_scenarios.json
 

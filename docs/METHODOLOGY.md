@@ -81,10 +81,10 @@ The redemption rate used for swing-pricing and gate threshold diagnostics is:
 ```text
 redemption_rate =
     gross_redemption_amount
-    / current_NAV_before_LMT_effects
+    / current_pre_LMT_NAV
 ```
 
-`current_NAV_before_LMT_effects` reflects the market valuation shock but does not include redemption payment, liquidation cost, or LMT effects.
+`current_pre_LMT_NAV` reflects the market valuation shock but does not include redemption payment, liquidation cost, or LMT effects.
 
 ### Asset-side market valuation stress
 
@@ -100,11 +100,11 @@ Beta-based revaluation is not part of the active methodology.
 
 ### Asset-side liquidity and execution stress
 
-Liquidity stress is specified by asset group. The methodology distinguishes:
+Liquidity stress is specified by asset group. It controls:
 
 * participation rate, which reduces liquidation capacity
 * liquidity haircut, which increases stressed haircut treatment
-* bid-ask spread, transaction-cost, and market-impact assumptions
+* bid-ask spread, transaction cost, and market impact, which provide execution-cost assumptions
 * settlement days
 * reverse-repo maturity days
 * the scenario stress horizon
@@ -190,19 +190,33 @@ dilution_rate = dilution_amount / fund_snapshot_NAV
 
 The matrix uses realised haircut cost when reporting asset-side liquidity impact and fund state before and after LMT effects.
 
-Estimated execution cost is separate calibration context. It combines scenario-level bid-ask spread, transaction cost, and market impact assumptions:
+Estimated execution cost is separate calibration context. For each asset group, bid-ask spread, transaction cost, and market impact are combined and then weighted by the stressed market value represented by that group:
 
 ```text
-estimated_execution_cost_rate =
+asset_group_execution_cost_rate =
     bid_ask_spread_rate
     + transaction_cost_rate
     + market_impact_rate
+
+estimated_execution_cost_rate =
+    sum(asset_group_weight × asset_group_execution_cost_rate)
 
 estimated_execution_cost_amount =
     gross_redemption_amount × estimated_execution_cost_rate
 ```
 
 This estimate supports swing-factor context and calibration review. It is not the realised strategy outcome.
+
+## NAV bases
+
+The single-period methodology uses explicit NAV bases for different purposes:
+
+* `initial_snapshot_nav` is the validated fund NAV before the market shock. Gross redemption amount, minimum cash buffer, and liquidation dilution rate use this basis.
+* `current_pre_lmt_nav` is NAV after market valuation stress and before redemption payment, liquidation cost, or LMT effects. Swing and gate activation rates use this basis.
+* `nav_after_redemption_before_lmt` is current pre-LMT NAV after gross redemption demand and realised liquidation cost, before simulated LMT effects.
+* `current_post_lmt_nav` is the scenario NAV after redemption payment, realised liquidation cost, redemption deferral, and applied swing recovery.
+
+The opening-NAV basis keeps redemption amounts, minimum cash requirements, and dilution rates comparable across market-condition columns. The current pre-LMT basis makes activation assessments responsive to the market-shocked fund value.
 
 ## Remaining liquidity buffer
 
@@ -213,11 +227,14 @@ remaining_liquid_resources =
     remaining_cash
     + remaining_post_haircut_eligible_capacity
 
-remaining_liquid_buffer_rate =
-    remaining_liquid_resources / fund_snapshot_NAV
+remaining_liquid_buffer_rate_before_LMT =
+    remaining_liquid_resources / NAV_after_redemption_before_LMT
+
+remaining_liquid_buffer_rate_after_LMT =
+    remaining_liquid_resources / current_post_LMT_NAV
 ```
 
-The remaining-cash amount reflects the configured minimum cash-buffer rule.
+The displayed ratio uses the NAV for the corresponding post-redemption fund state. The remaining-cash amount reflects the configured minimum cash-buffer rule.
 
 ## LMT threshold diagnostics
 
@@ -231,6 +248,21 @@ swing_threshold_diagnostic =
 ```
 
 The diagnostic reports the observed redemption rate and selected reference threshold. Estimated execution cost and realised haircut cost provide supporting calibration context.
+
+When simulated swing activation occurs, recovery is calculated once:
+
+```text
+applied_swing_factor =
+    min(estimated_execution_cost_rate, maximum_swing_factor_rate)
+
+theoretical_recovery =
+    gross_redemption_amount × applied_swing_factor
+
+applied_cost_recovery =
+    min(theoretical_recovery, realised_liquidation_cost)
+```
+
+Applied recovery reduces dilution to remaining investors but cannot exceed the realised strategy-dependent liquidation cost.
 
 ### Redemption-gate threshold diagnostic
 
@@ -285,7 +317,7 @@ The writer creates `<run_id>_audit.json` in a selected output directory. Automat
 Potential extensions outside the current methodology include:
 
 * multi-period redemption paths and deferred-redemption backlogs
-* stochastic redemption behaviour
+* stochastic redemption behaviour with explicit deterministic random seeds
 * intra-period liquidation schedules
 * reverse stress testing
 * behavioural feedback after threshold diagnostics

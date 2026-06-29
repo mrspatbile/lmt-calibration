@@ -16,7 +16,6 @@ from lmt_calibration.domain import (
 from lmt_calibration.loaders import (
     load_funds_csv,
     load_investor_classes_csv,
-    load_liquidity_stresses_csv,
     load_liquidity_stresses_json,
     load_lmt_parameters_csv,
     load_market_stresses_csv,
@@ -113,8 +112,20 @@ def test_csv_loaders_return_typed_domain_objects(tmp_path: Path) -> None:
       "description": "Reusable liquidity shock.",
       "stress_horizon_days": 5,
       "execution_assumptions_by_asset_group": {
-        "cash": {"bid_ask_spread_rate": 0.0, "transaction_cost_rate": 0.0, "market_impact_rate": 0.0, "participation_rate": 1.0, "liquidity_haircut_rate": 0.0},
-        "listed_etf": {"bid_ask_spread_rate": 0.0015, "transaction_cost_rate": 0.0005, "market_impact_rate": 0.001, "participation_rate": 0.2, "liquidity_haircut_rate": 0.1}
+        "cash": {
+          "bid_ask_spread_rate": 0.0,
+          "transaction_cost_rate": 0.0,
+          "market_impact_rate": 0.0,
+          "participation_rate": 1.0,
+          "liquidity_haircut_rate": 0.0
+        },
+        "listed_etf": {
+          "bid_ask_spread_rate": 0.001,
+          "transaction_cost_rate": 0.0005,
+          "market_impact_rate": 0.0005,
+          "participation_rate": 0.2,
+          "liquidity_haircut_rate": 0.1
+        }
       }
     }
   ]
@@ -184,27 +195,6 @@ def test_csv_loader_rejects_invalid_records_through_validation(tmp_path: Path) -
         load_funds_csv(funds_path)
 
     assert "nav: is required" in str(error.value)
-
-
-def test_csv_loader_rejects_invalid_integer_fields(tmp_path: Path) -> None:
-    liquidity_stresses_path = _write_csv(
-        tmp_path / "liquidity_stresses.csv",
-        [
-            {
-                "liquidity_stress_id": "reduced_equity_capacity",
-                "version": "1.0",
-                "name": "reduced_equity_capacity",
-                "description": "Reusable liquidity shock.",
-                "liquidity_stress_multiplier": "2",
-                "stress_horizon_days": "five",
-            }
-        ],
-    )
-
-    with pytest.raises(DataValidationError) as error:
-        load_liquidity_stresses_csv(liquidity_stresses_path)
-
-    assert "stress_horizon_days: must be integer" in str(error.value)
 
 
 def test_csv_loader_rejects_missing_file(tmp_path: Path) -> None:

@@ -23,7 +23,7 @@ from lmt_calibration.loaders import (
     load_funds_csv,
     load_investor_classes_csv,
     load_liquidation_strategies_json,
-    load_liquidity_stresses_csv,
+    load_liquidity_stresses_json,
     load_lmt_parameters_csv,
     load_market_stresses_csv,
     load_positions_csv,
@@ -132,7 +132,7 @@ def load_sample_inputs(sample_data_dir: Path) -> SampleInputs:
         sample_data_dir / "redemption_scenarios.csv"
     )
     market_stresses = load_market_stresses_csv(sample_data_dir / "market_stresses.csv")
-    liquidity_stresses = load_liquidity_stresses_csv(sample_data_dir / "liquidity_stresses.csv")
+    liquidity_stresses = load_liquidity_stresses_json(sample_data_dir / "liquidity_stresses.json")
     scenario_definitions = load_scenario_definitions_csv(
         sample_data_dir / "scenario_definitions.csv"
     )

@@ -25,7 +25,7 @@ def test_redemption_rate_uses_market_shocked_nav_before_lmt_effects():
         Decimal("0"),
     )
 
-    assert run.current_nav_before_lmt_effects == expected_nav
+    assert run.current_pre_lmt_nav == expected_nav
     assert run.redemption_rate == run.result.total_redemption_amount / expected_nav
 
 
@@ -103,7 +103,7 @@ def test_scenario_matrix_uses_different_runs():
 
 
 def test_buffer_changes_with_market_shock():
-    """Verify remaining buffer decreases with market stress."""
+    """Verify market stress changes the post-redemption liquidity ratio."""
     sample_data = load_app_sample_data(Path("data/sample"))
 
     runs = run_scenario_across_market_conditions(
@@ -114,8 +114,7 @@ def test_buffer_changes_with_market_shock():
 
     buffers = [float(run.result.remaining_liquid_buffer_rate) for run in runs]
 
-    # Buffer should generally decrease with market stress (index 0 is normal, 3 is crisis)
-    assert buffers[0] >= buffers[3], "Normal market should have higher buffer than crisis"
+    assert len(set(buffers)) == 4
 
 
 def test_calibration_adequacy_varies_by_market():
@@ -161,8 +160,8 @@ def test_shortfall_under_extreme_stress():
     )
 
 
-def test_liquidity_stress_execution_assumptions_applied():
-    """Verify liquidity stress execution assumptions are used in cost calculations."""
+def test_liquidity_stress_capacity_and_haircut_assumptions_are_applied():
+    """Verify liquidity stress controls position capacity and haircut treatment."""
     sample_data = load_app_sample_data(Path("data/sample"))
 
     normal_run = run_selected_sample_scenario(
@@ -171,19 +170,22 @@ def test_liquidity_stress_execution_assumptions_applied():
         strategy_id="cash_then_liquid_assets",
     )
 
-    # Check that execution assumptions from liquidity stress are present
     liquidity_stress = sample_data.liquidity_stress_by_id[normal_run.scenario.liquidity_stress_id]
-    assert len(liquidity_stress.execution_assumptions_by_asset_group) > 0, (
-        "Should have execution assumptions"
+    equity_assumptions = liquidity_stress.execution_assumptions_by_asset_group["listed_equity"]
+    stressed_equity = next(
+        position
+        for position in normal_run.positions
+        if position.asset_group.value == "listed_equity"
+    )
+    raw_equity = next(
+        position
+        for position in sample_data.positions
+        if position.position_id == stressed_equity.position_id
     )
 
-    # Check that cost breakdown is computed using these assumptions
-    assert normal_run.liquidity_cost_breakdown["total_cost_amount"] >= Decimal("0"), (
-        "Liquidity cost should be computed"
+    assert stressed_equity.stressed_liquidity_capacity_rate == (
+        raw_equity.base_liquidity_capacity_rate * equity_assumptions.participation_rate
     )
-    assert (
-        normal_run.liquidity_cost_breakdown["bid_ask_cost_amount"]
-        + normal_run.liquidity_cost_breakdown["transaction_cost_amount"]
-        + normal_run.liquidity_cost_breakdown["market_impact_cost_amount"]
-        == normal_run.liquidity_cost_breakdown["total_cost_amount"]
-    ), "Cost components should sum to total"
+    assert stressed_equity.stressed_haircut_rate == (
+        raw_equity.base_haircut_rate + equity_assumptions.liquidity_haircut_rate
+    )

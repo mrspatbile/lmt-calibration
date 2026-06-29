@@ -126,7 +126,7 @@ The implemented dependency flow is:
 
 4. Calculation engines under `src/lmt_calibration/engines/`
    - `liquidation_strategy.py`: cash treatment, asset eligibility, strategy allocation, haircut-adjusted cash, shortfall, dilution, and remaining liquidity
-   - `liquidity_cost.py`: asset-group liquidity cost estimates from bid-ask spread, transaction cost, market impact, participation rate, and liquidity haircut assumptions
+   - `liquidity_cost.py`: portfolio-weighted estimated execution cost from per-asset-group liquidity-stress bid-ask spread, transaction cost, and market-impact assumptions
    - `lmt_activation.py`: reference-threshold assessment, diagnostic checks, estimated recovery, redemption deferral, and liquidity-buffer diagnostics
 
 5. Audit trail under `src/lmt_calibration/audit/`
@@ -443,7 +443,7 @@ Nested liquidation strategy configuration and custom weights should use JSON, su
 data/sample/liquidation_strategies.json
 ```
 
-Liquidity stress execution assumptions use JSON:
+Asset-group execution-cost, liquidity-capacity, and haircut assumptions use JSON:
 
 ```text
 data/sample/liquidity_stresses.json
@@ -537,7 +537,7 @@ The current implementation remains focused on:
 * market stress and asset-side liquidity stress preparation in `services/streamlit_mvp.py`
 * configurable `most_liquid_first`, `pro_rata`, `hybrid`, and `custom_weights` liquidation strategies
 * strategy-dependent haircut cost, dilution, shortfall, and remaining-liquidity results
-* asset-group liquidity cost estimates for calibration context
+* portfolio-weighted estimated execution-cost context separated from realised liquidation cost
 * swing pricing, redemption gate, and liquidity buffer reference-threshold diagnostics
 * structured audit records and JSON audit output
 * Streamlit selectors, threshold controls, market-condition comparison, diagnostic display, and supporting guidance

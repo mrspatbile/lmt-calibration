@@ -323,7 +323,11 @@ def test_remaining_liquid_buffer_rate_uses_post_haircut_eligible_liquidity() -> 
         stress_horizon_days=5,
     )
 
-    assert result.remaining_liquid_buffer_rate == Decimal("0.5500000000000000000000000000")
+    expected_nav_after_redemption = Decimal("700") - Decimal("100") - result.total_haircut_cost
+    assert result.remaining_liquid_resources == Decimal("550.0000000000000000000000000")
+    assert result.remaining_liquid_buffer_rate == (
+        result.remaining_liquid_resources / expected_nav_after_redemption
+    )
 
 
 def test_repo_financing_is_not_liquidated() -> None:

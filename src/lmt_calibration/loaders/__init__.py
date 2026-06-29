@@ -3,7 +3,6 @@
 from lmt_calibration.loaders.csv_loaders import (
     load_funds_csv,
     load_investor_classes_csv,
-    load_liquidity_stresses_csv,
     load_lmt_parameters_csv,
     load_market_stresses_csv,
     load_positions_csv,
@@ -21,7 +20,6 @@ __all__ = [
     "load_historical_market_stress_scenarios_json",
     "load_investor_classes_csv",
     "load_liquidation_strategies_json",
-    "load_liquidity_stresses_csv",
     "load_liquidity_stresses_json",
     "load_lmt_parameters_csv",
     "load_market_stresses_csv",

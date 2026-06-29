@@ -9,7 +9,6 @@ from lmt_calibration.domain import (
     AssetPosition,
     FundSnapshot,
     InvestorClassProfile,
-    LiquidityStress,
     LmtParameters,
     MarketStress,
     RedemptionScenario,
@@ -20,7 +19,6 @@ from lmt_calibration.validation import (
     ValidationIssue,
     validate_fund_records,
     validate_investor_class_records,
-    validate_liquidity_stress_records,
     validate_lmt_parameter_records,
     validate_market_stress_records,
     validate_position_records,
@@ -89,27 +87,10 @@ def load_market_stresses_csv(path: Path) -> list[MarketStress]:
         "market_stresses",
         {
             "market_shock_rate",
-            "bid_ask_spread_rate",
-            "transaction_cost_rate",
-            "market_impact_rate",
-            "participation_rate",
-            "liquidity_haircut_rate",
         },
     )
     records = validate_market_stress_records(records)
     return [MarketStress.model_validate(record) for record in records]
-
-
-def load_liquidity_stresses_csv(path: Path) -> list[LiquidityStress]:
-    """Load validated reusable liquidity stresses from a CSV file."""
-
-    records = _load_validated_csv(
-        path,
-        dataset_name="liquidity_stresses",
-        validator=validate_liquidity_stress_records,
-        integer_fields={"stress_horizon_days"},
-    )
-    return [LiquidityStress.model_validate(record) for record in records]
 
 
 def load_scenario_definitions_csv(path: Path) -> list[ScenarioDefinition]:

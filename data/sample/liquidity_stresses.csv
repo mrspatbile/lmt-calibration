@@ -1,4 +1,0 @@
-liquidity_stress_id,version,name,description,liquidity_stress_multiplier,stress_horizon_days
-normal_liquidity_capacity,1.0,normal_liquidity_capacity,Normal synthetic liquidity capacity assumptions.,1.00,5
-reduced_equity_capacity,1.0,reduced_equity_capacity,Reduced synthetic liquidity capacity for listed instruments.,2.00,5
-severe_liquidity_squeeze,1.0,severe_liquidity_squeeze,Severe synthetic liquidity squeeze with shorter stress horizon.,3.00,3

@@ -112,6 +112,24 @@ def calculate_liquidation_strategy(
     shortfall = max(redemption_amount - total_cash_raised, ZERO)
     asset_group_allocations = _asset_group_allocations(cash_used, liquidated_assets)
     remaining_cash = cash_total - cash_used
+    remaining_liquid_resources = _remaining_liquid_resources(
+        remaining_cash=remaining_cash,
+        eligible_assets=eligible_assets,
+        liquidated_assets=liquidated_assets,
+    )
+    current_pre_lmt_nav = sum(
+        (position.stressed_market_value or ZERO for position in positions),
+        ZERO,
+    )
+    nav_after_redemption_before_lmt = max(
+        current_pre_lmt_nav - redemption_amount - total_haircut_cost,
+        ZERO,
+    )
+    remaining_liquid_buffer_rate = (
+        remaining_liquid_resources / nav_after_redemption_before_lmt
+        if nav_after_redemption_before_lmt > ZERO
+        else ZERO
+    )
 
     return LiquidationResult(
         scenario_id=scenario_id,
@@ -125,12 +143,8 @@ def calculate_liquidation_strategy(
         shortfall=shortfall,
         dilution_amount=total_haircut_cost,
         dilution_rate=total_haircut_cost / fund.nav,
-        remaining_liquid_buffer_rate=_remaining_liquid_buffer_rate(
-            fund=fund,
-            remaining_cash=remaining_cash,
-            eligible_assets=eligible_assets,
-            liquidated_assets=liquidated_assets,
-        ),
+        remaining_liquid_resources=remaining_liquid_resources,
+        remaining_liquid_buffer_rate=remaining_liquid_buffer_rate,
         minimum_cash_buffer_preserved=remaining_cash >= minimum_cash_buffer,
     )
 
@@ -355,9 +369,8 @@ def _asset_group_allocations(
     return allocations
 
 
-def _remaining_liquid_buffer_rate(
+def _remaining_liquid_resources(
     *,
-    fund: FundSnapshot,
     remaining_cash: Decimal,
     eligible_assets: Sequence[StressedLiquidationPosition],
     liquidated_assets: Sequence[LiquidatedAssetResult],
@@ -371,4 +384,4 @@ def _remaining_liquid_buffer_rate(
         ),
         ZERO,
     )
-    return (remaining_cash + remaining_asset_liquidity) / fund.nav
+    return remaining_cash + remaining_asset_liquidity

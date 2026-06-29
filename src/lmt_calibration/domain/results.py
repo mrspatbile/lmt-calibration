@@ -40,6 +40,7 @@ class LiquidationResult(BaseModel):
     shortfall: Decimal = Field(ge=Decimal("0"))
     dilution_amount: Decimal = Field(ge=Decimal("0"))
     dilution_rate: Decimal = Field(ge=Decimal("0"))
+    remaining_liquid_resources: Decimal = Field(ge=Decimal("0"))
     remaining_liquid_buffer_rate: Decimal = Field(ge=Decimal("0"))
     minimum_cash_buffer_preserved: bool
 

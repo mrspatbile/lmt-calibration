@@ -2,18 +2,26 @@
 
 All notable changes to this project are documented here.
 
+## Unreleased
+
+### Changed
+- Consolidated execution-cost, liquidity-capacity, and haircut assumptions by asset group under liquidity stress; market stress remains valuation-only.
+- Centralized applied swing-factor and cost-recovery calculations outside the dashboard.
+- Made initial, current pre-LMT, and current post-LMT NAV bases explicit while preserving their intended uses.
+- Confirmed audit writing as an explicit export action rather than a scenario-engine side effect.
+
 ## [0.5.0] - 2026-06-27
 
 ### Added
 - Streamlit dashboard for LMT calibration and scenario review.
 - Scenario comparison matrix across market conditions.
 - LMT activation-assessment engine for simulated swing activation, simulated gate activation, and liquidity-buffer threshold checks.
-- Liquidity cost breakdown by asset group.
+- Estimated execution-cost breakdown by bid-ask spread, transaction cost, and market impact.
 - Per-asset-group liquidity stress assumptions in `liquidity_stresses.json`.
 - Calibration guidance panel with simulated activation status, cost recovery, and deferral indicators.
 
 ### Changed
-- Expanded market stress inputs with execution-cost assumptions.
+- Added per-asset-group execution-cost assumptions to liquidity stress inputs.
 - Updated sample data schemas to support the dashboard workflow.
 - Refined dashboard layout, visual hierarchy, and theme handling.
 - Updated documentation for methodology, data schemas, and audit records.

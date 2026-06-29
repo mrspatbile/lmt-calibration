@@ -31,19 +31,14 @@ class RedemptionScenario(VersionedAssumption):
 
 
 class MarketStress(VersionedAssumption):
-    """Reusable asset-side market shock assumption."""
+    """Reusable asset-side market valuation shock assumption."""
 
     market_stress_id: str = Field(pattern=SNAKE_CASE_PATTERN)
     market_shock_rate: Decimal = Field(ge=Decimal("-1"), le=Decimal("1"))
-    bid_ask_spread_rate: Decimal | None = Field(default=None, ge=Decimal("0"), le=Decimal("1"))
-    transaction_cost_rate: Decimal | None = Field(default=None, ge=Decimal("0"), le=Decimal("1"))
-    market_impact_rate: Decimal | None = Field(default=None, ge=Decimal("0"), le=Decimal("1"))
-    participation_rate: Decimal | None = Field(default=None, gt=Decimal("0"), le=Decimal("1"))
-    liquidity_haircut_rate: Decimal | None = Field(default=None, ge=Decimal("0"), le=Decimal("1"))
 
 
 class LiquidityExecutionAssumption(BaseModel):
-    """Execution and tradability assumptions for an asset class under liquidity stress."""
+    """Execution, tradability, and haircut assumptions for an asset group."""
 
     model_config = ConfigDict(extra="forbid", frozen=True, str_strip_whitespace=True)
 
@@ -55,7 +50,7 @@ class LiquidityExecutionAssumption(BaseModel):
 
 
 class LiquidityStress(VersionedAssumption):
-    """Reusable asset-side liquidity shock assumption with execution assumptions by asset class."""
+    """Reusable liquidity and execution assumptions by asset group."""
 
     liquidity_stress_id: str = Field(pattern=SNAKE_CASE_PATTERN)
     stress_horizon_days: int = Field(gt=0)

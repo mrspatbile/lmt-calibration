@@ -238,32 +238,12 @@ def validate_market_stress_records(records: object) -> list[dict[str, object]]:
         validate_decimal(
             record, "market_shock_rate", location, issues, ge=Decimal("-1"), le=Decimal("1")
         )
-        if record.get("bid_ask_spread_rate") is not None:
-            validate_decimal(
-                record, "bid_ask_spread_rate", location, issues, ge=Decimal("0"), le=Decimal("1")
-            )
-        if record.get("transaction_cost_rate") is not None:
-            validate_decimal(
-                record, "transaction_cost_rate", location, issues, ge=Decimal("0"), le=Decimal("1")
-            )
-        if record.get("market_impact_rate") is not None:
-            validate_decimal(
-                record, "market_impact_rate", location, issues, ge=Decimal("0"), le=Decimal("1")
-            )
-        if record.get("participation_rate") is not None:
-            validate_decimal(
-                record, "participation_rate", location, issues, gt=Decimal("0"), le=Decimal("1")
-            )
-        if record.get("liquidity_haircut_rate") is not None:
-            validate_decimal(
-                record, "liquidity_haircut_rate", location, issues, ge=Decimal("0"), le=Decimal("1")
-            )
     raise_if_issues(issues)
     return copied_records
 
 
 def validate_liquidity_stress_records(records: object) -> list[dict[str, object]]:
-    """Validate reusable liquidity stress records with asset-class-specific execution assumptions."""
+    """Validate reusable asset-group liquidity and execution assumptions."""
 
     copied_records = _validate_versioned_assumption_records(
         records,

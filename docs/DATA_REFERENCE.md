@@ -159,7 +159,7 @@ Relationships:
 
 ### market_stresses.csv
 
-`market_stresses.csv` defines reusable asset-side market shock assumptions. Market stresses are reusable and not tied directly to a fund snapshot.
+`market_stresses.csv` defines reusable asset-side market valuation shocks. Market stresses are reusable and not tied directly to a fund snapshot.
 
 Relationships:
 
@@ -172,14 +172,14 @@ Relationships:
 
 ### liquidity_stresses.json
 
-`liquidity_stresses.json` defines reusable asset-side liquidity stress assumptions with execution assumptions broken down by asset group. Liquidity stresses include a stress horizon and per-asset-group execution costs such as bid-ask spreads, transaction costs, market impact, participation rates, and liquidity haircuts.
+`liquidity_stresses.json` defines reusable asset-side liquidity and execution assumptions by asset group. It contains the stress horizon; bid-ask spread, transaction-cost, and market-impact rates used for estimated execution-cost context; participation rates used for liquidation capacity; and liquidity haircuts used for stressed haircut treatment.
 
 For field-level details, see [DATA_SCHEMA.md](DATA_SCHEMA.md#liquidity-stresses-json).
 
 Relationships:
 
 * `scenario_definitions.csv` selects exactly one `liquidity_stress_id`.
-* Different asset groups may have different execution assumptions under the same liquidity stress scenario.
+* Different asset groups may have different execution-cost, participation, and haircut assumptions under the same liquidity stress scenario.
 * Used with position settlement days and maturity days to determine asset eligibility under the stress horizon.
 
 ---

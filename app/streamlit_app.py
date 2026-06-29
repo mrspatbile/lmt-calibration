@@ -990,13 +990,13 @@ def _build_dashboard_result(
     market_condition_runs: list[AppScenarioRun] | None = None,
 ) -> DashboardResult:
     initial_nav = run.fund.nav
-    redemption_amount = run.result.total_redemption_amount
-    liquidity_cost = run.result.dilution_amount
-    final_nav = max(initial_nav - redemption_amount - liquidity_cost, ZERO)
+    outcome = build_scenario_matrix_outcome(run)
+    final_nav = outcome.current_post_lmt_nav
     final_nav_change = _safe_rate(final_nav - initial_nav, initial_nav)
     redemption_rate = run.redemption_rate
     initial_buffer = _safe_rate(_cash_total(positions), initial_nav)
-    buffer_change = run.result.remaining_liquid_buffer_rate - initial_buffer
+    final_buffer_rate = outcome.remaining_liquid_buffer_rate_after_lmt
+    buffer_change = final_buffer_rate - initial_buffer
     redemption_met = run.result.shortfall == ZERO
     investor_classes = {
         investor.client_class.value
@@ -1024,7 +1024,7 @@ def _build_dashboard_result(
             "post_haircut_cash_raised": run.result.total_post_haircut_cash_raised,
             "shortfall": run.result.shortfall,
             "dilution": run.result.dilution_amount,
-            "remaining_buffer": run.result.remaining_liquid_buffer_rate,
+            "remaining_buffer": final_buffer_rate,
         }
         historical_rows = build_historical_result_rows(inputs, run)
         all_rows = [normal_row] + historical_rows
@@ -1057,7 +1057,7 @@ def _build_dashboard_result(
             Kpi("Final NAV", _money(final_nav), _signed_rate(final_nav_change), "danger"),
             Kpi(
                 "Liquidity buffer",
-                _rate(run.result.remaining_liquid_buffer_rate),
+                _rate(final_buffer_rate),
                 f"{_signed_rate(buffer_change)} vs initial",
                 _positive_or_warning(buffer_change),
             ),
@@ -1084,13 +1084,13 @@ def _scenario_result_from_market_condition_run(
     initial_nav: Decimal,
 ) -> ScenarioResult:
     """Create a ScenarioResult from a market condition run."""
-    shocked_nav = market_run.current_nav_before_lmt_effects
+    shocked_nav = market_run.current_pre_lmt_nav
     outcome = build_scenario_matrix_outcome(market_run)
 
     gross_redemption_amount = market_run.result.total_redemption_amount
 
     # For comparison with initial NAV
-    final_nav_change = _safe_rate(outcome.nav_after_lmt - initial_nav, initial_nav)
+    final_nav_change = _safe_rate(outcome.current_post_lmt_nav - initial_nav, initial_nav)
     shocked_nav_change = _safe_rate(shocked_nav - initial_nav, initial_nav)
 
     # Determine market condition label based on shock magnitude
@@ -1136,15 +1136,15 @@ def _scenario_result_from_market_condition_run(
             ),
             StageResult(
                 "Fund state before LMT",
-                _money(outcome.nav_before_lmt),
+                _money(outcome.nav_after_redemption_before_lmt),
                 "",
                 "NAV before LMT effects",
-                "NAV after market shock, redemption demand, and liquidity costs before LMT effects.",
+                "NAV after market shock, redemption demand, and realised liquidation cost before LMT effects.",
                 "warning",
             ),
             StageResult(
                 "Fund state after LMT",
-                _money(outcome.nav_after_lmt),
+                _money(outcome.current_post_lmt_nav),
                 _format_lmt_pills_compact(market_run, outcome),
                 "NAV after LMT effects",
                 "NAV after simulated LMT effects and resulting cash-flow adjustments.",
@@ -1152,12 +1152,12 @@ def _scenario_result_from_market_condition_run(
             ),
             StageResult(
                 "Liquidity position",
-                _rate(market_run.result.remaining_liquid_buffer_rate),
+                _rate(outcome.remaining_liquid_buffer_rate_after_lmt),
                 "",
-                "Remaining liquid assets",
-                "Remaining liquid assets as % of post-redemption NAV.",
+                "Remaining liquid resources",
+                "Remaining liquid resources as % of current post-LMT NAV.",
                 _positive_or_warning(
-                    market_run.result.remaining_liquid_buffer_rate - Decimal("0.05")
+                    outcome.remaining_liquid_buffer_rate_after_lmt - Decimal("0.05")
                 ),
             ),
         ],
@@ -1216,10 +1216,10 @@ def _scenario_result_from_row(
             ),
             StageResult(
                 "Liquidity position",
-                _rate(run.result.remaining_liquid_buffer_rate),
+                _rate(Decimal(str(row["remaining_buffer"]))),
                 f"{_signed_rate(buffer_change)} vs initial",
                 "Remaining liquidity buffer",
-                "Remaining liquidity buffer after the stressed liquidation.",
+                "Remaining liquid resources as % of current post-LMT NAV.",
                 _positive_or_warning(buffer_change),
             ),
         ],
@@ -1397,7 +1397,7 @@ def _format_lmt_pills_compact(
     pills_html = []
 
     if run.lmt_activation.swing_activated:
-        swing_factor_pct = float(run.lmt_activation.estimated_liquidity_cost_rate * ONE_HUNDRED)
+        swing_factor_pct = float(run.lmt_activation.applied_swing_factor_rate * ONE_HUNDRED)
         recovered_text = (
             "Swing "
             f"{swing_factor_pct:.2f}% | "

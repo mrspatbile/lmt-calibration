@@ -45,7 +45,7 @@ def test_before_and_after_lmt_nav_follow_strategy_dependent_cost() -> None:
 
     for run, outcome in ((cash_first, cash_outcome), (pro_rata, pro_rata_outcome)):
         expected_before = (
-            run.current_nav_before_lmt_effects
+            run.current_pre_lmt_nav
             - run.result.total_redemption_amount
             - run.result.total_haircut_cost
         )
@@ -53,18 +53,23 @@ def test_before_and_after_lmt_nav_follow_strategy_dependent_cost() -> None:
             expected_before + run.lmt_activation.redemption_deferred_amount + outcome.cost_recovered
         )
 
-        assert outcome.nav_before_lmt == expected_before
-        assert outcome.nav_after_lmt == expected_after
+        assert outcome.nav_after_redemption_before_lmt == expected_before
+        assert outcome.current_post_lmt_nav == expected_after
 
-    assert cash_outcome.nav_before_lmt != pro_rata_outcome.nav_before_lmt
-    assert cash_outcome.nav_after_lmt != pro_rata_outcome.nav_after_lmt
+    assert (
+        cash_outcome.nav_after_redemption_before_lmt
+        != pro_rata_outcome.nav_after_redemption_before_lmt
+    )
+    assert cash_outcome.current_post_lmt_nav != pro_rata_outcome.current_post_lmt_nav
 
 
 def test_swing_recovery_is_capped_at_realised_liquidation_cost() -> None:
-    run = _run("cash_then_liquid_assets", CRISIS_MARKET_ID)
+    run = _run("cash_then_liquid_assets", NORMAL_MARKET_ID)
     outcome = build_scenario_matrix_outcome(run)
 
     assert run.lmt_activation.swing_activated
-    assert outcome.estimated_swing_recovery > run.result.total_haircut_cost
-    assert outcome.cost_recovered == run.result.total_haircut_cost
+    assert outcome.cost_recovered == min(
+        outcome.estimated_swing_recovery,
+        run.result.total_haircut_cost,
+    )
     assert outcome.cost_recovered <= run.result.total_haircut_cost

@@ -82,7 +82,8 @@ class AppScenarioRun:
     liquidity_stress: LiquidityStress
     strategy: LiquidationStrategyConfig
     parameters: LmtParameters
-    current_nav_before_lmt_effects: Decimal
+    initial_snapshot_nav: Decimal
+    current_pre_lmt_nav: Decimal
     redemption_amount: Decimal
     redemption_rate: Decimal
     positions: list[StressedLiquidationPosition]
@@ -96,38 +97,29 @@ class ScenarioMatrixOutcome:
     """Strategy-dependent financial values displayed in the scenario matrix."""
 
     realised_liquidity_cost: Decimal
-    nav_before_lmt: Decimal
+    nav_after_redemption_before_lmt: Decimal
     estimated_swing_recovery: Decimal
     cost_recovered: Decimal
-    nav_after_lmt: Decimal
+    current_post_lmt_nav: Decimal
+    remaining_liquid_buffer_rate_before_lmt: Decimal
+    remaining_liquid_buffer_rate_after_lmt: Decimal
 
 
 def build_scenario_matrix_outcome(run: AppScenarioRun) -> ScenarioMatrixOutcome:
     """Reconcile matrix NAV values from the realised liquidation result."""
 
-    gross_redemption_amount = run.result.total_redemption_amount
     realised_liquidity_cost = run.result.total_haircut_cost
-    nav_before_lmt = max(
-        run.current_nav_before_lmt_effects - gross_redemption_amount - realised_liquidity_cost,
-        ZERO,
-    )
-    estimated_swing_recovery = (
-        gross_redemption_amount * run.lmt_activation.estimated_liquidity_cost_rate
-        if run.lmt_activation.swing_activated
-        else ZERO
-    )
-    cost_recovered = min(estimated_swing_recovery, realised_liquidity_cost)
-    nav_after_lmt = max(
-        nav_before_lmt + run.lmt_activation.redemption_deferred_amount + cost_recovered,
-        ZERO,
-    )
+    estimated_swing_recovery = run.lmt_activation.theoretical_recovery_amount
+    cost_recovered = run.lmt_activation.applied_cost_recovery_amount
 
     return ScenarioMatrixOutcome(
         realised_liquidity_cost=realised_liquidity_cost,
-        nav_before_lmt=nav_before_lmt,
+        nav_after_redemption_before_lmt=run.lmt_activation.nav_after_redemption_before_lmt,
         estimated_swing_recovery=estimated_swing_recovery,
         cost_recovered=cost_recovered,
-        nav_after_lmt=nav_after_lmt,
+        current_post_lmt_nav=run.lmt_activation.current_post_lmt_nav,
+        remaining_liquid_buffer_rate_before_lmt=run.result.remaining_liquid_buffer_rate,
+        remaining_liquid_buffer_rate_after_lmt=run.lmt_activation.remaining_liquid_buffer_rate,
     )
 
 
@@ -230,15 +222,13 @@ def run_selected_sample_scenario(
         )
 
     liquidation_positions = _stressed_positions(inputs, scenario, market_stress=market_stress)
-    current_nav_before_lmt_effects = sum(
+    current_pre_lmt_nav = sum(
         (position.stressed_market_value or ZERO for position in liquidation_positions),
         ZERO,
     )
     redemption_amount = _total_redemption_amount(inputs, scenario)
     redemption_rate = (
-        redemption_amount / current_nav_before_lmt_effects
-        if current_nav_before_lmt_effects > ZERO
-        else ZERO
+        redemption_amount / current_pre_lmt_nav if current_pre_lmt_nav > ZERO else ZERO
     )
     result = calculate_liquidation_strategy(
         scenario_id=scenario.scenario_id,
@@ -250,14 +240,19 @@ def run_selected_sample_scenario(
         stress_horizon_days=liquidity_stress.stress_horizon_days,
     )
 
-    # Calculate estimated liquidity costs and the simulated activation assessment.
-    liquidity_cost_breakdown = estimate_liquidity_cost_breakdown(redemption_amount, market_stress)
+    asset_group_market_values = _asset_group_market_values(liquidation_positions)
+    liquidity_cost_breakdown = estimate_liquidity_cost_breakdown(
+        redemption_amount,
+        liquidity_stress,
+        asset_group_market_values,
+    )
     lmt_activation = assess_lmt_impact(
-        nav=current_nav_before_lmt_effects,
+        nav=current_pre_lmt_nav,
         redemption_rate=redemption_rate,
-        market_stress=market_stress,
+        estimated_execution_cost_rate=liquidity_cost_breakdown["total_cost_rate"],
         lmt_parameters=parameters,
-        remaining_liquid_buffer_rate=result.remaining_liquid_buffer_rate,
+        realised_liquidation_cost=result.total_haircut_cost,
+        remaining_liquid_resources=result.remaining_liquid_resources,
     )
 
     return AppScenarioRun(
@@ -268,7 +263,8 @@ def run_selected_sample_scenario(
         liquidity_stress=liquidity_stress,
         strategy=strategy,
         parameters=parameters,
-        current_nav_before_lmt_effects=current_nav_before_lmt_effects,
+        initial_snapshot_nav=fund.nav,
+        current_pre_lmt_nav=current_pre_lmt_nav,
         redemption_amount=redemption_amount,
         redemption_rate=redemption_rate,
         positions=liquidation_positions,
@@ -336,6 +332,7 @@ def build_historical_result_rows(
 ) -> list[dict[str, object]]:
     """Return rows pairing historical context with the current sample workflow output."""
 
+    outcome = build_scenario_matrix_outcome(run)
     rows: list[dict[str, object]] = []
     for scenario_id, historical_scenario in inputs.historical_market_stresses.scenarios.items():
         rows.append(
@@ -348,7 +345,7 @@ def build_historical_result_rows(
                 "post_haircut_cash_raised": run.result.total_post_haircut_cash_raised,
                 "shortfall": run.result.shortfall,
                 "dilution": run.result.dilution_amount,
-                "remaining_buffer": run.result.remaining_liquid_buffer_rate,
+                "remaining_buffer": outcome.remaining_liquid_buffer_rate_after_lmt,
                 "status": "Context only",
             }
         )
@@ -509,3 +506,16 @@ def _stressed_liquidity_capacity_rate(
 
     # Apply participation rate to base capacity
     return position.base_liquidity_capacity_rate * execution_assumptions.participation_rate
+
+
+def _asset_group_market_values(
+    positions: list[StressedLiquidationPosition],
+) -> dict[AssetGroup, Decimal]:
+    values: dict[AssetGroup, Decimal] = {}
+    for position in positions:
+        if position.stressed_market_value is None:
+            continue
+        values[position.asset_group] = (
+            values.get(position.asset_group, ZERO) + position.stressed_market_value
+        )
+    return values

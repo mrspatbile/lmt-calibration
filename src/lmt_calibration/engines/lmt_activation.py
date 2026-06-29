@@ -4,11 +4,7 @@ from dataclasses import dataclass
 from decimal import Decimal
 from enum import Enum
 
-from lmt_calibration.domain import LmtParameters, MarketStress
-from lmt_calibration.engines.liquidity_cost import (
-    estimate_liquidity_cost_amount,
-    estimate_liquidity_cost_rate,
-)
+from lmt_calibration.domain import LmtParameters
 
 ZERO = Decimal("0")
 THRESHOLD_UNDER = Decimal("0.80")
@@ -35,16 +31,32 @@ class LmtActivationResult:
     gate_activated: bool
     buffer_breached: bool
     estimated_liquidity_cost_rate: Decimal
-    selected_swing_factor_rate: Decimal
+    applied_swing_factor_rate: Decimal
     coverage_ratio: Decimal
     residual_dilution_rate: Decimal
     estimated_liquidity_cost_amount: Decimal
-    recovered_cost_amount: Decimal
+    theoretical_recovery_amount: Decimal
+    applied_cost_recovery_amount: Decimal
     residual_dilution_amount: Decimal
     redemption_paid_amount: Decimal
     redemption_deferred_amount: Decimal
+    nav_after_redemption_before_lmt: Decimal
+    current_post_lmt_nav: Decimal
+    remaining_liquid_buffer_rate: Decimal
     calibration_adequacy: CalibrationAdequacy = None  # type: ignore
     calibration_message: str = ""
+
+    @property
+    def selected_swing_factor_rate(self) -> Decimal:
+        """Return the applied factor through the legacy result attribute."""
+
+        return self.applied_swing_factor_rate
+
+    @property
+    def recovered_cost_amount(self) -> Decimal:
+        """Return applied recovery through the legacy result attribute."""
+
+        return self.applied_cost_recovery_amount
 
 
 def classify_calibration_adequacy(
@@ -107,18 +119,20 @@ def assess_lmt_impact(
     *,
     nav: Decimal,
     redemption_rate: Decimal,
-    market_stress: MarketStress,
+    estimated_execution_cost_rate: Decimal,
     lmt_parameters: LmtParameters,
-    remaining_liquid_buffer_rate: Decimal | None = None,
+    realised_liquidation_cost: Decimal,
+    remaining_liquid_resources: Decimal,
 ) -> LmtActivationResult:
     """Assess simulated LMT activation and investor impact for a redemption scenario.
 
     Args:
         nav: Current NAV after market valuation shock and before LMT effects.
         redemption_rate: Gross redemption amount divided by current pre-LMT NAV.
-        market_stress: Market stress scenario with execution assumptions.
+        estimated_execution_cost_rate: Ex-ante portfolio-weighted execution-cost rate.
         lmt_parameters: LMT calibration parameters.
-        remaining_liquid_buffer_rate: Remaining liquidity buffer rate (optional).
+        realised_liquidation_cost: Strategy-dependent haircut cost from liquidation.
+        remaining_liquid_resources: Liquid resources remaining after liquidation.
 
     Returns:
         LmtActivationResult with simulated activation states and investor impact metrics.
@@ -126,25 +140,33 @@ def assess_lmt_impact(
     # Calculate gross redemption amount
     gross_redemption_amount = nav * redemption_rate
 
-    # Estimate liquidity cost
-    estimated_cost_rate = estimate_liquidity_cost_rate(market_stress)
-    estimated_cost_amount = estimate_liquidity_cost_amount(gross_redemption_amount, market_stress)
+    estimated_cost_amount = gross_redemption_amount * estimated_execution_cost_rate
 
     # Evaluate the simulated swing activation threshold comparison.
-    swing_factor_rate = lmt_parameters.max_swing_factor_rate
+    applied_swing_factor_rate = min(
+        estimated_execution_cost_rate,
+        lmt_parameters.max_swing_factor_rate,
+    )
     swing_activated = redemption_rate >= lmt_parameters.swing_threshold_rate
 
-    # Calculate cost recovery through swing pricing when the simulated condition is met.
-    # Swing pricing applies the selected factor to the redemption amount
-    recovered_cost_amount = gross_redemption_amount * swing_factor_rate if swing_activated else ZERO
+    theoretical_recovery_amount = (
+        gross_redemption_amount * applied_swing_factor_rate if swing_activated else ZERO
+    )
+    applied_cost_recovery_amount = min(
+        theoretical_recovery_amount,
+        realised_liquidation_cost,
+    )
 
     # Calculate residual dilution after simulated LMT effects.
-    residual_dilution_amount = max(estimated_cost_amount - recovered_cost_amount, ZERO)
+    residual_dilution_amount = max(
+        realised_liquidation_cost - applied_cost_recovery_amount,
+        ZERO,
+    )
     residual_dilution_rate = residual_dilution_amount / nav if nav > ZERO else ZERO
 
-    # Calculate coverage ratio
+    # Assess the applied factor against the ex-ante execution-cost estimate.
     coverage_ratio = (
-        (recovered_cost_amount / estimated_cost_amount)
+        (theoretical_recovery_amount / estimated_cost_amount)
         if estimated_cost_amount > ZERO
         else Decimal("1")
     )
@@ -162,15 +184,24 @@ def assess_lmt_impact(
         redemption_paid_amount = gross_redemption_amount
         redemption_deferred_amount = ZERO
 
-    # Check buffer breach (if remaining buffer provided)
-    buffer_breached = (
-        remaining_liquid_buffer_rate is not None
-        and remaining_liquid_buffer_rate < lmt_parameters.minimum_buffer_rate
+    nav_after_redemption_before_lmt = max(
+        nav - gross_redemption_amount - realised_liquidation_cost,
+        ZERO,
     )
+    current_post_lmt_nav = max(
+        nav_after_redemption_before_lmt + redemption_deferred_amount + applied_cost_recovery_amount,
+        ZERO,
+    )
+    remaining_liquid_buffer_rate = (
+        remaining_liquid_resources / current_post_lmt_nav if current_post_lmt_nav > ZERO else ZERO
+    )
+    buffer_breached = remaining_liquid_buffer_rate < lmt_parameters.minimum_buffer_rate
 
     # Classify calibration adequacy
     adequacy = classify_calibration_adequacy(
-        estimated_cost_amount, recovered_cost_amount, coverage_ratio
+        estimated_cost_amount,
+        theoretical_recovery_amount,
+        coverage_ratio,
     )
     message = get_calibration_message(adequacy)
 
@@ -178,15 +209,19 @@ def assess_lmt_impact(
         swing_activated=swing_activated,
         gate_activated=gate_activated,
         buffer_breached=buffer_breached,
-        estimated_liquidity_cost_rate=estimated_cost_rate,
-        selected_swing_factor_rate=swing_factor_rate,
+        estimated_liquidity_cost_rate=estimated_execution_cost_rate,
+        applied_swing_factor_rate=applied_swing_factor_rate,
         coverage_ratio=coverage_ratio,
         residual_dilution_rate=residual_dilution_rate,
         estimated_liquidity_cost_amount=estimated_cost_amount,
-        recovered_cost_amount=recovered_cost_amount,
+        theoretical_recovery_amount=theoretical_recovery_amount,
+        applied_cost_recovery_amount=applied_cost_recovery_amount,
         residual_dilution_amount=residual_dilution_amount,
         redemption_paid_amount=redemption_paid_amount,
         redemption_deferred_amount=redemption_deferred_amount,
+        nav_after_redemption_before_lmt=nav_after_redemption_before_lmt,
+        current_post_lmt_nav=current_post_lmt_nav,
+        remaining_liquid_buffer_rate=remaining_liquid_buffer_rate,
         calibration_adequacy=adequacy,
         calibration_message=message,
     )

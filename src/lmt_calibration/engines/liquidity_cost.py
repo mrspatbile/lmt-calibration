@@ -1,86 +1,89 @@
-"""Estimated liquidity cost analysis for LMT calibration."""
+"""Estimated execution-cost analysis for LMT calibration."""
 
+from collections.abc import Mapping
 from decimal import Decimal
 
-from lmt_calibration.domain import MarketStress
+from lmt_calibration.domain import AssetGroup, LiquidityStress
 
 ZERO = Decimal("0")
 
 
-def estimate_liquidity_cost_rate(market_stress: MarketStress) -> Decimal:
-    """Estimate total liquidity cost rate from market stress execution assumptions.
+def estimate_liquidity_cost_rate(
+    liquidity_stress: LiquidityStress,
+    asset_group_market_values: Mapping[AssetGroup, Decimal],
+) -> Decimal:
+    """Estimate the portfolio-weighted execution-cost rate."""
 
-    Args:
-        market_stress: Market stress scenario with execution assumptions.
-
-    Returns:
-        Total estimated liquidity cost as a rate (sum of spread, transaction, and impact costs).
-        Formula: bid_ask_spread_rate + transaction_cost_rate + market_impact_rate
-    """
-    bid_ask = market_stress.bid_ask_spread_rate or ZERO
-    transaction = market_stress.transaction_cost_rate or ZERO
-    market_impact = market_stress.market_impact_rate or ZERO
-    return bid_ask + transaction + market_impact
+    return _weighted_component_rates(liquidity_stress, asset_group_market_values)["total_cost_rate"]
 
 
 def estimate_liquidity_cost_amount(
-    gross_redemption_amount: Decimal, market_stress: MarketStress
+    gross_redemption_amount: Decimal,
+    liquidity_stress: LiquidityStress,
+    asset_group_market_values: Mapping[AssetGroup, Decimal],
 ) -> Decimal:
-    """Estimate total liquidity cost amount for a redemption under given market stress.
+    """Estimate execution cost for a redemption from liquidity-stress assumptions."""
 
-    Args:
-        gross_redemption_amount: Redemption amount in currency units.
-        market_stress: Market stress scenario with execution assumptions.
-
-    Returns:
-        Estimated liquidity cost amount in currency units.
-        Formula: gross_redemption_amount * (estimated_liquidity_cost_rate)
-    """
     if gross_redemption_amount <= ZERO:
         return ZERO
-    return gross_redemption_amount * estimate_liquidity_cost_rate(market_stress)
+    return gross_redemption_amount * estimate_liquidity_cost_rate(
+        liquidity_stress,
+        asset_group_market_values,
+    )
 
 
 def estimate_liquidity_cost_breakdown(
-    gross_redemption_amount: Decimal, market_stress: MarketStress
+    gross_redemption_amount: Decimal,
+    liquidity_stress: LiquidityStress,
+    asset_group_market_values: Mapping[AssetGroup, Decimal],
 ) -> dict[str, Decimal]:
-    """Estimate liquidity cost breakdown by component.
+    """Estimate portfolio-weighted execution cost by component."""
 
-    Args:
-        gross_redemption_amount: Redemption amount in currency units.
-        market_stress: Market stress scenario with execution assumptions.
-
-    Returns:
-        Dictionary with cost components:
-        - bid_ask_cost_amount
-        - transaction_cost_amount
-        - market_impact_cost_amount
-        - total_cost_amount
-        - total_cost_rate
-    """
-    total_cost_rate = estimate_liquidity_cost_rate(market_stress)
-
-    if gross_redemption_amount <= ZERO:
-        return {
-            "bid_ask_cost_amount": ZERO,
-            "transaction_cost_amount": ZERO,
-            "market_impact_cost_amount": ZERO,
-            "total_cost_amount": ZERO,
-            "total_cost_rate": total_cost_rate,
-        }
-
-    bid_ask_spread = market_stress.bid_ask_spread_rate or ZERO
-    transaction = market_stress.transaction_cost_rate or ZERO
-    market_impact = market_stress.market_impact_rate or ZERO
-    bid_ask_cost = gross_redemption_amount * bid_ask_spread
-    transaction_cost = gross_redemption_amount * transaction
-    market_impact_cost = gross_redemption_amount * market_impact
-    total_cost = bid_ask_cost + transaction_cost + market_impact_cost
+    rates = _weighted_component_rates(liquidity_stress, asset_group_market_values)
+    bid_ask_cost = gross_redemption_amount * rates["bid_ask_cost_rate"]
+    transaction_cost = gross_redemption_amount * rates["transaction_cost_rate"]
+    market_impact_cost = gross_redemption_amount * rates["market_impact_cost_rate"]
 
     return {
         "bid_ask_cost_amount": bid_ask_cost,
         "transaction_cost_amount": transaction_cost,
         "market_impact_cost_amount": market_impact_cost,
-        "total_cost_amount": total_cost,
-        "total_cost_rate": total_cost_rate,
+        "total_cost_amount": bid_ask_cost + transaction_cost + market_impact_cost,
+        "total_cost_rate": rates["total_cost_rate"],
+    }
+
+
+def _weighted_component_rates(
+    liquidity_stress: LiquidityStress,
+    asset_group_market_values: Mapping[AssetGroup, Decimal],
+) -> dict[str, Decimal]:
+    included_values = {
+        asset_group: max(market_value, ZERO)
+        for asset_group, market_value in asset_group_market_values.items()
+        if asset_group in liquidity_stress.execution_assumptions_by_asset_group
+    }
+    total_market_value = sum(included_values.values(), ZERO)
+    if total_market_value == ZERO:
+        return {
+            "bid_ask_cost_rate": ZERO,
+            "transaction_cost_rate": ZERO,
+            "market_impact_cost_rate": ZERO,
+            "total_cost_rate": ZERO,
+        }
+
+    bid_ask_rate = ZERO
+    transaction_rate = ZERO
+    market_impact_rate = ZERO
+    for asset_group, market_value in included_values.items():
+        weight = market_value / total_market_value
+        assumptions = liquidity_stress.execution_assumptions_by_asset_group[asset_group]
+        bid_ask_rate += weight * assumptions.bid_ask_spread_rate
+        transaction_rate += weight * assumptions.transaction_cost_rate
+        market_impact_rate += weight * assumptions.market_impact_rate
+
+    return {
+        "bid_ask_cost_rate": bid_ask_rate,
+        "transaction_cost_rate": transaction_rate,
+        "market_impact_cost_rate": market_impact_rate,
+        "total_cost_rate": bid_ask_rate + transaction_rate + market_impact_rate,
     }
