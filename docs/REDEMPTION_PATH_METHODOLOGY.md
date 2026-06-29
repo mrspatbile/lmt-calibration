@@ -290,6 +290,42 @@ defines more granular treatment.
 
 Investor-class-specific contagion is out of scope for the first version.
 
+## Path-Level Feedback Assumptions
+
+The first month starts with neutral behavioural and contagion multipliers (both 1.0).
+
+Behavioural feedback applies to the next month only. After the feedback month is
+applied, the multiplier returns to neutral (1.0) unless another LMT outcome
+occurs.
+
+When multiple LMT outcomes occur in a month, the priority order determines which
+outcome generates feedback for the following month:
+
+1. suspension
+2. redemption gate
+3. liquidity-buffer breach
+4. swing pricing
+5. none
+
+Only the highest-priority outcome applies feedback; lower-priority outcomes are
+not multiplied again.
+
+Behavioural feedback can vary by investor class. The same LMT or stress outcome
+may trigger different redemption multipliers for different investor classes in
+the following month.
+
+Contagion is a single path-level multiplier applied to all investor classes in
+the following month. Investor-class-specific contagion multipliers are not
+supported in the MVP.
+
+Deferred backlog is not multiplied again by behavioural feedback or contagion
+multipliers. Backlog carries forward at its original amount and joins new monthly
+redemption demand, which is then multiplied by the current month's applicable
+multipliers.
+
+Suspension treatment follows the existing project methodology. No new suspension
+methodology is implemented in this version.
+
 ## Liquidation
 
 Liquidation happens after paid redemption is determined.
