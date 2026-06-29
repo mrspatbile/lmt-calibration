@@ -8,6 +8,8 @@
 
 `lmt-calibration` is a fund liquidity risk project for calibrating Liquidity Management Tools under stressed redemption and market conditions.
 
+<br>
+
 ![LMT calibration dashboard](figs/LMT-darkmode.png)
 
 The stress framework combines:
