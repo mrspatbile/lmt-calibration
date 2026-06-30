@@ -47,7 +47,7 @@ The current application is a one-period liquidity stress and LMT calibration too
 
 <br>
 
-Out-of-scope extensions include multi-period redemption paths, reverse stress testing, behavioural feedback to redemption demand, market contagion affecting asset-side conditions, and strategy comparison views.
+Out-of-scope extensions include reverse stress testing, broader market-contagion effects beyond the redemption path's one-month liquidity-cost and net-proceeds adjustment, and strategy comparison views.
 
 The project uses structured risk-system components, including [validated data](src/lmt_calibration/validation), [calculation modules](src/lmt_calibration/engines), [audit records](src/lmt_calibration/audit), and [automated tests](tests).
 

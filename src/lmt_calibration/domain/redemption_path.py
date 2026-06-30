@@ -93,6 +93,7 @@ class RedemptionPathAssumptions(BaseModel):
     behavioural_feedback_multipliers_by_outcome: dict[
         PathLmtOutcome, dict[ClientClass, Decimal]
     ] = Field(default_factory=dict)
+    market_contagion_liquidity_cost_multiplier: Decimal = Field(default=ONE, ge=ONE)
     days_per_month: int = Field(default=30, gt=0)
 
     @field_validator("behavioural_feedback_multipliers_by_outcome")
@@ -122,6 +123,13 @@ class RedemptionPathAssumptions(BaseModel):
             self.market_stress_month < 1 or self.market_stress_month > self.horizon_months
         ):
             raise ValueError("market_stress_month must be within the path horizon")
+        if (
+            self.market_contagion_liquidity_cost_multiplier > ONE
+            and self.market_stress_month is None
+        ):
+            raise ValueError(
+                "market_stress_month is required when market contagion is above neutral"
+            )
         return self
 
 
@@ -151,7 +159,7 @@ class DeferredRedemptionBacklogEntry(BaseModel):
 
 
 class InvestorClassMonthlyState(BaseModel):
-    """Investor-class balance and redemption result for one month."""
+    """Redeemable investor-class balance and redemption result for one month."""
 
     model_config = ConfigDict(extra="forbid", frozen=True, str_strip_whitespace=True)
 
@@ -219,6 +227,10 @@ class MonthlyRedemptionPathResult(BaseModel):
     opening_cash: Decimal = Field(ge=ZERO)
     closing_cash: Decimal = Field(ge=ZERO)
     contractual_cashflow_amount: Decimal = Field(ge=ZERO)
+    base_estimated_liquidity_cost_rate: Decimal = Field(ge=ZERO)
+    adjusted_estimated_liquidity_cost_rate: Decimal = Field(ge=ZERO)
+    market_contagion_liquidity_cost_multiplier: Decimal = Field(ge=ONE)
+    market_contagion_applied: bool
     behavioural_feedback_adjustment: MonthlyBehaviouralFeedbackAdjustment
     investor_class_states: tuple[InvestorClassMonthlyState, ...]
     backlog: tuple[DeferredRedemptionBacklogEntry, ...]

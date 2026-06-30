@@ -39,8 +39,9 @@ The current methodology does not include:
 * stochastic redemption simulation
 * intra-period liquidation schedules
 * deferred-redemption backlogs across periods
-* behavioural feedback after an LMT diagnostic state
-* reverse stress testing or market contagion affecting asset-side conditions
+* reverse stress testing
+* market contagion beyond the one-month liquidity-cost and net-proceeds
+  adjustment defined for the 12-month redemption path
 * nonlinear price-impact or market-volume models
 * live market data
 * production legal, tax, or regulatory decision rules
@@ -207,6 +208,13 @@ estimated_execution_cost_amount =
 
 This estimate supports swing-factor context and calibration review. It is not the realised strategy outcome.
 
+The 12-month redemption path has one narrow exception: in the month immediately
+after the selected market stress, a market-contagion multiplier above its neutral
+value of 1.0 makes the incremental execution cost above the base estimate a
+realised cost of asset sales. That increment reduces net proceeds, can require
+higher gross sales, and reduces the path NAV. The single-period scenario matrix
+continues to treat estimated execution cost as calibration context only.
+
 ## NAV bases
 
 The single-period methodology uses explicit NAV bases for different purposes:
@@ -320,9 +328,9 @@ Potential extensions outside the current methodology include:
 * stochastic redemption behaviour with explicit deterministic random seeds
 * intra-period liquidation schedules
 * reverse stress testing
-* behavioural feedback after threshold diagnostics
 * nonlinear or volume-based market impact
-* market contagion affecting asset-side conditions
+* market contagion beyond the redemption path's one-month liquidity-cost and
+  net-proceeds adjustment
 * simultaneous liquidation-strategy comparison
 * live market-data calibration
 

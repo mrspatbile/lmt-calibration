@@ -69,10 +69,10 @@ def test_walkthrough_separates_behavioural_feedback_from_market_contagion() -> N
 
     source = _notebook_source(WALKTHROUGH_NOTEBOOK)
 
-    assert "behavioural_feedback_enabled" in source
-    assert "Market contagion is not implemented" in source
-    assert "contagion_enabled" not in source
-    assert "contagion_multiplier" not in source
+    assert "behavioural_feedback_enabled" not in source
+    assert "market_contagion_enabled" not in source
+    assert "market_contagion_liquidity_cost_multiplier" in source
+    assert "Market contagion increases incremental realised execution cost" in source
 
 
 def test_inspection_notebook_is_marked_as_low_level_diagnostic() -> None:

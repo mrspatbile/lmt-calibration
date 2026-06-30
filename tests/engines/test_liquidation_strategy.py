@@ -293,6 +293,49 @@ def test_positive_haircut_with_enough_capacity_targets_post_haircut_cash_need() 
     assert result.dilution_rate.quantize(Decimal("0.0001")) == Decimal("0.0111")
 
 
+def test_realised_execution_cost_requires_more_gross_sales_for_same_net_cash() -> None:
+    without_execution_cost = calculate_liquidation_strategy(
+        scenario_id="without_execution_cost",
+        fund=_fund(),
+        positions=(_position("listed_etf", AssetGroup.LISTED_ETF, "500", "0", "1", 2),),
+        redemption_amount=Decimal("100"),
+        strategy=_strategy("portfolio_profile_pro_rata", LiquidationStrategyType.PRO_RATA),
+        lmt_parameters=_parameters(),
+        stress_horizon_days=5,
+    )
+    with_execution_cost = calculate_liquidation_strategy(
+        scenario_id="with_execution_cost",
+        fund=_fund(),
+        positions=(
+            _position(
+                "listed_etf",
+                AssetGroup.LISTED_ETF,
+                "500",
+                "0",
+                "1",
+                2,
+                realised_execution_cost_rate="0.02",
+            ),
+        ),
+        redemption_amount=Decimal("100"),
+        strategy=_strategy("portfolio_profile_pro_rata", LiquidationStrategyType.PRO_RATA),
+        lmt_parameters=_parameters(),
+        stress_horizon_days=5,
+    )
+
+    assert with_execution_cost.total_net_cash_raised == Decimal("100")
+    assert with_execution_cost.assets_liquidated[0].gross_sale_amount > (
+        without_execution_cost.assets_liquidated[0].gross_sale_amount
+    )
+    assert with_execution_cost.total_realised_execution_cost > Decimal("0")
+    assert with_execution_cost.total_realised_liquidity_cost == (
+        with_execution_cost.total_haircut_cost + with_execution_cost.total_realised_execution_cost
+    )
+    assert with_execution_cost.dilution_amount == (
+        with_execution_cost.total_realised_liquidity_cost
+    )
+
+
 def test_positive_haircut_with_insufficient_capacity_sells_capacity_and_reports_shortfall() -> None:
     result = calculate_liquidation_strategy(
         scenario_id="haircut_capacity_shortfall",
@@ -425,12 +468,15 @@ def _position(
     stressed_liquidity_capacity_rate: str,
     settlement_days: int,
     maturity_days: int | None = None,
+    *,
+    realised_execution_cost_rate: str = "0",
 ) -> StressedLiquidationPosition:
     return StressedLiquidationPosition(
         position_id=position_id,
         asset_group=asset_group,
         stressed_market_value=Decimal(stressed_market_value),
         stressed_haircut_rate=Decimal(stressed_haircut_rate),
+        realised_execution_cost_rate=Decimal(realised_execution_cost_rate),
         stressed_liquidity_capacity_rate=Decimal(stressed_liquidity_capacity_rate),
         settlement_days=settlement_days,
         maturity_days=maturity_days,

@@ -51,6 +51,7 @@ class StressedLiquidationPosition(BaseModel):
     asset_group: AssetGroup
     stressed_market_value: Decimal | None = Field(default=None, ge=ZERO)
     stressed_haircut_rate: Decimal = Field(ge=ZERO, le=ONE)
+    realised_execution_cost_rate: Decimal = Field(default=ZERO, ge=ZERO, le=ONE)
     stressed_liquidity_capacity_rate: Decimal = Field(ge=ZERO, le=ONE)
     settlement_days: int = Field(ge=0)
     maturity_days: int | None = Field(default=None, ge=0)
@@ -108,7 +109,13 @@ def calculate_liquidation_strategy(
         ZERO,
     )
     total_haircut_cost = sum((asset.haircut_cost for asset in liquidated_assets), ZERO)
-    total_cash_raised = cash_used + total_post_haircut_cash_raised
+    total_realised_execution_cost = sum(
+        (asset.realised_execution_cost for asset in liquidated_assets),
+        ZERO,
+    )
+    total_net_cash_raised = sum((asset.net_cash_raised for asset in liquidated_assets), ZERO)
+    total_realised_liquidity_cost = total_haircut_cost + total_realised_execution_cost
+    total_cash_raised = cash_used + total_net_cash_raised
     shortfall = max(redemption_amount - total_cash_raised, ZERO)
     asset_group_allocations = _asset_group_allocations(cash_used, liquidated_assets)
     remaining_cash = cash_total - cash_used
@@ -122,7 +129,7 @@ def calculate_liquidation_strategy(
         ZERO,
     )
     nav_after_redemption_before_lmt = max(
-        current_pre_lmt_nav - redemption_amount - total_haircut_cost,
+        current_pre_lmt_nav - redemption_amount - total_realised_liquidity_cost,
         ZERO,
     )
     remaining_liquid_buffer_rate = (
@@ -140,9 +147,12 @@ def calculate_liquidation_strategy(
         asset_group_allocations=asset_group_allocations,
         total_post_haircut_cash_raised=total_post_haircut_cash_raised,
         total_haircut_cost=total_haircut_cost,
+        total_realised_execution_cost=total_realised_execution_cost,
+        total_net_cash_raised=total_net_cash_raised,
+        total_realised_liquidity_cost=total_realised_liquidity_cost,
         shortfall=shortfall,
-        dilution_amount=total_haircut_cost,
-        dilution_rate=total_haircut_cost / fund.nav,
+        dilution_amount=total_realised_liquidity_cost,
+        dilution_rate=total_realised_liquidity_cost / fund.nav,
         remaining_liquid_resources=remaining_liquid_resources,
         remaining_liquid_buffer_rate=remaining_liquid_buffer_rate,
         minimum_cash_buffer_preserved=remaining_cash >= minimum_cash_buffer,
@@ -211,7 +221,7 @@ def _allocate_most_liquid_first(
                 continue
             liquidated_asset = _liquidated_asset_result_for_cash_need(asset, remaining_need)
             results.append(liquidated_asset)
-            remaining_need -= liquidated_asset.post_haircut_cash_raised
+            remaining_need -= liquidated_asset.net_cash_raised
 
     return results
 
@@ -302,9 +312,10 @@ def _gross_sale_amount_for_cash_need(
     available_capacity = _available_capacity(asset)
     if cash_need <= ZERO or available_capacity <= ZERO:
         return ZERO
-    if asset.stressed_haircut_rate >= ONE:
+    net_proceeds_rate = _net_proceeds_rate(asset)
+    if net_proceeds_rate <= ZERO:
         return available_capacity
-    required_gross_sale = cash_need / (ONE - asset.stressed_haircut_rate)
+    required_gross_sale = cash_need / net_proceeds_rate
     return min(required_gross_sale, available_capacity)
 
 
@@ -313,12 +324,18 @@ def _liquidated_asset_result(
     gross_sale_amount: Decimal,
 ) -> LiquidatedAssetResult:
     post_haircut_cash_raised = gross_sale_amount * (ONE - asset.stressed_haircut_rate)
+    realised_execution_cost = min(
+        gross_sale_amount * asset.realised_execution_cost_rate,
+        post_haircut_cash_raised,
+    )
     return LiquidatedAssetResult(
         position_id=asset.position_id,
         asset_group=asset.asset_group,
         gross_sale_amount=gross_sale_amount,
         post_haircut_cash_raised=post_haircut_cash_raised,
         haircut_cost=gross_sale_amount - post_haircut_cash_raised,
+        realised_execution_cost=realised_execution_cost,
+        net_cash_raised=post_haircut_cash_raised - realised_execution_cost,
     )
 
 
@@ -328,26 +345,37 @@ def _liquidated_asset_result_for_cash_need(
 ) -> LiquidatedAssetResult:
     gross_sale_amount = _gross_sale_amount_for_cash_need(asset, cash_need)
     if _can_raise_cash_need(asset, cash_need):
-        post_haircut_cash_raised = cash_need
+        realised_execution_cost = gross_sale_amount * asset.realised_execution_cost_rate
+        post_haircut_cash_raised = cash_need + realised_execution_cost
         return LiquidatedAssetResult(
             position_id=asset.position_id,
             asset_group=asset.asset_group,
             gross_sale_amount=gross_sale_amount,
             post_haircut_cash_raised=post_haircut_cash_raised,
-            haircut_cost=gross_sale_amount - post_haircut_cash_raised,
+            haircut_cost=gross_sale_amount * asset.stressed_haircut_rate,
+            realised_execution_cost=realised_execution_cost,
+            net_cash_raised=cash_need,
         )
     return _liquidated_asset_result(asset, gross_sale_amount)
 
 
 def _can_raise_cash_need(asset: StressedLiquidationPosition, cash_need: Decimal) -> bool:
-    if cash_need <= ZERO or asset.stressed_haircut_rate >= ONE:
+    net_proceeds_rate = _net_proceeds_rate(asset)
+    if cash_need <= ZERO or net_proceeds_rate <= ZERO:
         return False
-    required_gross_sale = cash_need / (ONE - asset.stressed_haircut_rate)
+    required_gross_sale = cash_need / net_proceeds_rate
     return required_gross_sale <= _available_capacity(asset)
 
 
 def _available_capacity(asset: StressedLiquidationPosition) -> Decimal:
     return _stressed_market_value(asset) * asset.stressed_liquidity_capacity_rate
+
+
+def _net_proceeds_rate(asset: StressedLiquidationPosition) -> Decimal:
+    return max(
+        ONE - asset.stressed_haircut_rate - asset.realised_execution_cost_rate,
+        ZERO,
+    )
 
 
 def _stressed_market_value(asset: StressedLiquidationPosition) -> Decimal:
@@ -379,7 +407,7 @@ def _remaining_liquid_resources(
     remaining_asset_liquidity = sum(
         (
             max(_available_capacity(asset) - sold_by_position.get(asset.position_id, ZERO), ZERO)
-            * (ONE - asset.stressed_haircut_rate)
+            * _net_proceeds_rate(asset)
             for asset in eligible_assets
         ),
         ZERO,

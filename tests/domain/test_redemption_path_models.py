@@ -66,6 +66,25 @@ def test_redemption_path_assumptions_reject_behavioural_feedback_below_one() -> 
         )
 
 
+def test_redemption_path_assumptions_validate_market_contagion() -> None:
+    with pytest.raises(ValidationError, match="market_stress_month is required"):
+        RedemptionPathAssumptions(
+            scenario_id="missing_market_stress_month",
+            start_date="2026-01-01",
+            random_seed=7,
+            market_contagion_liquidity_cost_multiplier=Decimal("1.50"),
+        )
+
+    with pytest.raises(ValidationError, match="greater than or equal to 1"):
+        RedemptionPathAssumptions(
+            scenario_id="invalid_market_contagion",
+            start_date="2026-01-01",
+            random_seed=7,
+            market_stress_month=1,
+            market_contagion_liquidity_cost_multiplier=Decimal("0.99"),
+        )
+
+
 def test_beta_distribution_parameters_allow_boundary_means() -> None:
     parameters = BetaDistributionParameters(
         mean_rate="0",

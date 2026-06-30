@@ -163,20 +163,61 @@ def test_redemption_path_page_does_not_render_tables():
     assert "plot_lmt_matrix" in source
 
 
-def test_redemption_path_controls_use_explicit_behavioural_feedback_terms() -> None:
+def test_redemption_path_controls_separate_feedback_and_market_contagion() -> None:
     app_source = Path("app/streamlit_app.py").read_text(encoding="utf-8")
     service_source = Path("src/lmt_calibration/services/streamlit_mvp.py").read_text(
         encoding="utf-8"
     )
 
-    assert "behavioural_feedback_enabled" in app_source
-    assert "Behavioural feedback multiplier" in app_source
-    assert "contagion_enabled" not in app_source
-    assert "contagion_multiplier" not in app_source
-    assert "Contagion multiplier" not in app_source
+    controls_source = app_source.split("def _capture_redemption_path_controls", 1)[1].split(
+        "def _capture_lmt_thresholds_from_sliders", 1
+    )[0]
+
+    assert "behavioural_feedback_enabled" not in app_source
+    assert "path_behavioural_feedback_multiplier" in app_source
+    assert "market_contagion_enabled" not in app_source
+    assert "path_market_contagion_multiplier" in app_source
+    assert "Redemption behaviour" in app_source
+    assert "Market and liquidity stress" in app_source
+    assert "Simulation settings" in app_source
+    assert controls_source.count("lmt-path-block-heading") == 3
+    assert '"Behavioural feedback multiplier"' in controls_source
+    assert '"Market contagion multiplier"' in controls_source
+    sidebar_group_rule = app_source.split(".lmt-sidebar-group-label {", 1)[1].split("}", 1)[0]
+    threshold_group_rule = app_source.split(".lmt-threshold-subsection-title {", 1)[1].split(
+        "}", 1
+    )[0]
+    assert "font-size: 11px" in sidebar_group_rule
+    assert "font-size: 11px" in threshold_group_rule
+    assert "text-transform: uppercase" in sidebar_group_rule
+    path_block_rule = app_source.split(".lmt-path-block-heading {", 1)[1].split("}", 1)[0]
+    assert "font-size: 11px" in path_block_rule
+    assert "border-bottom: 2px solid $text" in path_block_rule
+    assert "padding-bottom: 6px" in path_block_rule
+    assert "margin: 0 0 0.75rem" in path_block_rule
+    path_separator_rule = app_source.split(".lmt-path-section-separator {", 1)[1].split("}", 1)[0]
+    assert "border-top: 1px solid $border" in path_separator_rule
+    assert "margin: 1.8rem auto 4.5rem" in path_separator_rule
+    assert "width: 50%" in path_separator_rule
+    assert controls_source.count("lmt-path-section-separator") == 2
+    assert "st.columns([0.75, 0.25]" in app_source
+    assert "st.columns([0.9, 10, 0.9]" in app_source
+    assert "Applies after an LMT activation. Increases next-month redemption demand." in app_source
+    assert "It does not change liquidity costs, prices," in app_source
+    assert "Applies after a market stress month. Increases next-month realised" in app_source
+    assert "Higher values mean the fund must sell more assets" in app_source
+    assert "st.toggle(" not in controls_source
+    assert 'label_visibility="collapsed"' not in controls_source
+    assert "if selected_market_id is not None:" in controls_source
+    assert "Turn on behavioural feedback to edit this multiplier." not in app_source
+    assert (
+        "Select a stressed market scenario to configure the stress month and the market contagion multiplier for the following month."
+        in app_source
+    )
     assert "Use 0 for no" not in app_source
-    assert "contagion_enabled" not in service_source
-    assert "contagion_multiplier" not in service_source
+    assert "behavioural_feedback_enabled" not in service_source
+    assert "market_contagion_enabled" not in service_source
+    assert "market_contagion_liquidity_cost_multiplier" in service_source
 
 
 def test_redemption_path_matplotlib_charts_refresh_with_controls():
@@ -204,6 +245,7 @@ def test_redemption_path_matplotlib_charts_refresh_with_controls():
             "paid_redemption": Decimal("1200000"),
             "deferred_redemption": Decimal("250000"),
             "cumulative_backlog": Decimal("250000"),
+            "realised_liquidity_cost": Decimal("25000"),
             "liquid_nav": Decimal("19000000"),
             "illiquid_nav": Decimal("81000000"),
         },
@@ -212,6 +254,7 @@ def test_redemption_path_matplotlib_charts_refresh_with_controls():
             "paid_redemption": Decimal("0"),
             "deferred_redemption": Decimal("0"),
             "cumulative_backlog": Decimal("0"),
+            "realised_liquidity_cost": Decimal("75000"),
             "liquid_nav": Decimal("18000000"),
             "illiquid_nav": Decimal("81500000"),
         },
@@ -263,6 +306,11 @@ def test_redemption_path_matplotlib_charts_refresh_with_controls():
     assert fig3 is not None
     assert fig3.get_figwidth() > 0
     assert fig3.get_figheight() > 0
+    assert fig3.axes[0].texts[0].get_text() == "Activated LMTs"
+    marker_sizes = {
+        float(size) for collection in fig3.axes[0].collections for size in collection.get_sizes()
+    }
+    assert 24.0 in marker_sizes
 
     fig4 = plot_redemption_and_nav_combined(
         monthly_rows=monthly_rows,
@@ -272,6 +320,13 @@ def test_redemption_path_matplotlib_charts_refresh_with_controls():
         dark_mode=False,
     )
     assert fig4.axes[0].get_facecolor()[:3] == (1.0, 1.0, 1.0)
+    assert fig4.axes[0].get_ylim()[1] == 80.0
+    legend = fig4.axes[0].get_legend()
+    assert legend is not None
+    assert legend._ncols == 3
+    assert legend.get_bbox_to_anchor()._bbox.y0 > 1.0
+    assert fig4.axes[1].get_title(loc="left") == "Realised liquidity cost"
+    assert fig4.axes[1].lines
 
     fig5 = plot_lmt_matrix(
         lmt_rows=lmt_rows,

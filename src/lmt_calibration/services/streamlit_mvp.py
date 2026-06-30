@@ -395,8 +395,8 @@ def run_sample_redemption_path(
     random_seed: int,
     market_stress_id: str | None,
     market_stress_month: int | None,
-    behavioural_feedback_enabled: bool,
     behavioural_feedback_multiplier: Decimal,
+    market_contagion_liquidity_cost_multiplier: Decimal,
 ) -> AppRedemptionPathRun:
     """Assemble sample inputs and run the fixed monthly redemption path."""
 
@@ -423,10 +423,10 @@ def run_sample_redemption_path(
         stress_months=stress_months,
         market_stress_month=market_stress_month,
         random_seed=random_seed,
+        market_contagion_liquidity_cost_multiplier=(market_contagion_liquidity_cost_multiplier),
         behavioural_feedback_multipliers_by_outcome=(
             _behavioural_feedback_multipliers_by_outcome(
                 investor_profiles,
-                behavioural_feedback_enabled=behavioural_feedback_enabled,
                 behavioural_feedback_multiplier=behavioural_feedback_multiplier,
             )
         ),
@@ -453,8 +453,8 @@ def run_sample_redemption_path(
         strategy=strategy,
         parameters=parameters,
         stress_months=stress_months,
-        behavioural_feedback_enabled=behavioural_feedback_enabled,
         behavioural_feedback_multiplier=behavioural_feedback_multiplier,
+        market_contagion_liquidity_cost_multiplier=(market_contagion_liquidity_cost_multiplier),
     )
 
     return AppRedemptionPathRun(
@@ -554,6 +554,23 @@ def build_redemption_path_monthly_rows(
                 "liquid_nav": liquid_nav,
                 "illiquid_nav": max(month.closing_nav - liquid_nav, ZERO),
                 "market_stress_applied": month.market_stress_applied,
+                "base_estimated_liquidity_cost_rate": (month.base_estimated_liquidity_cost_rate),
+                "adjusted_estimated_liquidity_cost_rate": (
+                    month.adjusted_estimated_liquidity_cost_rate
+                ),
+                "market_contagion_liquidity_cost_multiplier": (
+                    month.market_contagion_liquidity_cost_multiplier
+                ),
+                "market_contagion_applied": month.market_contagion_applied,
+                "realised_execution_cost": (month.liquidation_result.total_realised_execution_cost),
+                "realised_liquidity_cost": (month.liquidation_result.total_realised_liquidity_cost),
+                "gross_asset_sales": sum(
+                    (
+                        asset.gross_sale_amount
+                        for asset in month.liquidation_result.assets_liquidated
+                    ),
+                    ZERO,
+                ),
                 "priority_outcome": month.lmt_assessment.priority_outcome.value,
                 "behavioural_feedback_source_outcome": (
                     month.behavioural_feedback_adjustment.source_outcome.value
@@ -629,8 +646,8 @@ def build_redemption_path_configuration_rows(
     strategy: LiquidationStrategyConfig,
     parameters: LmtParameters,
     stress_months: tuple[int, ...],
-    behavioural_feedback_enabled: bool,
     behavioural_feedback_multiplier: Decimal,
+    market_contagion_liquidity_cost_multiplier: Decimal,
 ) -> list[dict[str, object]]:
     """Return compact configuration rows for display."""
 
@@ -649,9 +666,20 @@ def build_redemption_path_configuration_rows(
         {"setting": "Liquidity buffer target", "value": parameters.minimum_buffer_rate},
         {
             "setting": "Behavioural feedback",
-            "value": behavioural_feedback_multiplier if behavioural_feedback_enabled else "Off",
+            "value": (
+                behavioural_feedback_multiplier
+                if behavioural_feedback_multiplier > ONE
+                else "Neutral (1.0×)"
+            ),
         },
-        {"setting": "Market contagion", "value": "Not implemented"},
+        {
+            "setting": "Market contagion",
+            "value": (
+                market_contagion_liquidity_cost_multiplier
+                if market_contagion_liquidity_cost_multiplier > ONE
+                else "Neutral (1.0×)"
+            ),
+        },
     ]
 
 
@@ -720,13 +748,12 @@ def _path_investors(
 def _behavioural_feedback_multipliers_by_outcome(
     investor_profiles: list[InvestorClassProfile],
     *,
-    behavioural_feedback_enabled: bool,
     behavioural_feedback_multiplier: Decimal,
 ) -> dict[PathLmtOutcome, dict[ClientClass, Decimal]]:
-    if not behavioural_feedback_enabled:
-        return {}
     if behavioural_feedback_multiplier < ONE:
-        raise ValueError("behavioural_feedback_multiplier must be at least 1 when enabled")
+        raise ValueError("behavioural_feedback_multiplier must be at least 1")
+    if behavioural_feedback_multiplier == ONE:
+        return {}
 
     multipliers_by_class = {
         investor.client_class: behavioural_feedback_multiplier for investor in investor_profiles

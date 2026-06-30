@@ -114,7 +114,20 @@ def run_redemption_path(
             lmt_parameters=lmt_parameters,
         )
 
-        stressed_positions = _stressed_positions(carried_positions, liquidity_stress)
+        market_contagion_applied = _market_contagion_applies(
+            assumptions=assumptions,
+            month_number=month_number,
+        )
+        market_contagion_liquidity_cost_multiplier = (
+            assumptions.market_contagion_liquidity_cost_multiplier
+            if market_contagion_applied
+            else ONE
+        )
+        stressed_positions = _stressed_positions(
+            carried_positions,
+            liquidity_stress,
+            market_contagion_liquidity_cost_multiplier=(market_contagion_liquidity_cost_multiplier),
+        )
         liquidation_result = calculate_liquidation_strategy(
             scenario_id=f"{assumptions.scenario_id}_month_{month_number}",
             fund=fund.model_copy(update={"as_of_date": period.month_start, "nav": pre_lmt_nav}),
@@ -139,16 +152,20 @@ def run_redemption_path(
             liquidity_stress,
             _asset_group_market_values(stressed_positions),
         )
+        base_estimated_liquidity_cost_rate = liquidity_cost_breakdown["total_cost_rate"]
+        adjusted_estimated_liquidity_cost_rate = (
+            base_estimated_liquidity_cost_rate * market_contagion_liquidity_cost_multiplier
+        )
         lmt_assessment = _monthly_lmt_assessment(
             effective_redemption_rate=effective_redemption_rate,
             effective_total=effective_total,
             final_paid_amount=final_paid_amount,
             gate_activated=gate_activated,
-            liquidity_cost_rate=liquidity_cost_breakdown["total_cost_rate"],
+            liquidity_cost_rate=adjusted_estimated_liquidity_cost_rate,
             liquidation_result=liquidation_result,
             lmt_parameters=lmt_parameters,
             closing_nav_before_recovery=max(
-                pre_lmt_nav - final_paid_amount - liquidation_result.total_haircut_cost,
+                pre_lmt_nav - final_paid_amount - liquidation_result.total_realised_liquidity_cost,
                 ZERO,
             ),
         )
@@ -185,6 +202,12 @@ def run_redemption_path(
                 opening_cash=opening_cash,
                 closing_cash=closing_cash,
                 contractual_cashflow_amount=contractual_cashflow_amount,
+                base_estimated_liquidity_cost_rate=base_estimated_liquidity_cost_rate,
+                adjusted_estimated_liquidity_cost_rate=adjusted_estimated_liquidity_cost_rate,
+                market_contagion_liquidity_cost_multiplier=(
+                    market_contagion_liquidity_cost_multiplier
+                ),
+                market_contagion_applied=market_contagion_applied,
                 behavioural_feedback_adjustment=behavioural_feedback_adjustment,
                 investor_class_states=investor_states,
                 backlog=backlog,
@@ -203,6 +226,18 @@ def run_redemption_path(
         scenario_id=assumptions.scenario_id,
         random_seed=assumptions.random_seed,
         monthly_results=tuple(monthly_results),
+    )
+
+
+def _market_contagion_applies(
+    *,
+    assumptions: RedemptionPathAssumptions,
+    month_number: int,
+) -> bool:
+    return (
+        assumptions.market_contagion_liquidity_cost_multiplier > ONE
+        and assumptions.market_stress_month is not None
+        and month_number == assumptions.market_stress_month + 1
     )
 
 
@@ -347,6 +382,8 @@ def _apply_contractual_cashflows(
 def _stressed_positions(
     positions: Sequence[PathPositionState],
     liquidity_stress: LiquidityStress,
+    *,
+    market_contagion_liquidity_cost_multiplier: Decimal = ONE,
 ) -> tuple[StressedLiquidationPosition, ...]:
     return tuple(
         StressedLiquidationPosition(
@@ -354,6 +391,11 @@ def _stressed_positions(
             asset_group=position.asset_group,
             stressed_market_value=position.market_value,
             stressed_haircut_rate=_stressed_haircut_rate(position, liquidity_stress),
+            realised_execution_cost_rate=_market_contagion_execution_cost_rate(
+                position,
+                liquidity_stress,
+                market_contagion_liquidity_cost_multiplier,
+            ),
             stressed_liquidity_capacity_rate=_stressed_liquidity_capacity_rate(
                 position,
                 liquidity_stress,
@@ -364,6 +406,24 @@ def _stressed_positions(
         )
         for position in positions
     )
+
+
+def _market_contagion_execution_cost_rate(
+    position: PathPositionState,
+    liquidity_stress: LiquidityStress,
+    multiplier: Decimal,
+) -> Decimal:
+    if position.asset_group is AssetGroup.CASH or multiplier <= ONE:
+        return ZERO
+    assumption = liquidity_stress.execution_assumptions_by_asset_group.get(position.asset_group)
+    if assumption is None:
+        return ZERO
+    base_execution_cost_rate = (
+        assumption.bid_ask_spread_rate
+        + assumption.transaction_cost_rate
+        + assumption.market_impact_rate
+    )
+    return min(base_execution_cost_rate * (multiplier - ONE), ONE)
 
 
 def _stressed_haircut_rate(
@@ -458,7 +518,10 @@ def _allocate_paid_and_deferred_by_class(
                 effective_redemption_amount=class_effective,
                 paid_redemption_amount=class_paid,
                 deferred_redemption_amount=class_backlog,
-                closing_balance=max(demand.opening_balance - class_paid, ZERO),
+                closing_balance=max(
+                    demand.opening_balance - demand.redemption_amount,
+                    ZERO,
+                ),
                 redemption_rate=demand.redemption_rate,
             )
         )
@@ -502,7 +565,10 @@ def _monthly_lmt_assessment(
     theoretical_recovery = (
         final_paid_amount * applied_swing_factor_rate if swing_activated else ZERO
     )
-    swing_recovery_amount = min(theoretical_recovery, liquidation_result.total_haircut_cost)
+    swing_recovery_amount = min(
+        theoretical_recovery,
+        liquidation_result.total_realised_liquidity_cost,
+    )
     closing_nav = max(closing_nav_before_recovery + swing_recovery_amount, ZERO)
     remaining_liquid_buffer_rate = (
         liquidation_result.remaining_liquid_resources / closing_nav if closing_nav > ZERO else ZERO
@@ -553,7 +619,7 @@ def _closing_cash(
 ) -> Decimal:
     return max(
         _cash_total(positions)
-        + liquidation_result.total_post_haircut_cash_raised
+        + liquidation_result.total_net_cash_raised
         - final_paid_amount
         + swing_recovery_amount,
         ZERO,

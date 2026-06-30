@@ -67,8 +67,8 @@ def test_streamlit_mvp_service_runs_redemption_path_without_market_stress() -> N
         random_seed=42,
         market_stress_id=None,
         market_stress_month=None,
-        behavioural_feedback_enabled=False,
         behavioural_feedback_multiplier=Decimal("1"),
+        market_contagion_liquidity_cost_multiplier=Decimal("1"),
     )
 
     assert len(run.result.monthly_results) == 12
@@ -101,8 +101,8 @@ def test_sample_normal_redemption_path_uses_stable_beta_draws() -> None:
         random_seed=42,
         market_stress_id=None,
         market_stress_month=None,
-        behavioural_feedback_enabled=False,
         behavioural_feedback_multiplier=Decimal("1"),
+        market_contagion_liquidity_cost_multiplier=Decimal("1"),
     )
 
     first_four_month_rates = [
@@ -144,8 +144,8 @@ def test_streamlit_mvp_service_prepares_behavioural_feedback_rows() -> None:
         random_seed=42,
         market_stress_id=None,
         market_stress_month=None,
-        behavioural_feedback_enabled=True,
         behavioural_feedback_multiplier=Decimal("1.50"),
+        market_contagion_liquidity_cost_multiplier=Decimal("1"),
     )
 
     second_month_rows = [row for row in run.investor_rows if row["month"] == 2]
@@ -159,7 +159,7 @@ def test_streamlit_mvp_service_prepares_behavioural_feedback_rows() -> None:
     }
 
 
-def test_streamlit_mvp_service_disables_behavioural_feedback_explicitly() -> None:
+def test_streamlit_mvp_service_uses_one_as_neutral_behavioural_feedback() -> None:
     inputs = load_app_sample_data(SAMPLE_DATA_DIR)
     fund = inputs.funds[0]
     strategy = inputs.liquidation_strategies[0]
@@ -185,8 +185,8 @@ def test_streamlit_mvp_service_disables_behavioural_feedback_explicitly() -> Non
         random_seed=42,
         market_stress_id=None,
         market_stress_month=None,
-        behavioural_feedback_enabled=False,
-        behavioural_feedback_multiplier=Decimal("2"),
+        behavioural_feedback_multiplier=Decimal("1"),
+        market_contagion_liquidity_cost_multiplier=Decimal("1"),
     )
 
     second_month_rows = [row for row in run.investor_rows if row["month"] == 2]
@@ -197,7 +197,7 @@ def test_streamlit_mvp_service_disables_behavioural_feedback_explicitly() -> Non
     assert {row["behavioural_feedback_multiplier"] for row in second_month_rows} == {Decimal("1")}
 
 
-def test_streamlit_mvp_service_rejects_enabled_behavioural_feedback_below_one() -> None:
+def test_streamlit_mvp_service_rejects_behavioural_feedback_below_one() -> None:
     inputs = load_app_sample_data(SAMPLE_DATA_DIR)
     fund = inputs.funds[0]
     strategy = inputs.liquidation_strategies[0]
@@ -214,9 +214,51 @@ def test_streamlit_mvp_service_rejects_enabled_behavioural_feedback_below_one() 
             random_seed=42,
             market_stress_id=None,
             market_stress_month=None,
-            behavioural_feedback_enabled=True,
             behavioural_feedback_multiplier=Decimal("0.99"),
+            market_contagion_liquidity_cost_multiplier=Decimal("1"),
         )
+
+
+def test_streamlit_mvp_service_applies_market_contagion_after_market_stress() -> None:
+    inputs = load_app_sample_data(SAMPLE_DATA_DIR)
+    fund = inputs.funds[0]
+    strategy = inputs.liquidation_strategies[0]
+    redemption = inputs.redemption_scenarios[0]
+    market_stress = inputs.market_stresses[0]
+    scenario = next(item for item in inputs.scenario_definitions if item.fund_id == fund.fund_id)
+    parameters = inputs.parameters_by_key[
+        (scenario.fund_id, scenario.as_of_date, scenario.lmt_parameter_set_id)
+    ].model_copy(update={"minimum_buffer_rate": Decimal("0.30")})
+
+    run = run_sample_redemption_path(
+        inputs,
+        fund_id=fund.fund_id,
+        strategy_id=strategy.liquidation_strategy_id,
+        redemption_scenario_id=redemption.redemption_scenario_id,
+        lmt_parameters_override=parameters,
+        stress_months=(1, 2, 3),
+        random_seed=42,
+        market_stress_id=market_stress.market_stress_id,
+        market_stress_month=1,
+        behavioural_feedback_multiplier=Decimal("1"),
+        market_contagion_liquidity_cost_multiplier=Decimal("1.50"),
+    )
+
+    assert [row["market_contagion_applied"] for row in run.monthly_rows[:3]] == [
+        False,
+        True,
+        False,
+    ]
+    second_month = run.monthly_rows[1]
+    assert second_month["adjusted_estimated_liquidity_cost_rate"] == (
+        second_month["base_estimated_liquidity_cost_rate"] * Decimal("1.50")
+    )
+    assert second_month["realised_execution_cost"] > Decimal("0")
+    assert second_month["realised_liquidity_cost"] >= second_month["realised_execution_cost"]
+    assert second_month["gross_asset_sales"] > Decimal("0")
+    assert next(
+        row["value"] for row in run.configuration_rows if row["setting"] == "Market contagion"
+    ) == Decimal("1.50")
 
 
 def test_t0_liquidity_profile_rows_include_cash_and_liquid_resources() -> None:

@@ -130,9 +130,11 @@ def plot_redemption_profile(
     ax.set_ylabel("")
     ax.tick_params(axis="y", labelcolor=COLORS["muted"], labelsize=8)
 
-    # Y-axis: 5 gridlines, M-suffixed format with EUR symbol
+    # Y-axis: fixed to 60% of initial NAV, 5 gridlines, M-suffixed format with EUR symbol
+    y_max = float(initial_nav) / 1e6 * 0.6
+    ax.set_ylim(0, y_max)
     ax.yaxis.set_major_locator(plt.MaxNLocator(5))
-    top = ax.get_ylim()[1]
+    top = y_max
     ax.yaxis.set_major_formatter(
         FuncFormatter(lambda v, _: f"€{v:.0f}M" if abs(v - top) < 1e-6 else f"€{v:.0f}M")
     )
@@ -289,7 +291,7 @@ def plot_redemption_and_nav_combined(
 ) -> plt.Figure:
     """Combined plot: redemptions and NAV evolution with shared x-axis.
 
-    Two subplots stacked vertically with synchronized month labels.
+    Three compact subplots with synchronized month labels.
     """
     df = pd.DataFrame(monthly_rows)
     colors = _palette(dark_mode=dark_mode)
@@ -298,6 +300,9 @@ def plot_redemption_and_nav_combined(
     paid_m = df["paid_redemption"].astype(float) / 1e6
     deferred_m = df["deferred_redemption"].astype(float) / 1e6
     backlog_m = df["cumulative_backlog"].astype(float) / 1e6
+    realised_liquidity_cost_m = (
+        df.get("realised_liquidity_cost", pd.Series(0.0, index=df.index)).astype(float) / 1e6
+    )
     illiquid_m = df["illiquid_nav"].astype(float) / 1e6
     liquid_m = df["liquid_nav"].astype(float) / 1e6
     months = df["month"].values
@@ -312,11 +317,18 @@ def plot_redemption_and_nav_combined(
         (computation_date + timedelta(days=30 * i)).strftime("%b/%y") for i in range(len(months))
     ]
 
-    # Create figure with two subplots, shared x-axis, with controlled spacing.
-    fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(7, 5.4), sharex=True, dpi=120)
+    # Keep liquidity cost separate from redemption bars while sharing the monthly timeline.
+    fig, (ax1, ax_cost, ax2) = plt.subplots(
+        3,
+        1,
+        figsize=(7, 6.0),
+        sharex=True,
+        dpi=120,
+        gridspec_kw={"height_ratios": [2.2, 0.8, 2.2]},
+    )
     fig.patch.set_facecolor(colors["bg"])
     fig.patch.set_alpha(0 if dark_mode else 1)
-    fig.subplots_adjust(hspace=0.55, top=0.96, right=0.98, bottom=0.12, left=0.09)
+    fig.subplots_adjust(hspace=0.58, top=0.93, right=0.98, bottom=0.11, left=0.09)
 
     # ===== TOP SUBPLOT: REDEMPTIONS =====
     ax1.set_facecolor(colors["bg"])
@@ -360,6 +372,8 @@ def plot_redemption_and_nav_combined(
     )
 
     ax1.set_ylabel("")
+    redemption_axis_max_m = float(initial_nav * Decimal("0.80")) / 1e6
+    ax1.set_ylim(0, redemption_axis_max_m)
     ax1.tick_params(axis="y", labelcolor=colors["muted"], labelsize=8)
     ax1.yaxis.set_major_locator(plt.MaxNLocator(5))
     top1 = ax1.get_ylim()[1]
@@ -382,15 +396,58 @@ def plot_redemption_and_nav_combined(
 
     # Legend for redemptions
     legend1 = ax1.legend(
-        loc="upper right",
-        bbox_to_anchor=(1.0, 1.0),
+        loc="lower right",
+        bbox_to_anchor=(1.0, 1.02),
+        ncol=3,
         frameon=False,
         fontsize=8,
-        handlelength=1.5,
+        handlelength=1.2,
+        handletextpad=0.4,
+        columnspacing=0.8,
         borderaxespad=0,
     )
     for text in legend1.get_texts():
         text.set_color(colors["text"])
+
+    # ===== MIDDLE SUBPLOT: REALISED LIQUIDITY COST =====
+    ax_cost.set_facecolor(colors["bg"])
+    ax_cost.set_title(
+        "Realised liquidity cost",
+        loc="left",
+        fontsize=8,
+        color=colors["text"],
+        fontweight="normal",
+        pad=6,
+    )
+    ax_cost.plot(
+        months,
+        realised_liquidity_cost_m,
+        color=colors["cyan"],
+        marker="o",
+        linewidth=1.8,
+        markersize=4,
+    )
+    ax_cost.fill_between(
+        months,
+        0,
+        realised_liquidity_cost_m,
+        color=colors["cyan"],
+        alpha=0.14,
+    )
+    cost_max = float(realised_liquidity_cost_m.max())
+    ax_cost.set_ylim(0, cost_max * 1.25 if cost_max > 0 else 1)
+    ax_cost.set_ylabel("")
+    ax_cost.yaxis.set_major_locator(plt.MaxNLocator(3))
+    ax_cost.yaxis.set_major_formatter(FuncFormatter(lambda value, _: f"€{value:.2f}M"))
+    ax_cost.tick_params(axis="y", labelcolor=colors["muted"], labelsize=7)
+    ax_cost.tick_params(axis="x", labelbottom=False, length=0)
+    ax_cost.grid(True, axis="y", alpha=0.3, linestyle="-", linewidth=0.5, color=colors["grid"])
+    ax_cost.set_axisbelow(True)
+    for spine in ax_cost.spines.values():
+        spine.set_color(colors["muted"])
+        spine.set_linewidth(0.5)
+    ax_cost.spines["top"].set_visible(False)
+    ax_cost.spines["right"].set_visible(False)
 
     # ===== BOTTOM SUBPLOT: NAV EVOLUTION =====
     ax2.set_facecolor(colors["bg"])
@@ -529,19 +586,19 @@ def plot_lmt_matrix(
         1.18,
         transform=ax.transAxes,
         marker="o",
-        s=42,
+        s=24,
         color=trigger_color,
         edgecolor=colors["marker_edge"],
-        linewidth=0.4,
+        linewidth=0.3,
         clip_on=False,
         zorder=4,
     )
     ax.text(
-        -0.035,
+        -0.037,
         1.18,
         "Activated LMTs",
         transform=ax.transAxes,
-        fontsize=9,
+        fontsize=8,
         color=colors["text"],
         fontweight="normal",
         va="center",
@@ -564,10 +621,10 @@ def plot_lmt_matrix(
                     month,
                     y,
                     marker="o",
-                    s=42,
+                    s=24,
                     color=trigger_color,
                     edgecolor=colors["marker_edge"],
-                    linewidth=0.4,
+                    linewidth=0.3,
                     zorder=3,
                 )
             else:

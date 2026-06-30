@@ -87,6 +87,78 @@ def test_market_stress_is_applied_once_in_selected_month() -> None:
     assert month_3_equity == Decimal("810.00")
 
 
+def test_market_contagion_adjusts_only_next_month_liquidity_cost_rate() -> None:
+    base_arguments = {
+        "fund": _fund(),
+        "positions": (_cash("100"), _equity("euro_equity", "900")),
+        "investor_profiles": (_investor(ClientClass.RETAIL, "1", "0", "0.10"),),
+        "liquidity_stress": _liquidity_stress_with_cost("0.01"),
+        "liquidation_strategy": _strategy(),
+        "lmt_parameters": _parameters(gate_threshold="1"),
+        "market_stress": MarketStress(
+            market_stress_id="market_contagion_stress",
+            version="1.0",
+            name="market_contagion_stress",
+            description="Synthetic market stress for liquidity-cost spillover.",
+            market_shock_rate=Decimal("-0.10"),
+        ),
+    }
+    enabled = run_redemption_path(
+        **base_arguments,
+        assumptions=RedemptionPathAssumptions(
+            scenario_id="market_contagion_comparison",
+            start_date="2026-01-01",
+            random_seed=1,
+            stress_months=(1, 2, 3),
+            market_stress_month=1,
+            market_contagion_liquidity_cost_multiplier=Decimal("2"),
+        ),
+    )
+    disabled = run_redemption_path(
+        **base_arguments,
+        assumptions=RedemptionPathAssumptions(
+            scenario_id="market_contagion_comparison",
+            start_date="2026-01-01",
+            random_seed=1,
+            stress_months=(1, 2, 3),
+            market_stress_month=1,
+        ),
+    )
+
+    assert [month.market_contagion_applied for month in enabled.monthly_results[:3]] == [
+        False,
+        True,
+        False,
+    ]
+    assert enabled.monthly_results[0].liquidation_result.total_realised_execution_cost == Decimal(
+        "0"
+    )
+    assert enabled.monthly_results[2].liquidation_result.total_realised_execution_cost == Decimal(
+        "0"
+    )
+    second_month = enabled.monthly_results[1]
+    assert second_month.market_contagion_liquidity_cost_multiplier == Decimal("2")
+    assert second_month.adjusted_estimated_liquidity_cost_rate == (
+        second_month.base_estimated_liquidity_cost_rate * Decimal("2")
+    )
+    assert second_month.investor_class_states == disabled.monthly_results[1].investor_class_states
+    disabled_second_month = disabled.monthly_results[1]
+    assert second_month.lmt_assessment.paid_redemption_amount == (
+        disabled_second_month.lmt_assessment.paid_redemption_amount
+    )
+    assert second_month.liquidation_result.total_realised_execution_cost > Decimal("0")
+    assert second_month.liquidation_result.total_haircut_cost == (
+        disabled_second_month.liquidation_result.total_haircut_cost
+    )
+    assert sum(
+        asset.gross_sale_amount for asset in second_month.liquidation_result.assets_liquidated
+    ) > sum(
+        asset.gross_sale_amount
+        for asset in disabled_second_month.liquidation_result.assets_liquidated
+    )
+    assert second_month.closing_nav < disabled_second_month.closing_nav
+
+
 def test_reverse_repo_maturity_becomes_cash_before_liquidation() -> None:
     result = run_redemption_path(
         fund=_fund(),
@@ -312,7 +384,7 @@ def test_multiple_outcomes_use_priority_order() -> None:
     assert result.monthly_results[1].investor_class_states[0].redemption_rate == Decimal("0.750")
 
 
-def test_behavioural_feedback_lasts_one_month_only() -> None:
+def test_behavioural_feedback_expires_without_another_activation() -> None:
     result = run_redemption_path(
         fund=_fund(),
         positions=(_cash("1000"),),
@@ -345,6 +417,35 @@ def test_behavioural_feedback_lasts_one_month_only() -> None:
     assert result.monthly_results[2].investor_class_states[0].redemption_rate == Decimal("0")
 
 
+def test_repeated_lmt_activations_trigger_repeated_following_month_feedback() -> None:
+    result = run_redemption_path(
+        fund=_fund(),
+        positions=(_cash("1000"),),
+        investor_profiles=(_investor(ClientClass.RETAIL, "1", "0", "0.10"),),
+        liquidity_stress=_liquidity_stress(),
+        liquidation_strategy=_strategy(),
+        lmt_parameters=_parameters(swing_threshold="0.05", gate_threshold="1"),
+        assumptions=RedemptionPathAssumptions(
+            scenario_id="repeated_behavioural_feedback",
+            start_date="2026-01-01",
+            random_seed=3,
+            stress_months=(1, 2, 3),
+            behavioural_feedback_multipliers_by_outcome={
+                PathLmtOutcome.SWING_PRICING: {ClientClass.RETAIL: Decimal("1.50")}
+            },
+        ),
+    )
+
+    assert [month.lmt_assessment.swing_activated for month in result.monthly_results[:3]] == [
+        True,
+        True,
+        True,
+    ]
+    assert [
+        month.investor_class_states[0].redemption_rate for month in result.monthly_results[:3]
+    ] == [Decimal("0.10"), Decimal("0.150"), Decimal("0.150")]
+
+
 def test_backlog_is_not_multiplied_again_by_behavioural_feedback() -> None:
     result = run_redemption_path(
         fund=_fund(),
@@ -369,7 +470,39 @@ def test_backlog_is_not_multiplied_again_by_behavioural_feedback() -> None:
 
     assert first_backlog == Decimal("400.0")
     assert second_state.opening_backlog_amount == first_backlog
-    assert second_state.new_redemption_amount == Decimal("900.0")
+    assert second_state.new_redemption_amount == Decimal("500.0")
+
+
+def test_backlog_and_new_demand_do_not_exceed_remaining_investor_capital() -> None:
+    initial_nav = Decimal("1000")
+    result = run_redemption_path(
+        fund=_fund(),
+        positions=(_cash("1000"),),
+        investor_profiles=(_investor(ClientClass.RETAIL, "1", "0", "0.50"),),
+        liquidity_stress=_liquidity_stress(),
+        liquidation_strategy=_strategy(),
+        lmt_parameters=_parameters(swing_threshold="1", gate_threshold="0.10"),
+        assumptions=RedemptionPathAssumptions(
+            scenario_id="bounded_redemption_demand",
+            start_date="2026-01-01",
+            random_seed=3,
+            stress_months=tuple(range(1, 13)),
+            behavioural_feedback_multipliers_by_outcome={
+                PathLmtOutcome.REDEMPTION_GATE: {ClientClass.RETAIL: Decimal("3")}
+            },
+        ),
+    )
+
+    for month in result.monthly_results:
+        effective_demand = sum(
+            (state.effective_redemption_amount for state in month.investor_class_states),
+            Decimal("0"),
+        )
+        assert effective_demand <= initial_nav
+
+    assert result.monthly_results[1].investor_class_states[0].new_redemption_amount == Decimal(
+        "500.0"
+    )
 
 
 def test_liquidation_still_uses_paid_redemption_only() -> None:
@@ -513,6 +646,28 @@ def _liquidity_stress() -> LiquidityStress:
         description="Synthetic normal liquidity.",
         stress_horizon_days=5,
         execution_assumptions_by_asset_group=assumptions,
+    )
+
+
+def _liquidity_stress_with_cost(cost_rate: str) -> LiquidityStress:
+    cost_assumption = LiquidityExecutionAssumption(
+        bid_ask_spread_rate=Decimal(cost_rate),
+        transaction_cost_rate=Decimal("0"),
+        market_impact_rate=Decimal("0"),
+        participation_rate=Decimal("1"),
+        liquidity_haircut_rate=Decimal("0"),
+    )
+    return LiquidityStress(
+        liquidity_stress_id="liquidity_cost_stress",
+        version="1.0",
+        name="liquidity_cost_stress",
+        description="Synthetic liquidity stress with execution cost.",
+        stress_horizon_days=5,
+        execution_assumptions_by_asset_group={
+            AssetGroup.CASH: cost_assumption,
+            AssetGroup.LISTED_EQUITY: cost_assumption,
+            AssetGroup.REVERSE_REPO: cost_assumption,
+        },
     )
 
 

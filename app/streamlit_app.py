@@ -100,8 +100,8 @@ class RedemptionPathControls:
     random_seed: int
     market_stress_id: str | None
     market_stress_month: int | None
-    behavioural_feedback_enabled: bool
     behavioural_feedback_multiplier: Decimal
+    market_contagion_liquidity_cost_multiplier: Decimal
 
 
 FONT_STACK = (
@@ -730,12 +730,32 @@ table.lmt-matrix .cell-wrapper {
   font-weight: 500 !important;
 }
 .lmt-sidebar-group-label {
-  color: $muted;
-  font-size: 9px;
-  font-weight: 500;
-  letter-spacing: .05em;
+  color: $group_label;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: .06em;
   margin-bottom: 6px;
   text-transform: uppercase;
+}
+.lmt-path-block-heading {
+  border-bottom: 2px solid $text;
+  color: $group_label;
+  display: block;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: .06em;
+  margin: 0 0 0.75rem;
+  padding-bottom: 6px;
+  text-align: left;
+  text-transform: uppercase;
+}
+.lmt-path-block-heading.first {
+  margin-top: 0;
+}
+.lmt-path-section-separator {
+  border-top: 1px solid $border;
+  margin: 1.8rem auto 4.5rem;
+  width: 50%;
 }
 .lmt-path-config {
   background: $surface;
@@ -1165,10 +1185,10 @@ def main() -> None:
         _render_calibration_guidance(run)
 
     with path_tab:
-        chart_column, control_column = st.columns([0.70, 0.30], gap="medium")
+        chart_column, control_column = st.columns([0.75, 0.25], gap="medium")
 
         with control_column:
-            path_controls = _capture_redemption_path_controls(inputs)
+            path_controls = _capture_redemption_path_controls(inputs, selected_redemption_id)
 
         path_run = run_sample_redemption_path(
             inputs,
@@ -1180,8 +1200,10 @@ def main() -> None:
             random_seed=path_controls.random_seed,
             market_stress_id=path_controls.market_stress_id,
             market_stress_month=path_controls.market_stress_month,
-            behavioural_feedback_enabled=path_controls.behavioural_feedback_enabled,
             behavioural_feedback_multiplier=path_controls.behavioural_feedback_multiplier,
+            market_contagion_liquidity_cost_multiplier=(
+                path_controls.market_contagion_liquidity_cost_multiplier
+            ),
         )
 
         with chart_column:
@@ -1197,11 +1219,29 @@ def _load_inputs() -> AppSampleData:
     return load_app_sample_data(SAMPLE_DATA_DIR)
 
 
-def _capture_redemption_path_controls(inputs: AppSampleData) -> RedemptionPathControls:
+def _capture_redemption_path_controls(
+    inputs: AppSampleData, selected_redemption_id: str
+) -> RedemptionPathControls:
+    # Display the selected redemption scenario
+    scenario_name = next(
+        s.name.replace("_", " ").title()
+        for s in inputs.redemption_scenarios
+        if s.redemption_scenario_id == selected_redemption_id
+    )
+
     st.markdown(
-        "<div class='lmt-sidebar-group-label' style='margin-top:0;'>Redemption Path Configuration</div>",
+        "<div class='lmt-path-block-heading first'>Redemption behaviour</div>",
         unsafe_allow_html=True,
     )
+
+    st.markdown(
+        f"<div style='font-size: 13px; color: #c9d4e3; margin-bottom: 0.75rem;'>"
+        f"Using: {scenario_name} "
+        f"<span style='font-size: 11px; color: #9ca3af;'>(configured in the left panel)</span>"
+        f"</div>",
+        unsafe_allow_html=True,
+    )
+
     stress_months = tuple(
         sorted(
             st.multiselect(
@@ -1212,11 +1252,30 @@ def _capture_redemption_path_controls(inputs: AppSampleData) -> RedemptionPathCo
             )
         )
     )
-    market_options = {"No market stress": None}
+    behavioural_feedback_value = st.slider(
+        "Behavioural feedback multiplier",
+        min_value=1.0,
+        max_value=3.0,
+        step=0.05,
+        key="path_behavioural_feedback_multiplier",
+        help=(
+            "Applies after an LMT activation. Increases next-month redemption demand. "
+            "It does not change liquidity costs, prices, or liquidation capacity."
+        ),
+    )
+    behavioural_feedback_multiplier = Decimal(str(behavioural_feedback_value))
+
+    st.markdown(
+        "<div class='lmt-path-section-separator'></div>"
+        "<div class='lmt-path-block-heading'>Market and liquidity stress</div>",
+        unsafe_allow_html=True,
+    )
+    market_options = {"Normal market conditions": None}
     market_options.update(
         {
             stress.name.replace("_", " ").title(): stress.market_stress_id
             for stress in inputs.market_stresses
+            if stress.market_stress_id != "normal_market_conditions"
         }
     )
     selected_market_label = st.selectbox("Market stress scenario", list(market_options))
@@ -1229,6 +1288,36 @@ def _capture_redemption_path_controls(inputs: AppSampleData) -> RedemptionPathCo
             index=0,
             help="The selected market stress is applied once at the start of this month.",
         )
+
+        market_contagion_value = st.slider(
+            "Market contagion multiplier",
+            min_value=1.0,
+            max_value=3.0,
+            step=0.05,
+            key="path_market_contagion_multiplier",
+            help=(
+                "Applies after a market stress month. Increases next-month realised liquidity "
+                "cost, reducing net liquidation proceeds. It does not change redemption demand. "
+                "Higher values mean the fund must sell more assets to meet the same cash "
+                "redemption."
+            ),
+        )
+    else:
+        st.session_state.path_market_contagion_multiplier = 1.0
+        market_contagion_value = 1.0
+        st.markdown(
+            "<div style='color: #c9d4e3; font-size: 13px; opacity: 0.9;'>"
+            "Select a stressed market scenario to configure the stress month and the market contagion multiplier for the following month."
+            "</div>",
+            unsafe_allow_html=True,
+        )
+    market_contagion_liquidity_cost_multiplier = Decimal(str(market_contagion_value))
+
+    st.markdown(
+        "<div class='lmt-path-section-separator'></div>"
+        "<div class='lmt-path-block-heading'>Simulation settings</div>",
+        unsafe_allow_html=True,
+    )
     random_seed = st.number_input(
         "Seed",
         min_value=0,
@@ -1238,36 +1327,13 @@ def _capture_redemption_path_controls(inputs: AppSampleData) -> RedemptionPathCo
         help="Fixed seed for reproducible monthly redemption samples.",
     )
 
-    behavioural_feedback_enabled = st.toggle(
-        "Behavioural feedback",
-        value=False,
-        help=(
-            "When enabled, a configured LMT outcome can increase next-month new redemption "
-            "demand. It does not affect market prices, liquidity costs, haircuts, or "
-            "liquidation capacity."
-        ),
-    )
-    behavioural_feedback_value = st.slider(
-        "Behavioural feedback multiplier (×)",
-        min_value=1.0,
-        max_value=3.0,
-        value=1.0,
-        step=0.05,
-        disabled=not behavioural_feedback_enabled,
-        help=(
-            "Applied only to new redemption demand in the month after a configured LMT "
-            "outcome. A value of 1.0 is neutral; values above 1.0 increase demand."
-        ),
-    )
-    behavioural_feedback_multiplier = Decimal(str(behavioural_feedback_value))
-
     return RedemptionPathControls(
         stress_months=stress_months,
         random_seed=int(random_seed),
         market_stress_id=selected_market_id,
         market_stress_month=market_stress_month,
-        behavioural_feedback_enabled=behavioural_feedback_enabled,
         behavioural_feedback_multiplier=behavioural_feedback_multiplier,
+        market_contagion_liquidity_cost_multiplier=(market_contagion_liquidity_cost_multiplier),
     )
 
 
@@ -1641,7 +1707,7 @@ def _render_redemption_path_page(
     title_color = "#c9d4e3" if dark_mode else "#111827"
 
     # Wrap chart in centered columns with side margins for breathing room
-    left_margin, chart_container, right_margin = st.columns([0.5, 10, 0.5])
+    left_margin, chart_container, right_margin = st.columns([0.9, 10, 0.9])
 
     with chart_container:
         # Title for combined chart

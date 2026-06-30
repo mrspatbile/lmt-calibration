@@ -148,6 +148,12 @@ It handles:
 
 The engine handles strategy-specific liquidation allocation and returns a consistent liquidation result object regardless of selected strategy.
 
+The liquidation engine can also apply an explicit realised execution-cost rate
+to asset sales. The default rate is zero, preserving the single-period
+workflow. The 12-month redemption path supplies only the incremental
+market-contagion execution cost in the month after the selected market stress;
+the resulting lower net proceeds can require higher gross sales and reduce NAV.
+
 ### Liquidity cost engine
 
 Estimates portfolio-weighted ex-ante execution cost from per-asset-group liquidity-stress assumptions and stressed market values. This calibration context is separate from strategy-dependent realised liquidation cost.

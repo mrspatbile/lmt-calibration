@@ -22,6 +22,8 @@ class LiquidatedAssetResult(BaseModel):
     gross_sale_amount: Decimal = Field(ge=Decimal("0"))
     post_haircut_cash_raised: Decimal = Field(ge=Decimal("0"))
     haircut_cost: Decimal = Field(ge=Decimal("0"))
+    realised_execution_cost: Decimal = Field(ge=Decimal("0"))
+    net_cash_raised: Decimal = Field(ge=Decimal("0"))
 
 
 class LiquidationResult(BaseModel):
@@ -37,6 +39,9 @@ class LiquidationResult(BaseModel):
     asset_group_allocations: dict[AssetGroup, Decimal] = Field(default_factory=dict)
     total_post_haircut_cash_raised: Decimal = Field(ge=Decimal("0"))
     total_haircut_cost: Decimal = Field(ge=Decimal("0"))
+    total_realised_execution_cost: Decimal = Field(ge=Decimal("0"))
+    total_net_cash_raised: Decimal = Field(ge=Decimal("0"))
+    total_realised_liquidity_cost: Decimal = Field(ge=Decimal("0"))
     shortfall: Decimal = Field(ge=Decimal("0"))
     dilution_amount: Decimal = Field(ge=Decimal("0"))
     dilution_rate: Decimal = Field(ge=Decimal("0"))
