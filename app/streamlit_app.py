@@ -7,10 +7,12 @@ from html import escape
 from pathlib import Path
 from string import Template
 
+import pandas as pd
 import streamlit as st
 
 from lmt_calibration.domain import AssetPosition, LmtParameters
 from lmt_calibration.services import (
+    AppRedemptionPathRun,
     AppSampleData,
     AppScenarioRun,
     ScenarioMatrixOutcome,
@@ -18,6 +20,7 @@ from lmt_calibration.services import (
     build_scenario_matrix_outcome,
     fund_positions,
     load_app_sample_data,
+    run_sample_redemption_path,
     run_scenario_across_market_conditions,
     run_selected_sample_scenario,
 )
@@ -89,42 +92,56 @@ class DashboardResult:
     scenarios: list[ScenarioResult]
 
 
+@dataclass(frozen=True)
+class RedemptionPathControls:
+    """Sidebar controls for the redemption-path page."""
+
+    stress_months: tuple[int, ...]
+    random_seed: int
+    market_stress_id: str | None
+    market_stress_month: int | None
+    behavioural_feedback_enabled: bool
+    behavioural_feedback_multiplier: Decimal
+
+
 FONT_STACK = (
     '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif'
 )
 
 DARK_THEME = {
     "font": FONT_STACK,
-    "bg": "#0e1117",
-    "surface": "#171b22",
-    "tertiary": "#21262d",
-    "border": "rgba(255,255,255,0.25)",
-    "text": "#e8eaed",
-    "muted": "#9aa0a6",
-    "accent": "#5eead4",
+    "bg": "#0d1424",
+    "surface": "#131d32",
+    "elevated_surface": "#192641",
+    "tertiary": "#131d32",
+    "border": "rgba(57,194,214,0.25)",
+    "text": "#c9d4e3",
+    "muted": "#9ca3af",
+    "accent": "#39c2d6",
     "neutral_bg": "rgba(255,255,255,0.05)",
-    "neutral_fg": "#9aa0a6",
-    "info_bg": "rgba(85,175,255,0.10)",
-    "info_fg": "#66d9ff",
+    "neutral_fg": "#9ca3af",
+    "info_bg": "rgba(57,194,214,0.10)",
+    "info_fg": "#39c2d6",
     "success_bg": "rgba(76,215,150,0.10)",
     "success_fg": "#66ffaa",
     "danger_bg": "rgba(255,100,100,0.10)",
     "danger_fg": "#ff8080",
     "warning_bg": "rgba(255,180,50,0.10)",
     "warning_fg": "#ffcc66",
-    "guidance_bg": "rgba(255,255,255,0.04)",
-    "guidance_border": "rgba(255,255,255,0.15)",
-    "group_label": "#B8C3CF",
-    "secondary_text": "#A5AFBA",
-    "matrix_title": "#F2F4F6",
-    "metric_label": "#9AA5B1",
-    "scenario_header": "#7FB3D5",
+    "guidance_bg": "rgba(13,20,36,0.8)",
+    "guidance_border": "rgba(57,194,214,0.15)",
+    "group_label": "#c9d4e3",
+    "secondary_text": "#9ca3af",
+    "matrix_title": "#39c2d6",
+    "metric_label": "#9ca3af",
+    "scenario_header": "#39c2d6",
 }
 
 LIGHT_THEME = {
     "font": FONT_STACK,
     "bg": "#ffffff",
     "surface": "#f6f7f9",
+    "elevated_surface": "#ffffff",
     "tertiary": "#eceef1",
     "border": "rgba(0,0,0,0.15)",
     "text": "#1a1d21",
@@ -209,6 +226,23 @@ div[data-testid="stRadio"] {
 [role="radio"][aria-checked="true"] {
   background: $accent !important;
   color: $bg !important;
+}
+[data-testid="stTabs"] [data-baseweb="tab-list"] {
+  gap: 6px;
+  margin: 12px 0 16px;
+}
+[data-testid="stTabs"] [data-baseweb="tab"] {
+  background: $surface;
+  border: 1px solid $border;
+  border-radius: 8px 8px 0 0;
+  color: $secondary_text;
+  font-weight: 700;
+  padding: 8px 16px;
+}
+[data-testid="stTabs"] [aria-selected="true"] {
+  background: $tertiary;
+  border-bottom-color: $tertiary;
+  color: $text !important;
 }
 div[data-baseweb="popover"],
 ul[data-baseweb="menu"],
@@ -601,9 +635,9 @@ table.lmt-matrix .cell-wrapper {
 }
 .lmt-help-icon {
   align-items: center;
-  border: 1px solid #9ca3af;
+  border: 1px solid $muted;
   border-radius: 50%;
-  color: #9ca3af;
+  color: $muted;
   cursor: help;
   display: inline-flex;
   flex: 0 0 15px;
@@ -616,9 +650,10 @@ table.lmt-matrix .cell-wrapper {
   width: 15px;
 }
 .lmt-help-icon::after {
-  background: $surface;
+  background: $elevated_surface;
   border: 1px solid $border;
   border-radius: 4px;
+  box-shadow: 0 10px 28px rgba(0,0,0,0.24);
   color: $text;
   content: attr(data-tooltip);
   font-size: 11px;
@@ -642,6 +677,33 @@ table.lmt-matrix .cell-wrapper {
 .lmt-help-icon:focus::after {
   opacity: 1;
   visibility: visible;
+}
+
+[data-testid="stTooltipHoverTarget"],
+[data-testid="stWidgetLabel"] [data-testid="stTooltipHoverTarget"] {
+  color: $muted !important;
+  stroke: $muted !important;
+}
+[data-testid="stTooltipHoverTarget"] svg,
+[data-testid="stWidgetLabel"] [data-testid="stTooltipHoverTarget"] svg {
+  color: $muted !important;
+  fill: none !important;
+  stroke: $muted !important;
+}
+[data-testid="stTooltipContent"],
+[role="tooltip"] {
+  background: $elevated_surface !important;
+  border: 1px solid $border !important;
+  border-radius: 8px !important;
+  box-shadow: 0 14px 32px rgba(0,0,0,0.32) !important;
+  color: $text !important;
+}
+[data-testid="stTooltipContent"] *,
+[data-testid="stTooltipContent"] p,
+[role="tooltip"] *,
+[role="tooltip"] p {
+  color: $text !important;
+  -webkit-text-fill-color: $text !important;
 }
 
 .lmt-guidance-container {
@@ -668,12 +730,130 @@ table.lmt-matrix .cell-wrapper {
   font-weight: 500 !important;
 }
 .lmt-sidebar-group-label {
-  color: $group_label;
+  color: $muted;
   font-size: 9px;
-  font-weight: 600;
-  letter-spacing: .06em;
-  margin-bottom: 3px;
+  font-weight: 500;
+  letter-spacing: .05em;
+  margin-bottom: 6px;
   text-transform: uppercase;
+}
+.lmt-path-config {
+  background: $surface;
+  border: 1px solid $border;
+  border-radius: 8px;
+  margin-top: 16px;
+  padding: 12px;
+}
+.lmt-path-config-row {
+  border-bottom: 1px solid $border;
+  display: flex;
+  gap: 12px;
+  justify-content: space-between;
+  padding: 7px 0;
+}
+.lmt-path-config-row:last-child {
+  border-bottom: 0;
+}
+.lmt-path-config-row span {
+  color: $metric_label;
+  font-size: 12px;
+}
+.lmt-path-config-row strong {
+  color: $text;
+  font-size: 12px;
+  text-align: right;
+}
+
+/* Input and control styling - dark surface for all input types */
+[data-testid="stMultiSelect"] div[data-baseweb="select"] > div {
+  background: $tertiary !important;
+  border-color: $border !important;
+  color: $text !important;
+}
+[data-testid="stMultiSelect"] div[data-baseweb="select"] span,
+[data-testid="stMultiSelect"] div[data-baseweb="select"] svg {
+  color: $text !important;
+  fill: $text !important;
+}
+[data-testid="stNumberInput"] input,
+[data-testid="stNumberInput"] input::placeholder {
+  background: $tertiary !important;
+  border-color: $border !important;
+  color: $text !important;
+}
+[data-testid="stSlider"] div[data-testid="stSlider"] {
+  background: $tertiary !important;
+}
+[data-testid="stSlider"] [role="slider"] {
+  background: $accent !important;
+}
+
+/* Disabled state - raise opacity to ~50% for legibility */
+[data-testid="stMultiSelect"]:disabled label,
+[data-testid="stNumberInput"]:disabled label,
+[data-testid="stSelectbox"]:disabled label,
+[data-testid="stSlider"]:disabled label,
+.stDisabled label {
+  opacity: 0.5 !important;
+  color: $text !important;
+}
+[disabled] input,
+[disabled] textarea,
+input:disabled,
+textarea:disabled {
+  background: $tertiary !important;
+  opacity: 0.6 !important;
+}
+
+/* Chart typography - reduce sizes for better hierarchy */
+.plotly .xaxis .xtick text,
+.plotly .yaxis .ytick text {
+  font-size: 9px !important;
+}
+.plotly .xaxis .xtitle,
+.plotly .yaxis .ytitle {
+  font-size: 10px !important;
+}
+.plotly .legend {
+  font-size: 10px !important;
+}
+
+/* Legend text brightness and hatched pattern contrast */
+.matplotlib-text,
+.matplotlib-legend {
+  color: $text !important;
+}
+svg [stroke-dasharray],
+svg [fill-opacity] {
+  opacity: 0.85 !important;
+}
+
+/* Stepper buttons for number input - dark background */
+[data-testid="stNumberInput"] button {
+  background: $tertiary !important;
+  border-color: $border !important;
+  color: $text !important;
+}
+[data-testid="stNumberInput"] button svg {
+  color: $text !important;
+  fill: $text !important;
+}
+[data-testid="stNumberInput"] button:hover {
+  background: rgba(57, 194, 214, 0.1) !important;
+}
+
+/* Enable labels with readable muted color (not disabled opacity) */
+section[data-testid="stSidebar"] label {
+  color: $muted !important;
+  opacity: 1 !important;
+}
+
+/* Theme toggle text contrast */
+[role="radiogroup"] [role="radio"] {
+  color: $muted !important;
+}
+[role="radiogroup"] [role="radio"][aria-checked="true"] {
+  color: $text !important;
 }
 </style>
 """
@@ -731,6 +911,87 @@ LIGHT_MODE_CSS = """
 .lmt-guidance-container {
   background-color: #f5f5f5 !important;
   border-color: #d1d5db !important;
+}
+</style>
+"""
+
+DARK_MODE_CSS = """
+<style>
+/* Dark mode: Theme toggle (Light/Dark radio) - readable labels */
+[data-testid="stRadio"] [role="radio"] {
+  color: #9ca3af !important;
+  -webkit-text-fill-color: #9ca3af !important;
+}
+[data-testid="stRadio"] [role="radio"] * {
+  color: #9ca3af !important;
+  -webkit-text-fill-color: #9ca3af !important;
+  opacity: 1 !important;
+}
+[data-testid="stRadio"] label[data-baseweb="radio"] {
+  color: #9ca3af !important;
+  -webkit-text-fill-color: #9ca3af !important;
+}
+[data-testid="stRadio"] label[data-baseweb="radio"] * {
+  color: #9ca3af !important;
+  -webkit-text-fill-color: #9ca3af !important;
+  opacity: 1 !important;
+}
+[data-testid="stRadio"] [data-testid="stMarkdownContainer"] {
+  color: #9ca3af !important;
+  -webkit-text-fill-color: #9ca3af !important;
+}
+[data-testid="stRadio"] [data-testid="stMarkdownContainer"] * {
+  color: #9ca3af !important;
+  -webkit-text-fill-color: #9ca3af !important;
+  opacity: 1 !important;
+}
+/* Active (checked) radio button - use primary text */
+[data-testid="stRadio"] [role="radio"][aria-checked="true"],
+[data-testid="stRadio"] [role="radio"][aria-checked="true"] * {
+  color: #c9d4e3 !important;
+  -webkit-text-fill-color: #c9d4e3 !important;
+}
+
+/* Dark mode: 12-month control labels - readable muted text */
+[data-testid="stWidgetLabel"] {
+  color: #9ca3af !important;
+  opacity: 1 !important;
+}
+[data-testid="stWidgetLabel"] p {
+  color: #9ca3af !important;
+  -webkit-text-fill-color: #9ca3af !important;
+  opacity: 1 !important;
+}
+[data-testid="stWidgetLabel"] span {
+  color: #9ca3af !important;
+  -webkit-text-fill-color: #9ca3af !important;
+  opacity: 1 !important;
+}
+/* Right column controls: redemption-stress months, seed, and behavioural feedback */
+.stRight [data-testid="stWidgetLabel"],
+.stRight [data-testid="stWidgetLabel"] p,
+.stRight [data-testid="stWidgetLabel"] span {
+  color: #9ca3af !important;
+  -webkit-text-fill-color: #9ca3af !important;
+  opacity: 1 !important;
+}
+
+/* Dark mode: Seed stepper buttons */
+[data-testid="stNumberInput"] button {
+  background: #131d32 !important;
+  border-color: rgba(57,194,214,0.25) !important;
+  color: #c9d4e3 !important;
+}
+[data-testid="stNumberInput"] button svg {
+  color: #c9d4e3 !important;
+  fill: #c9d4e3 !important;
+}
+[data-testid="stNumberInput"] button svg path {
+  fill: #c9d4e3 !important;
+  color: #c9d4e3 !important;
+}
+[data-testid="stNumberInput"] button:hover {
+  background: rgba(57, 194, 214, 0.1) !important;
 }
 </style>
 """
@@ -801,7 +1062,32 @@ def main() -> None:
         )
         _render_fund_card(fund_chars, fund_early.fund_name)
 
+        # Visual break between read-only fund info and interactive controls
+        st.markdown(
+            "<hr style='width:50%; margin:1.5rem auto; border:none; border-top:1px solid #2a3a5a;'>",
+            unsafe_allow_html=True,
+        )
+
+        # Redemption scenario section
+        st.markdown(
+            "<div class='lmt-sidebar-group-label' style='margin-top:1rem;'>Redemption Scenario</div>",
+            unsafe_allow_html=True,
+        )
+        st.markdown(
+            "<div style='font-size:11px; color:#9ca3af; margin-bottom:0.5rem;'>Defines investor behavior under stress.</div>",
+            unsafe_allow_html=True,
+        )
         selected_redemption_id = _redemption_selector(inputs)
+
+        # Liquidation strategy section
+        st.markdown(
+            "<div class='lmt-sidebar-group-label' style='margin-top:1.5rem;'>Liquidation Strategy</div>",
+            unsafe_allow_html=True,
+        )
+        st.markdown(
+            "<div style='font-size:11px; color:#9ca3af; margin-bottom:0.5rem;'>Determines asset ordering for redemptions.</div>",
+            unsafe_allow_html=True,
+        )
         selected_strategy_id = _strategy_selector(inputs)
 
     # Get scenario template to access default LMT parameters
@@ -820,30 +1106,7 @@ def main() -> None:
     with st.sidebar:
         updated_params = _capture_lmt_thresholds_from_sliders(default_params)
 
-    # NOW build scenario runs with updated LMT parameters and selected redemption scenario
-    run = run_selected_sample_scenario(
-        inputs,
-        fund_id=selected_fund_id,
-        strategy_id=selected_strategy_id,
-        lmt_parameters_override=updated_params,
-        redemption_scenario_id_override=selected_redemption_id,
-    )
-    positions = fund_positions(inputs, run.fund)
-
-    # Build scenario runs for matrix comparison across market conditions with updated parameters and redemption scenario
-    market_condition_runs = run_scenario_across_market_conditions(
-        inputs,
-        fund_id=selected_fund_id,
-        strategy_id=selected_strategy_id,
-        lmt_parameters_override=updated_params,
-        redemption_scenario_id_override=selected_redemption_id,
-    )
-
-    dashboard = _build_dashboard_result(inputs, run, positions, market_condition_runs)
-
     col_header, col_theme_top = st.columns([0.82, 0.18])
-    with col_header:
-        _render_header(dashboard)
     with col_theme_top:
         selected_theme = st.radio(
             "Theme",
@@ -858,21 +1121,75 @@ def main() -> None:
     dark_mode = st.session_state.dark_mode
     theme = DARK_THEME if dark_mode else LIGHT_THEME
     st.markdown(CSS.substitute(theme), unsafe_allow_html=True)
-    if not dark_mode:
+    if dark_mode:
+        st.markdown(DARK_MODE_CSS, unsafe_allow_html=True)
+    else:
         st.markdown(LIGHT_MODE_CSS, unsafe_allow_html=True)
 
-    _render_lmt_configuration(run)
+    with col_header:
+        _render_main_header()
 
-    st.markdown(
-        """
-        <div class='lmt-section-h'>Calibration Across Market Conditions</div>
-        """,
-        unsafe_allow_html=True,
-    )
-    _render_matrix(dashboard.scenarios)
+    matrix_tab, path_tab = st.tabs(["Market scenario matrix", "12-month redemption path"])
 
-    # Calibration guidance panel
-    _render_calibration_guidance(run)
+    with matrix_tab:
+        # NOW build scenario runs with updated LMT parameters and selected redemption scenario
+        run = run_selected_sample_scenario(
+            inputs,
+            fund_id=selected_fund_id,
+            strategy_id=selected_strategy_id,
+            lmt_parameters_override=updated_params,
+            redemption_scenario_id_override=selected_redemption_id,
+        )
+        positions = fund_positions(inputs, run.fund)
+
+        # Build scenario runs for matrix comparison across market conditions with updated parameters and redemption scenario
+        market_condition_runs = run_scenario_across_market_conditions(
+            inputs,
+            fund_id=selected_fund_id,
+            strategy_id=selected_strategy_id,
+            lmt_parameters_override=updated_params,
+            redemption_scenario_id_override=selected_redemption_id,
+        )
+
+        dashboard = _build_dashboard_result(inputs, run, positions, market_condition_runs)
+
+        _render_lmt_configuration(run)
+
+        st.markdown(
+            """
+            <div class='lmt-section-h'>Calibration Across Market Conditions</div>
+            """,
+            unsafe_allow_html=True,
+        )
+        _render_matrix(dashboard.scenarios)
+        _render_calibration_guidance(run)
+
+    with path_tab:
+        chart_column, control_column = st.columns([0.70, 0.30], gap="medium")
+
+        with control_column:
+            path_controls = _capture_redemption_path_controls(inputs)
+
+        path_run = run_sample_redemption_path(
+            inputs,
+            fund_id=selected_fund_id,
+            strategy_id=selected_strategy_id,
+            redemption_scenario_id=selected_redemption_id,
+            lmt_parameters_override=updated_params,
+            stress_months=path_controls.stress_months,
+            random_seed=path_controls.random_seed,
+            market_stress_id=path_controls.market_stress_id,
+            market_stress_month=path_controls.market_stress_month,
+            behavioural_feedback_enabled=path_controls.behavioural_feedback_enabled,
+            behavioural_feedback_multiplier=path_controls.behavioural_feedback_multiplier,
+        )
+
+        with chart_column:
+            _render_redemption_path_page(
+                path_run,
+                selected_fund_id=selected_fund_id,
+                dark_mode=dark_mode,
+            )
 
 
 @st.cache_data(show_spinner=False)
@@ -880,23 +1197,97 @@ def _load_inputs() -> AppSampleData:
     return load_app_sample_data(SAMPLE_DATA_DIR)
 
 
+def _capture_redemption_path_controls(inputs: AppSampleData) -> RedemptionPathControls:
+    st.markdown(
+        "<div class='lmt-sidebar-group-label' style='margin-top:0;'>Redemption Path Configuration</div>",
+        unsafe_allow_html=True,
+    )
+    stress_months = tuple(
+        sorted(
+            st.multiselect(
+                "Redemption-stress months",
+                options=list(range(1, 13)),
+                default=[1],
+                help="Months where investor stress redemption rates replace sampled normal-period rates.",
+            )
+        )
+    )
+    market_options = {"No market stress": None}
+    market_options.update(
+        {
+            stress.name.replace("_", " ").title(): stress.market_stress_id
+            for stress in inputs.market_stresses
+        }
+    )
+    selected_market_label = st.selectbox("Market stress scenario", list(market_options))
+    selected_market_id = market_options[selected_market_label]
+    market_stress_month = None
+    if selected_market_id is not None:
+        market_stress_month = st.selectbox(
+            "Market-stress month",
+            options=list(range(1, 13)),
+            index=0,
+            help="The selected market stress is applied once at the start of this month.",
+        )
+    random_seed = st.number_input(
+        "Seed",
+        min_value=0,
+        max_value=999_999,
+        value=42,
+        step=1,
+        help="Fixed seed for reproducible monthly redemption samples.",
+    )
+
+    behavioural_feedback_enabled = st.toggle(
+        "Behavioural feedback",
+        value=False,
+        help=(
+            "When enabled, a configured LMT outcome can increase next-month new redemption "
+            "demand. It does not affect market prices, liquidity costs, haircuts, or "
+            "liquidation capacity."
+        ),
+    )
+    behavioural_feedback_value = st.slider(
+        "Behavioural feedback multiplier (×)",
+        min_value=1.0,
+        max_value=3.0,
+        value=1.0,
+        step=0.05,
+        disabled=not behavioural_feedback_enabled,
+        help=(
+            "Applied only to new redemption demand in the month after a configured LMT "
+            "outcome. A value of 1.0 is neutral; values above 1.0 increase demand."
+        ),
+    )
+    behavioural_feedback_multiplier = Decimal(str(behavioural_feedback_value))
+
+    return RedemptionPathControls(
+        stress_months=stress_months,
+        random_seed=int(random_seed),
+        market_stress_id=selected_market_id,
+        market_stress_month=market_stress_month,
+        behavioural_feedback_enabled=behavioural_feedback_enabled,
+        behavioural_feedback_multiplier=behavioural_feedback_multiplier,
+    )
+
+
 def _capture_lmt_thresholds_from_sliders(default_params: LmtParameters) -> LmtParameters:
     """Render LMT threshold sliders and return updated parameters based on slider values."""
     st.markdown(
-        "<div class='lmt-threshold-subsection' style='padding-left: 12px;'>"
+        "<div class='lmt-threshold-subsection' style='padding-left: 12px; margin-top: 1.5rem;'>"
         "<div class='lmt-threshold-subsection-title'>Anti-dilution tools</div>",
         unsafe_allow_html=True,
     )
 
     default_swing = float(default_params.swing_threshold_rate * ONE_HUNDRED)
     swing_pct = st.slider(
-        "Swing activation threshold",
+        "Swing activation threshold (%)",
         min_value=0.5,
         max_value=5.0,
         value=default_swing,
         step=0.25,
         key="swing_threshold",
-        help="Redemption rate at which the simulated swing activation condition is met.",
+        help="Redemption rate (% of NAV) at which swing is activated.",
     )
 
     st.markdown("</div>", unsafe_allow_html=True)
@@ -908,13 +1299,13 @@ def _capture_lmt_thresholds_from_sliders(default_params: LmtParameters) -> LmtPa
     )
 
     gate_pct = st.slider(
-        "Gate activation threshold",
+        "Gate activation threshold (%)",
         min_value=5.0,
         max_value=15.0,
         value=6.0,
         step=1.0,
         key="gate_threshold",
-        help="Redemption rate at which the simulated gate activation condition is met.",
+        help="Redemption rate (% of NAV) at which gate is activated.",
     )
 
     st.markdown("</div>", unsafe_allow_html=True)
@@ -927,13 +1318,13 @@ def _capture_lmt_thresholds_from_sliders(default_params: LmtParameters) -> LmtPa
 
     default_buffer = float(default_params.minimum_buffer_rate * ONE_HUNDRED)
     buffer_pct = st.slider(
-        "Internal liquidity buffer target",
+        "Internal liquidity buffer target (%)",
         min_value=2.0,
         max_value=15.0,
         value=default_buffer,
         step=0.5,
         key="internal_buffer_target",
-        help="Internal monitoring threshold, not regulatory minimum.",
+        help="Internal monitoring threshold (% of NAV), not regulatory minimum.",
     )
 
     st.markdown("</div>", unsafe_allow_html=True)
@@ -954,14 +1345,16 @@ def _fund_selector(inputs: AppSampleData) -> str:
     return fund_options[selected_name]
 
 
+def _format_display_name(snake_case: str) -> str:
+    """Convert snake_case to Title Case display name."""
+    return " ".join(word.capitalize() for word in snake_case.split("_"))
+
+
 def _redemption_selector(inputs: AppSampleData) -> str:
     redemption_options = {
-        scenario.name: scenario.redemption_scenario_id for scenario in inputs.redemption_scenarios
+        _format_display_name(scenario.name): scenario.redemption_scenario_id
+        for scenario in inputs.redemption_scenarios
     }
-    st.markdown(
-        "<div class='lmt-sidebar-group-label'>Selected redemption scenario</div>",
-        unsafe_allow_html=True,
-    )
     selected_name = st.selectbox(
         "Redemption scenario", list(redemption_options), label_visibility="collapsed"
     )
@@ -973,10 +1366,6 @@ def _strategy_selector(inputs: AppSampleData) -> str:
         _strategy_label(strategy.liquidation_strategy_id): strategy.liquidation_strategy_id
         for strategy in inputs.liquidation_strategies
     }
-    st.markdown(
-        "<div class='lmt-sidebar-group-label'>Selected liquidation strategy</div>",
-        unsafe_allow_html=True,
-    )
     selected_name = st.selectbox(
         "Liquidation strategy", list(strategy_options), label_visibility="collapsed"
     )
@@ -1224,6 +1613,625 @@ def _scenario_result_from_row(
             ),
         ],
     )
+
+
+def _render_main_header() -> None:
+    st.markdown(
+        """
+        <div class="lmt-header-copy">
+          <div class="lmt-eyebrow">LMT Calibration Tool</div>
+          <h1 class="lmt-title">Liquidity Management Tools Calibration</h1>
+          <p class="lmt-subtitle">Calibrating LMT settings across market stress, redemption pressure, liquidity resources, and activation assessment outputs.</p>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+
+def _render_redemption_path_page(
+    run: AppRedemptionPathRun,
+    *,
+    selected_fund_id: str,
+    dark_mode: bool,
+) -> None:
+    from chart_matplotlib import plot_lmt_matrix, plot_redemption_and_nav_combined
+
+    initial_nav = run.result.monthly_results[0].opening_nav
+    as_of_date = str(run.fund.as_of_date)
+    title_color = "#c9d4e3" if dark_mode else "#111827"
+
+    # Wrap chart in centered columns with side margins for breathing room
+    left_margin, chart_container, right_margin = st.columns([0.5, 10, 0.5])
+
+    with chart_container:
+        # Title for combined chart
+        st.markdown(
+            f"<div style='font-size:17px; color:{title_color}; font-weight:700; margin-bottom:0.8rem;'>"
+            "12-month redemption path and NAV evolution"
+            "</div>",
+            unsafe_allow_html=True,
+        )
+
+        # Combined chart with shared x-axis
+        fig = plot_redemption_and_nav_combined(
+            monthly_rows=run.monthly_rows,
+            initial_nav=initial_nav,
+            fund_name=selected_fund_id,
+            as_of_date=as_of_date,
+            dark_mode=dark_mode,
+        )
+        st.pyplot(fig, use_container_width=True)
+
+        matrix_fig = plot_lmt_matrix(
+            lmt_rows=run.lmt_timeline_rows,
+            fund_name=selected_fund_id,
+            as_of_date=as_of_date,
+            dark_mode=dark_mode,
+        )
+        st.pyplot(matrix_fig, use_container_width=True)
+
+
+def _render_path_configuration_summary(run: AppRedemptionPathRun) -> None:
+    items = []
+    for row in run.configuration_rows:
+        if row["setting"] == "Scenario":
+            continue
+        setting = escape(str(row["setting"]))
+        value = escape(_format_config_value(row["value"]))
+        items.append(
+            f"<div class='lmt-path-config-row'><span>{setting}</span><strong>{value}</strong></div>"
+        )
+    st.markdown(
+        "<div class='lmt-path-config'>"
+        "<div class='lmt-sidebar-group-label'>Configuration summary</div>"
+        f"{''.join(items)}"
+        "</div>",
+        unsafe_allow_html=True,
+    )
+
+
+def _format_config_value(value: object) -> str:
+    if isinstance(value, Decimal):
+        return _rate(value)
+    return str(value).replace("_", " ").title()
+
+
+def _render_path_kpis(run: AppRedemptionPathRun) -> None:
+    first_month = run.result.monthly_results[0]
+    last_month = run.result.monthly_results[-1]
+    final_backlog = sum((entry.remaining_amount for entry in last_month.backlog), ZERO)
+    final_nav_change = _safe_rate(
+        last_month.closing_nav - first_month.opening_nav, first_month.opening_nav
+    )
+    kpis = [
+        Kpi("Final NAV", _money(last_month.closing_nav), _signed_rate(final_nav_change), "neutral"),
+        Kpi(
+            "Final backlog",
+            _money(final_backlog),
+            "deferred redemptions",
+            "warning" if final_backlog > ZERO else "success",
+        ),
+        Kpi("Closing cash", _money(last_month.closing_cash), "month 12", "neutral"),
+        Kpi(
+            "Priority outcome",
+            last_month.lmt_assessment.priority_outcome.value.replace("_", " ").title(),
+            "month 12",
+            "info",
+        ),
+    ]
+    _render_kpis(kpis)
+
+
+def _render_redemption_path_nav_chart(
+    *,
+    monthly_rows: list[dict[str, object]],
+    lmt_rows: list[dict[str, object]],
+    initial_nav: Decimal,
+    dark_mode: bool,
+) -> None:
+    chart_rows = _redemption_path_chart_rows(monthly_rows=monthly_rows, lmt_rows=lmt_rows)
+    if not chart_rows:
+        st.info("No redemption-path rows to display.")
+        return
+
+    y_max = float(initial_nav)
+
+    st.vega_lite_chart(
+        chart_rows,
+        {
+            "$schema": "https://vega.github.io/schema/vega-lite/v5.json",
+            "background": "#0d1424",
+            "padding": {"left": 20, "right": 20, "top": 20, "bottom": 20},
+            "spacing": {"row": 40},
+            "vconcat": [
+                {
+                    "height": 240,
+                    "title": {
+                        "text": "Monthly Redemptions",
+                        "fontSize": 13,
+                        "fontWeight": 600,
+                        "color": "#c9d4e3",
+                    },
+                    "layer": [
+                        {
+                            "transform": [
+                                {"filter": "datum.panel == 'redemption' && datum.kind == 'bar'"}
+                            ],
+                            "mark": {"type": "bar"},
+                            "encoding": {
+                                "x": {
+                                    "field": "month",
+                                    "type": "ordinal",
+                                    "axis": {
+                                        "title": None,
+                                        "labels": False,
+                                        "domain": False,
+                                        "ticks": False,
+                                    },
+                                },
+                                "y": {
+                                    "field": "amount",
+                                    "type": "quantitative",
+                                    "axis": {
+                                        "title": "EUR m",
+                                        "titleColor": "#c9d4e3",
+                                        "labelColor": "#c9d4e3",
+                                        "gridColor": "#1c2740",
+                                        "tickCount": 5,
+                                        "format": ".0f",
+                                    },
+                                    "scale": {"domain": [0, y_max]},
+                                },
+                                "color": {
+                                    "field": "series",
+                                    "scale": {
+                                        "domain": ["Paid redemption", "Deferred redemption"],
+                                        "range": ["#2d6fe8", "#2d6fe8"],
+                                    },
+                                    "legend": {
+                                        "title": "Type",
+                                        "titleColor": "#c9d4e3",
+                                        "labelColor": "#c9d4e3",
+                                        "orient": "bottom",
+                                        "direction": "horizontal",
+                                    },
+                                },
+                                "opacity": {
+                                    "condition": [
+                                        {
+                                            "test": "datum.series == 'Deferred redemption'",
+                                            "value": 0.5,
+                                        }
+                                    ],
+                                    "value": 1.0,
+                                },
+                                "tooltip": [
+                                    {"field": "month", "title": "Month"},
+                                    {"field": "series", "title": "Type"},
+                                    {"field": "amount", "title": "Amount", "format": ",.0f"},
+                                ],
+                            },
+                        },
+                        {
+                            "transform": [
+                                {"filter": "datum.panel == 'redemption' && datum.kind == 'line'"}
+                            ],
+                            "mark": {
+                                "type": "line",
+                                "strokeWidth": 2.5,
+                                "point": {"filled": True, "size": 50},
+                            },
+                            "encoding": {
+                                "x": {
+                                    "field": "month",
+                                    "type": "ordinal",
+                                    "axis": {"title": None, "labels": False, "domain": False},
+                                },
+                                "y": {
+                                    "field": "amount",
+                                    "type": "quantitative",
+                                    "scale": {"domain": [0, y_max]},
+                                    "axis": None,
+                                },
+                                "color": {"value": "#f5793b"},
+                                "tooltip": [
+                                    {"field": "month", "title": "Month"},
+                                    {"field": "series", "title": "Backlog"},
+                                    {"field": "amount", "title": "Amount", "format": ",.0f"},
+                                ],
+                            },
+                        },
+                    ],
+                },
+                {
+                    "height": 200,
+                    "title": {
+                        "text": "NAV Composition",
+                        "fontSize": 13,
+                        "fontWeight": 600,
+                        "color": "#c9d4e3",
+                    },
+                    "layer": [
+                        {
+                            "transform": [{"filter": "datum.panel == 'nav'"}],
+                            "mark": {"type": "area"},
+                            "encoding": {
+                                "x": {
+                                    "field": "month",
+                                    "type": "ordinal",
+                                    "axis": {
+                                        "title": None,
+                                        "labels": False,
+                                        "domain": False,
+                                        "ticks": False,
+                                    },
+                                },
+                                "y": {
+                                    "field": "amount",
+                                    "type": "quantitative",
+                                    "axis": {
+                                        "title": "EUR m",
+                                        "titleColor": "#c9d4e3",
+                                        "labelColor": "#c9d4e3",
+                                        "gridColor": "#1c2740",
+                                        "tickCount": 5,
+                                        "format": ".0f",
+                                    },
+                                    "scale": {"domain": [0, y_max]},
+                                    "stack": "zero",
+                                },
+                                "color": {
+                                    "field": "series",
+                                    "scale": {
+                                        "domain": ["Illiquid NAV", "Liquid NAV"],
+                                        "range": ["#1c5a5e", "#2f5aa8"],
+                                    },
+                                    "legend": {
+                                        "title": "Asset Type",
+                                        "titleColor": "#c9d4e3",
+                                        "labelColor": "#c9d4e3",
+                                        "orient": "bottom",
+                                        "direction": "horizontal",
+                                    },
+                                },
+                                "order": {"field": "series_order"},
+                                "tooltip": [
+                                    {"field": "month", "title": "Month"},
+                                    {"field": "series", "title": "Component"},
+                                    {"field": "amount", "title": "Amount", "format": ",.0f"},
+                                ],
+                            },
+                        },
+                    ],
+                },
+                {
+                    "height": 120,
+                    "title": {
+                        "text": "LMT Activation Matrix",
+                        "fontSize": 13,
+                        "fontWeight": 600,
+                        "color": "#c9d4e3",
+                    },
+                    "layer": [
+                        {
+                            "transform": [
+                                {"filter": "datum.panel == 'lmt_matrix' && datum.activated"}
+                            ],
+                            "mark": {"type": "point", "filled": True, "size": 120},
+                            "encoding": {
+                                "x": {
+                                    "field": "month",
+                                    "type": "ordinal",
+                                    "axis": {
+                                        "title": None,
+                                        "labelAngle": 90,
+                                        "labelColor": "#c9d4e3",
+                                        "domain": False,
+                                    },
+                                },
+                                "y": {
+                                    "field": "tool",
+                                    "type": "ordinal",
+                                    "axis": {
+                                        "title": None,
+                                        "labelColor": "#c9d4e3",
+                                        "domain": False,
+                                        "labelFontSize": 11,
+                                    },
+                                    "sort": ["Swing", "Gate", "Suspension"],
+                                },
+                                "color": {"value": "#f5793b"},
+                                "tooltip": [
+                                    {"field": "month", "title": "Month"},
+                                    {"field": "tool", "title": "Tool"},
+                                    {"value": "Triggered", "title": "Status"},
+                                ],
+                            },
+                        },
+                        {
+                            "transform": [
+                                {"filter": "datum.panel == 'lmt_matrix' && !datum.activated"}
+                            ],
+                            "mark": {"type": "text", "text": "−", "fontSize": 14},
+                            "encoding": {
+                                "x": {
+                                    "field": "month",
+                                    "type": "ordinal",
+                                    "axis": {"title": None, "labels": False, "domain": False},
+                                },
+                                "y": {
+                                    "field": "tool",
+                                    "type": "ordinal",
+                                    "axis": None,
+                                    "sort": ["Swing", "Gate", "Suspension"],
+                                },
+                                "color": {"value": "#3a4a63"},
+                                "tooltip": [
+                                    {"field": "month", "title": "Month"},
+                                    {"field": "tool", "title": "Tool"},
+                                    {"value": "Not triggered", "title": "Status"},
+                                ],
+                            },
+                        },
+                    ],
+                },
+            ],
+            "resolve": {"scale": {"y": "independent"}},
+            "config": {
+                "view": {"fill": "#0d1424", "stroke": "transparent"},
+                "axis": {
+                    "domainColor": "#1c2740",
+                    "gridColor": "#1c2740",
+                    "labelFont": "system-ui",
+                    "labelFontSize": 11,
+                    "titleFont": "system-ui",
+                    "titleFontSize": 12,
+                },
+                "legend": {
+                    "labelColor": "#c9d4e3",
+                    "titleColor": "#c9d4e3",
+                    "labelFontSize": 11,
+                    "strokeColor": "#2a3a5a",
+                    "fillColor": "rgba(13,20,36,0.7)",
+                    "padding": 10,
+                },
+                "title": {"fontSize": 13, "fontWeight": 600, "color": "#c9d4e3", "anchor": "start"},
+            },
+        },
+        use_container_width=True,
+    )
+
+
+def _redemption_path_chart_rows(
+    *,
+    monthly_rows: list[dict[str, object]],
+    lmt_rows: list[dict[str, object]],
+) -> list[dict[str, object]]:
+    lmt_by_month = {row["month"]: row for row in lmt_rows}
+    chart_rows: list[dict[str, object]] = []
+    for row in monthly_rows:
+        month = row["month"]
+        lmt_row = lmt_by_month.get(month, {})
+        outcome = str(lmt_row.get("priority_outcome", "none")).replace("_", " ").title()
+        chart_rows.extend(
+            [
+                {
+                    "month": month,
+                    "series": "Paid redemption",
+                    "amount": float(row["paid_redemption"]),
+                    "kind": "bar",
+                    "panel": "redemption",
+                    "activation_assessment": outcome,
+                },
+                {
+                    "month": month,
+                    "series": "Deferred redemption",
+                    "amount": float(row["deferred_redemption"]),
+                    "kind": "bar",
+                    "panel": "redemption",
+                    "activation_assessment": outcome,
+                },
+                {
+                    "month": month,
+                    "series": "Backlog",
+                    "amount": float(row["cumulative_backlog"]),
+                    "kind": "line",
+                    "panel": "redemption",
+                    "activation_assessment": outcome,
+                },
+                {
+                    "month": month,
+                    "series": "Liquid NAV",
+                    "amount": float(row["liquid_nav"]),
+                    "kind": "area",
+                    "panel": "nav",
+                    "activation_assessment": outcome,
+                    "series_order": 1,
+                },
+                {
+                    "month": month,
+                    "series": "Illiquid NAV",
+                    "amount": float(row["illiquid_nav"]),
+                    "kind": "area",
+                    "panel": "nav",
+                    "activation_assessment": outcome,
+                    "series_order": 0,
+                },
+            ]
+        )
+    for row in lmt_rows:
+        month = row["month"]
+        for tool, field in [
+            ("Gate", "redemption_gate"),
+            ("Swing", "swing_pricing"),
+            ("Suspension", "suspension"),
+        ]:
+            chart_rows.append(
+                {
+                    "month": month,
+                    "tool": tool,
+                    "activated": row.get(field, False),
+                    "panel": "lmt_matrix",
+                }
+            )
+    return chart_rows
+
+
+def _month_axis() -> dict[str, object]:
+    return {
+        "field": "month",
+        "type": "ordinal",
+        "axis": {"title": None, "labelAngle": -90},
+    }
+
+
+def _amount_axis() -> dict[str, object]:
+    return {
+        "field": "amount",
+        "type": "quantitative",
+        "axis": {"title": None, "format": "~s"},
+    }
+
+
+def _path_chart_tooltips() -> list[dict[str, str]]:
+    return [
+        {"field": "month", "title": "Month"},
+        {"field": "series", "title": "Series"},
+        {"field": "amount", "title": "Amount", "format": ",.0f"},
+        {"field": "activation_assessment", "title": "Activation assessment"},
+    ]
+
+
+def _plot_background(dark_mode: bool) -> str:
+    return "#0e1117" if dark_mode else "#ffffff"
+
+
+def _vega_config(dark_mode: bool) -> dict[str, object]:
+    text_color = "#e8eaed" if dark_mode else "#1a1d21"
+    grid_color = "rgba(255,255,255,0.16)" if dark_mode else "rgba(0,0,0,0.10)"
+    return {
+        "view": {"fill": _plot_background(dark_mode), "stroke": "transparent"},
+        "axis": {
+            "domainColor": grid_color,
+            "gridColor": grid_color,
+            "labelColor": text_color,
+            "titleColor": text_color,
+        },
+        "legend": {"labelColor": text_color, "titleColor": text_color},
+    }
+
+
+def _render_monthly_redemption_demand_chart(rows: list[dict[str, object]]) -> None:
+    st.caption("Monthly new redemption demand by investor class")
+    frame = pd.DataFrame(rows)
+    if frame.empty:
+        st.info("No investor demand rows to display.")
+        return
+    frame["new_redemption_demand"] = frame["new_redemption_demand"].astype(float)
+    chart = frame.pivot_table(
+        index="month",
+        columns="client_class",
+        values="new_redemption_demand",
+        aggfunc="sum",
+        fill_value=0.0,
+    )
+    st.bar_chart(chart)
+
+
+def _render_paid_deferred_chart(rows: list[dict[str, object]]) -> None:
+    st.caption("Paid and deferred redemptions")
+    frame = _chart_frame(rows, ("paid_redemption", "deferred_redemption"))
+    if frame.empty:
+        st.info("No monthly rows to display.")
+        return
+    st.bar_chart(frame)
+
+
+def _render_cumulative_backlog_chart(rows: list[dict[str, object]]) -> None:
+    st.caption("Cumulative deferred redemption backlog")
+    frame = _chart_frame(rows, ("cumulative_backlog",))
+    if frame.empty:
+        st.info("No backlog rows to display.")
+        return
+    st.line_chart(frame)
+
+
+def _render_nav_evolution_chart(rows: list[dict[str, object]]) -> None:
+    st.caption("NAV evolution")
+    frame = _chart_frame(rows, ("opening_nav", "pre_lmt_nav", "closing_nav"))
+    if frame.empty:
+        st.info("No NAV rows to display.")
+        return
+    st.line_chart(frame)
+
+
+def _render_liquid_resource_chart(rows: list[dict[str, object]]) -> None:
+    st.caption("Remaining liquid resources and liquid NAV split")
+    frame = _chart_frame(rows, ("remaining_liquid_resources", "liquid_nav", "illiquid_nav"))
+    if frame.empty:
+        st.info("No liquidity rows to display.")
+        return
+    st.line_chart(frame)
+
+
+def _render_behavioural_feedback_chart(rows: list[dict[str, object]]) -> None:
+    st.caption("Behavioural feedback multipliers")
+    frame = pd.DataFrame(rows)
+    if frame.empty:
+        st.info("No behavioural feedback rows to display.")
+        return
+    frame["behavioural_feedback_multiplier"] = frame["behavioural_feedback_multiplier"].astype(
+        float
+    )
+    chart = frame.pivot_table(
+        index="month",
+        columns="client_class",
+        values="behavioural_feedback_multiplier",
+        aggfunc="mean",
+        fill_value=1.0,
+    )
+    st.line_chart(chart)
+
+
+def _render_lmt_timeline(rows: list[dict[str, object]]) -> None:
+    if not rows:
+        st.info("No LMT timeline rows to display.")
+        return
+    cards = ""
+    for row in rows:
+        pills = []
+        if row["swing_pricing"]:
+            pills.append(_badge("Swing", "info"))
+        if row["redemption_gate"]:
+            pills.append(_badge("Gate", "warning"))
+        if row["liquidity_buffer_breach"]:
+            pills.append(_badge("Buffer", "danger"))
+        if row["suspension"]:
+            pills.append(_badge("Suspension", "danger"))
+        if not pills:
+            pills.append(_badge("None", "neutral"))
+        priority = str(row["priority_outcome"]).replace("_", " ").title()
+        cards += (
+            "<div class='lmt-kpi'>"
+            f"<div class='k-label'>Month {row['month']}</div>"
+            f"<div class='k-value' style='font-size:1rem'>{escape(priority)}</div>"
+            f"<div style='line-height:1.8'>{''.join(pills)}</div>"
+            "</div>"
+        )
+    st.markdown(f"<div class='lmt-kpis'>{cards}</div>", unsafe_allow_html=True)
+
+
+def _chart_frame(
+    rows: list[dict[str, object]],
+    value_columns: tuple[str, ...],
+) -> pd.DataFrame:
+    frame = pd.DataFrame(rows)
+    if frame.empty:
+        return frame
+    chart = frame[["month", *value_columns]].copy()
+    for column in value_columns:
+        chart[column] = chart[column].astype(float)
+    return chart.set_index("month")
 
 
 def _render_header(result: DashboardResult) -> None:

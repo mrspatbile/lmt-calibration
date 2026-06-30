@@ -1,5 +1,8 @@
 """Integration tests for dashboard value wiring."""
 
+import importlib.util
+import inspect
+import sys
 from decimal import Decimal
 from pathlib import Path
 
@@ -124,3 +127,156 @@ def test_liquidation_result_available(sample_data):
     assert isinstance(result.minimum_cash_buffer_preserved, bool), (
         "buffer preservation should be bool"
     )
+
+
+def test_streamlit_app_imports_with_redemption_path_page():
+    """Verify the single Streamlit entry point imports with both page modes defined."""
+
+    module_path = Path("app/streamlit_app.py")
+    spec = importlib.util.spec_from_file_location("streamlit_app", module_path)
+    assert spec is not None
+    assert spec.loader is not None
+    app_module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(app_module)
+
+    assert hasattr(app_module, "main")
+    assert hasattr(app_module, "_render_redemption_path_page")
+
+
+def test_redemption_path_page_does_not_render_tables():
+    """Verify the 12-month page avoids tables and KPI cards."""
+
+    module_path = Path("app/streamlit_app.py")
+    spec = importlib.util.spec_from_file_location("streamlit_app", module_path)
+    assert spec is not None
+    assert spec.loader is not None
+    app_module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(app_module)
+
+    source = inspect.getsource(app_module._render_redemption_path_page)
+
+    assert "st.dataframe" not in source
+    assert "st.table" not in source
+    assert "_render_path_kpis" not in source
+    assert "Static liquidity profile" not in source
+    assert "_render_t0_liquidity_profile_chart" not in source
+    assert "plot_lmt_matrix" in source
+
+
+def test_redemption_path_controls_use_explicit_behavioural_feedback_terms() -> None:
+    app_source = Path("app/streamlit_app.py").read_text(encoding="utf-8")
+    service_source = Path("src/lmt_calibration/services/streamlit_mvp.py").read_text(
+        encoding="utf-8"
+    )
+
+    assert "behavioural_feedback_enabled" in app_source
+    assert "Behavioural feedback multiplier" in app_source
+    assert "contagion_enabled" not in app_source
+    assert "contagion_multiplier" not in app_source
+    assert "Contagion multiplier" not in app_source
+    assert "Use 0 for no" not in app_source
+    assert "contagion_enabled" not in service_source
+    assert "contagion_multiplier" not in service_source
+
+
+def test_redemption_path_matplotlib_charts_refresh_with_controls():
+    """Verify matplotlib charts refresh correctly when 12-month controls change.
+
+    Regression test for: chart refresh bug where redemption bars disappear
+    or do not refresh correctly when controls are modified.
+    """
+    import matplotlib
+
+    matplotlib.use("Agg")
+
+    sys.path.insert(0, "app")
+    from chart_matplotlib import (
+        plot_lmt_matrix,
+        plot_nav_evolution,
+        plot_redemption_and_nav_combined,
+        plot_redemption_profile,
+    )
+
+    # Sample monthly data with redemptions and NAV
+    monthly_rows = [
+        {
+            "month": 1,
+            "paid_redemption": Decimal("1200000"),
+            "deferred_redemption": Decimal("250000"),
+            "cumulative_backlog": Decimal("250000"),
+            "liquid_nav": Decimal("19000000"),
+            "illiquid_nav": Decimal("81000000"),
+        },
+        {
+            "month": 2,
+            "paid_redemption": Decimal("0"),
+            "deferred_redemption": Decimal("0"),
+            "cumulative_backlog": Decimal("0"),
+            "liquid_nav": Decimal("18000000"),
+            "illiquid_nav": Decimal("81500000"),
+        },
+    ]
+
+    initial_nav = Decimal("100000000")
+
+    # Verify redemption chart generates without error
+    fig1 = plot_redemption_profile(
+        monthly_rows=monthly_rows,
+        initial_nav=initial_nav,
+        fund_name="TestFund",
+        as_of_date="2026-01-15",
+    )
+    assert fig1 is not None
+    assert fig1.get_figwidth() > 0
+    assert fig1.get_figheight() > 0
+
+    # Verify NAV chart generates without error
+    fig2 = plot_nav_evolution(
+        monthly_rows=monthly_rows,
+        initial_nav=initial_nav,
+        fund_name="TestFund",
+        as_of_date="2026-01-15",
+    )
+    assert fig2 is not None
+    assert fig2.get_figwidth() > 0
+    assert fig2.get_figheight() > 0
+
+    lmt_rows = [
+        {
+            "month": 1,
+            "swing_pricing": True,
+            "redemption_gate": False,
+            "suspension": False,
+        },
+        {
+            "month": 2,
+            "swing_pricing": False,
+            "redemption_gate": True,
+            "suspension": False,
+        },
+    ]
+    fig3 = plot_lmt_matrix(
+        lmt_rows=lmt_rows,
+        fund_name="TestFund",
+        as_of_date="2026-01-15",
+    )
+    assert fig3 is not None
+    assert fig3.get_figwidth() > 0
+    assert fig3.get_figheight() > 0
+
+    fig4 = plot_redemption_and_nav_combined(
+        monthly_rows=monthly_rows,
+        initial_nav=initial_nav,
+        fund_name="TestFund",
+        as_of_date="2026-01-15",
+        dark_mode=False,
+    )
+    assert fig4.axes[0].get_facecolor()[:3] == (1.0, 1.0, 1.0)
+
+    fig5 = plot_lmt_matrix(
+        lmt_rows=lmt_rows,
+        fund_name="TestFund",
+        as_of_date="2026-01-15",
+        dark_mode=False,
+    )
+    assert fig5.axes[0].get_facecolor()[:3] == (1.0, 1.0, 1.0)
