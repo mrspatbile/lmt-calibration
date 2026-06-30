@@ -171,13 +171,9 @@ def validate_investor_class_records(records: object) -> list[dict[str, object]]:
     for index, record in enumerate(copied_records):
         location = record_location("investor_classes", index)
         validate_in_allowed(record, "client_class", SUPPORTED_CLIENT_CLASSES, location, issues)
-        for field_name in (
-            "nav_share_rate",
-            "base_redemption_rate",
-            "stress_redemption_rate",
-            "concentration_factor",
-        ):
+        for field_name in ("nav_share_rate", "base_redemption_rate", "stress_redemption_rate"):
             validate_decimal(record, field_name, location, issues, ge=Decimal("0"), le=Decimal("1"))
+        validate_decimal(record, "concentration_factor", location, issues, gt=Decimal("0"))
         validate_int(record, "notice_days", location, issues, ge=0)
         validate_int(record, "settlement_days", location, issues, ge=0)
 

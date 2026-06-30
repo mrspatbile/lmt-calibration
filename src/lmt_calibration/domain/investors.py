@@ -32,6 +32,6 @@ class InvestorClassProfile(BaseModel):
     nav_share_rate: Decimal = Field(ge=Decimal("0"), le=Decimal("1"))
     base_redemption_rate: Decimal = Field(ge=Decimal("0"), le=Decimal("1"))
     stress_redemption_rate: Decimal = Field(ge=Decimal("0"), le=Decimal("1"))
-    concentration_factor: Decimal = Field(ge=Decimal("0"), le=Decimal("1"))
+    concentration_factor: Decimal = Field(gt=Decimal("0"))
     notice_days: int = Field(ge=0)
     settlement_days: int = Field(ge=0)

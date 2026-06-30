@@ -2,12 +2,31 @@ import pytest
 
 from lmt_calibration.validation import (
     DataValidationError,
+    validate_investor_class_records,
     validate_liquidation_strategy_config,
     validate_market_stress_records,
     validate_position_records,
     validate_redemption_scenario_records,
     validate_scenario_definition_records,
 )
+
+
+def test_investor_class_validation_accepts_beta_concentration_above_one() -> None:
+    records = [
+        {
+            "fund_id": "lux_dynamic_allocation",
+            "as_of_date": "2026-06-30",
+            "client_class": "retail",
+            "nav_share_rate": "1",
+            "base_redemption_rate": "0.02",
+            "stress_redemption_rate": "0.10",
+            "concentration_factor": "150",
+            "notice_days": 1,
+            "settlement_days": 3,
+        }
+    ]
+
+    assert validate_investor_class_records(records) == records
 
 
 def test_valid_liquidation_strategy_config_accepts_custom_weights() -> None:

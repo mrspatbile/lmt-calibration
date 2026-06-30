@@ -178,7 +178,7 @@ Required fields:
 | `nav_share_rate` | Share of fund NAV | decimal string, 0 to 1 |
 | `base_redemption_rate` | Base redemption assumption | decimal string, 0 to 1 |
 | `stress_redemption_rate` | Stressed redemption assumption | decimal string, 0 to 1 |
-| `concentration_factor` | Investor concentration proxy | decimal string, 0 to 1 |
+| `concentration_factor` | Beta distribution concentration parameter for normal-period redemption sampling | positive decimal string |
 | `notice_days` | Redemption notice period | integer days |
 | `settlement_days` | Redemption settlement timing | integer days |
 

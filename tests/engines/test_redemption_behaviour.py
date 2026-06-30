@@ -15,18 +15,18 @@ from lmt_calibration.engines.redemption_behaviour import (
 def test_estimate_beta_parameters_uses_approved_formula() -> None:
     parameters = estimate_beta_parameters(
         mean_rate=Decimal("0.20"),
-        concentration_factor=Decimal("0.50"),
+        concentration_factor=Decimal("150"),
     )
 
-    assert parameters.alpha == Decimal("0.1000")
-    assert parameters.beta == Decimal("0.4000")
+    assert parameters.alpha == Decimal("30.00")
+    assert parameters.beta == Decimal("120.00")
 
 
 def test_estimate_beta_parameters_requires_valid_inputs() -> None:
     with pytest.raises(RedemptionBehaviourError, match="mean_rate"):
         estimate_beta_parameters(
             mean_rate=Decimal("1.10"),
-            concentration_factor=Decimal("0.50"),
+            concentration_factor=Decimal("150"),
         )
 
     with pytest.raises(RedemptionBehaviourError, match="concentration_factor"):
@@ -113,7 +113,7 @@ def _investor(
         nav_share_rate=Decimal("0.50"),
         base_redemption_rate=Decimal(base_rate),
         stress_redemption_rate=Decimal(stress_rate),
-        concentration_factor=Decimal("0.50"),
+        concentration_factor=Decimal("150"),
         notice_days=1,
         settlement_days=3,
     )
