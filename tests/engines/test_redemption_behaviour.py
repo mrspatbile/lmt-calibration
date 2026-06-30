@@ -43,16 +43,14 @@ def test_monthly_rate_is_deterministic_for_fixed_seed() -> None:
         investor=investor,
         month_number=1,
         stress_months=(),
-        behavioural_multiplier=Decimal("1"),
-        contagion_multiplier=Decimal("1"),
+        behavioural_feedback_multiplier=Decimal("1"),
         rng=Random(11),
     )
     second = monthly_redemption_rate_for_class(
         investor=investor,
         month_number=1,
         stress_months=(),
-        behavioural_multiplier=Decimal("1"),
-        contagion_multiplier=Decimal("1"),
+        behavioural_feedback_multiplier=Decimal("1"),
         rng=Random(11),
     )
 
@@ -60,15 +58,14 @@ def test_monthly_rate_is_deterministic_for_fixed_seed() -> None:
     assert first.applied_redemption_rate == second.applied_redemption_rate
 
 
-def test_stress_month_replaces_sample_then_applies_multipliers_and_cap() -> None:
+def test_stress_month_replaces_sample_then_applies_behavioural_feedback_and_cap() -> None:
     investor = _investor(ClientClass.PLATFORM, base_rate="0.01", stress_rate="0.80")
 
     rate = monthly_redemption_rate_for_class(
         investor=investor,
         month_number=2,
         stress_months=(2,),
-        behavioural_multiplier=Decimal("1.50"),
-        contagion_multiplier=Decimal("1.10"),
+        behavioural_feedback_multiplier=Decimal("1.50"),
         rng=Random(4),
     )
 
@@ -90,14 +87,26 @@ def test_monthly_demands_use_current_investor_balances() -> None:
         },
         month_number=1,
         stress_months=(1,),
-        behavioural_multipliers={ClientClass.RETAIL: Decimal("2")},
-        contagion_multiplier=Decimal("1"),
+        behavioural_feedback_multipliers={ClientClass.RETAIL: Decimal("2")},
         rng=Random(3),
     )
 
     by_class = {demand.client_class: demand for demand in demands}
     assert by_class[ClientClass.RETAIL].redemption_amount == Decimal("80.0")
     assert by_class[ClientClass.INSTITUTIONAL].redemption_amount == Decimal("120.0")
+
+
+def test_behavioural_feedback_multiplier_below_one_is_invalid() -> None:
+    investor = _investor(ClientClass.RETAIL, base_rate="0.08", stress_rate="0.25")
+
+    with pytest.raises(RedemptionBehaviourError, match="at least 1"):
+        monthly_redemption_rate_for_class(
+            investor=investor,
+            month_number=1,
+            stress_months=(),
+            behavioural_feedback_multiplier=Decimal("0.99"),
+            rng=Random(11),
+        )
 
 
 def _investor(

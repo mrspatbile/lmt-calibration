@@ -57,18 +57,15 @@ def monthly_redemption_rate_for_class(
     investor: InvestorClassProfile,
     month_number: int,
     stress_months: Sequence[int],
-    behavioural_multiplier: Decimal,
-    contagion_multiplier: Decimal,
+    behavioural_feedback_multiplier: Decimal,
     rng: Random,
 ) -> InvestorClassRedemptionRate:
     """Return the monthly redemption rate selected for one investor class."""
 
     if month_number < 1:
         raise RedemptionBehaviourError("month_number must be positive")
-    if behavioural_multiplier < ZERO:
-        raise RedemptionBehaviourError("behavioural_multiplier must be non-negative")
-    if contagion_multiplier < ZERO:
-        raise RedemptionBehaviourError("contagion_multiplier must be non-negative")
+    if behavioural_feedback_multiplier < ONE:
+        raise RedemptionBehaviourError("behavioural_feedback_multiplier must be at least 1")
 
     beta_parameters = estimate_beta_parameters(
         mean_rate=investor.base_redemption_rate,
@@ -79,10 +76,7 @@ def monthly_redemption_rate_for_class(
     starting_rate = (
         investor.stress_redemption_rate if stress_override_applied else sampled_redemption_rate
     )
-    applied_redemption_rate = min(
-        starting_rate * behavioural_multiplier * contagion_multiplier,
-        ONE,
-    )
+    applied_redemption_rate = min(starting_rate * behavioural_feedback_multiplier, ONE)
 
     return InvestorClassRedemptionRate(
         client_class=investor.client_class,
@@ -90,8 +84,7 @@ def monthly_redemption_rate_for_class(
         sampled_redemption_rate=sampled_redemption_rate,
         applied_redemption_rate=applied_redemption_rate,
         stress_override_applied=stress_override_applied,
-        behavioural_multiplier=behavioural_multiplier,
-        contagion_multiplier=contagion_multiplier,
+        behavioural_feedback_multiplier=behavioural_feedback_multiplier,
     )
 
 
@@ -101,8 +94,7 @@ def calculate_monthly_redemption_demands(
     investor_balances: Mapping[ClientClass, Decimal],
     month_number: int,
     stress_months: Sequence[int],
-    behavioural_multipliers: Mapping[ClientClass, Decimal],
-    contagion_multiplier: Decimal,
+    behavioural_feedback_multipliers: Mapping[ClientClass, Decimal],
     rng: Random,
 ) -> tuple[InvestorClassRedemptionDemand, ...]:
     """Aggregate monthly redemption demand across investor classes."""
@@ -114,8 +106,10 @@ def calculate_monthly_redemption_demands(
             investor=investor,
             month_number=month_number,
             stress_months=stress_months,
-            behavioural_multiplier=behavioural_multipliers.get(investor.client_class, ONE),
-            contagion_multiplier=contagion_multiplier,
+            behavioural_feedback_multiplier=behavioural_feedback_multipliers.get(
+                investor.client_class,
+                ONE,
+            ),
             rng=rng,
         )
         redemption_amount = opening_balance * rate_detail.applied_redemption_rate

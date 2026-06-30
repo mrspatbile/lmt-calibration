@@ -40,7 +40,7 @@ The current methodology does not include:
 * intra-period liquidation schedules
 * deferred-redemption backlogs across periods
 * behavioural feedback after an LMT diagnostic state
-* reverse stress testing or asset-side contagion
+* reverse stress testing or market contagion affecting asset-side conditions
 * nonlinear price-impact or market-volume models
 * live market data
 * production legal, tax, or regulatory decision rules
@@ -322,7 +322,7 @@ Potential extensions outside the current methodology include:
 * reverse stress testing
 * behavioural feedback after threshold diagnostics
 * nonlinear or volume-based market impact
-* asset-side contagion
+* market contagion affecting asset-side conditions
 * simultaneous liquidation-strategy comparison
 * live market-data calibration
 

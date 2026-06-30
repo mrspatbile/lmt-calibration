@@ -20,7 +20,7 @@ from lmt_calibration.domain import (
     LiquidityStress,
     LmtParameters,
     MarketStress,
-    MonthlyBehaviourAdjustment,
+    MonthlyBehaviouralFeedbackAdjustment,
     MonthlyPathLmtAssessment,
     MonthlyRedemptionPathResult,
     MonthlySimulationPeriod,
@@ -73,7 +73,7 @@ def run_redemption_path(
     investor_balances = _initial_investor_balances(fund, investor_profiles)
     backlog: tuple[DeferredRedemptionBacklogEntry, ...] = ()
     monthly_results: list[MonthlyRedemptionPathResult] = []
-    behaviour_adjustment = _neutral_behaviour_adjustment(investor_profiles)
+    behavioural_feedback_adjustment = _neutral_behavioural_feedback_adjustment(investor_profiles)
 
     for month_number in range(1, assumptions.horizon_months + 1):
         period = _monthly_period(assumptions.start_date, month_number)
@@ -99,8 +99,9 @@ def run_redemption_path(
             investor_balances=investor_balances,
             month_number=month_number,
             stress_months=assumptions.stress_months,
-            behavioural_multipliers=behaviour_adjustment.behavioural_multipliers,
-            contagion_multiplier=behaviour_adjustment.contagion_multiplier,
+            behavioural_feedback_multipliers=(
+                behavioural_feedback_adjustment.behavioural_feedback_multipliers
+            ),
             rng=rng,
         )
         effective_total = _effective_redemption_total(demands, backlog)
@@ -184,7 +185,7 @@ def run_redemption_path(
                 opening_cash=opening_cash,
                 closing_cash=closing_cash,
                 contractual_cashflow_amount=contractual_cashflow_amount,
-                behaviour_adjustment=behaviour_adjustment,
+                behavioural_feedback_adjustment=behavioural_feedback_adjustment,
                 investor_class_states=investor_states,
                 backlog=backlog,
                 positions=carried_positions,
@@ -192,7 +193,7 @@ def run_redemption_path(
                 lmt_assessment=lmt_assessment,
             )
         )
-        behaviour_adjustment = _next_behaviour_adjustment(
+        behavioural_feedback_adjustment = _next_behavioural_feedback_adjustment(
             assumptions=assumptions,
             investor_profiles=investor_profiles,
             source_outcome=lmt_assessment.priority_outcome,
@@ -205,36 +206,36 @@ def run_redemption_path(
     )
 
 
-def _neutral_behaviour_adjustment(
+def _neutral_behavioural_feedback_adjustment(
     investor_profiles: Sequence[InvestorClassProfile],
-) -> MonthlyBehaviourAdjustment:
-    return MonthlyBehaviourAdjustment(
+) -> MonthlyBehaviouralFeedbackAdjustment:
+    return MonthlyBehaviouralFeedbackAdjustment(
         source_outcome=PathLmtOutcome.NONE,
-        behavioural_multipliers={investor.client_class: ONE for investor in investor_profiles},
-        contagion_multiplier=ONE,
+        behavioural_feedback_multipliers={
+            investor.client_class: ONE for investor in investor_profiles
+        },
     )
 
 
-def _next_behaviour_adjustment(
+def _next_behavioural_feedback_adjustment(
     *,
     assumptions: RedemptionPathAssumptions,
     investor_profiles: Sequence[InvestorClassProfile],
     source_outcome: PathLmtOutcome,
-) -> MonthlyBehaviourAdjustment:
-    feedback_multipliers = assumptions.behavioural_feedback_multipliers.get(
+) -> MonthlyBehaviouralFeedbackAdjustment:
+    behavioural_feedback_multipliers = assumptions.behavioural_feedback_multipliers_by_outcome.get(
         source_outcome,
         {},
     )
-    return MonthlyBehaviourAdjustment(
+    return MonthlyBehaviouralFeedbackAdjustment(
         source_outcome=source_outcome,
-        behavioural_multipliers={
-            investor.client_class: feedback_multipliers.get(investor.client_class, ONE)
+        behavioural_feedback_multipliers={
+            investor.client_class: behavioural_feedback_multipliers.get(
+                investor.client_class,
+                ONE,
+            )
             for investor in investor_profiles
         },
-        contagion_multiplier=assumptions.contagion_multipliers_by_outcome.get(
-            source_outcome,
-            ONE,
-        ),
     )
 
 

@@ -64,6 +64,17 @@ def test_walkthrough_notebook_does_not_use_obsolete_calculation_helpers() -> Non
         assert f"def {helper_name}" not in helper_source
 
 
+def test_walkthrough_separates_behavioural_feedback_from_market_contagion() -> None:
+    """Verify the walkthrough does not describe redemption feedback as contagion."""
+
+    source = _notebook_source(WALKTHROUGH_NOTEBOOK)
+
+    assert "behavioural_feedback_enabled" in source
+    assert "Market contagion is not implemented" in source
+    assert "contagion_enabled" not in source
+    assert "contagion_multiplier" not in source
+
+
 def test_inspection_notebook_is_marked_as_low_level_diagnostic() -> None:
     """Verify the inspection notebook is clearly distinguished from app workflow."""
 

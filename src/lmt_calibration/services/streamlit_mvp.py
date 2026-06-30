@@ -12,6 +12,7 @@ from pathlib import Path
 from lmt_calibration.domain import (
     AssetGroup,
     AssetPosition,
+    ClientClass,
     FundSnapshot,
     HistoricalMarketStressScenarioLibrary,
     InvestorClassProfile,
@@ -20,12 +21,17 @@ from lmt_calibration.domain import (
     LiquidityStress,
     LmtParameters,
     MarketStress,
+    PathLmtOutcome,
+    PathPositionState,
+    RedemptionPathAssumptions,
+    RedemptionPathResult,
     RedemptionScenario,
     ScenarioDefinition,
 )
 from lmt_calibration.engines import StressedLiquidationPosition, calculate_liquidation_strategy
 from lmt_calibration.engines.liquidity_cost import estimate_liquidity_cost_breakdown
 from lmt_calibration.engines.lmt_activation import LmtActivationResult, assess_lmt_impact
+from lmt_calibration.engines.redemption_path import run_redemption_path
 from lmt_calibration.loaders import (
     load_funds_csv,
     load_historical_market_stress_scenarios_json,
@@ -47,6 +53,13 @@ SELLABLE_GROUPS = {
     AssetGroup.LISTED_ETF,
     AssetGroup.LISTED_EQUITY,
 }
+
+LIQUIDITY_BUCKETS = (
+    "Cash",
+    "0-7 days",
+    "8-30 days",
+    ">30 days / constrained",
+)
 
 
 @dataclass(frozen=True)
@@ -103,6 +116,25 @@ class ScenarioMatrixOutcome:
     current_post_lmt_nav: Decimal
     remaining_liquid_buffer_rate_before_lmt: Decimal
     remaining_liquid_buffer_rate_after_lmt: Decimal
+
+
+@dataclass(frozen=True)
+class AppRedemptionPathRun:
+    """Selected sample redemption-path run and presentation-ready rows."""
+
+    scenario: ScenarioDefinition
+    fund: FundSnapshot
+    redemption: RedemptionScenario
+    market_stress: MarketStress | None
+    liquidity_stress: LiquidityStress
+    strategy: LiquidationStrategyConfig
+    parameters: LmtParameters
+    result: RedemptionPathResult
+    liquidity_profile_rows: list[dict[str, object]]
+    monthly_rows: list[dict[str, object]]
+    investor_rows: list[dict[str, object]]
+    lmt_timeline_rows: list[dict[str, object]]
+    configuration_rows: list[dict[str, object]]
 
 
 def build_scenario_matrix_outcome(run: AppScenarioRun) -> ScenarioMatrixOutcome:
@@ -352,6 +384,277 @@ def build_historical_result_rows(
     return rows
 
 
+def run_sample_redemption_path(
+    inputs: AppSampleData,
+    *,
+    fund_id: str,
+    strategy_id: str,
+    redemption_scenario_id: str,
+    lmt_parameters_override: LmtParameters | None,
+    stress_months: tuple[int, ...],
+    random_seed: int,
+    market_stress_id: str | None,
+    market_stress_month: int | None,
+    behavioural_feedback_enabled: bool,
+    behavioural_feedback_multiplier: Decimal,
+) -> AppRedemptionPathRun:
+    """Assemble sample inputs and run the fixed monthly redemption path."""
+
+    scenario = _scenario_for_selection(inputs, fund_id=fund_id, strategy_id=strategy_id)
+    scenario = scenario.model_copy(update={"redemption_scenario_id": redemption_scenario_id})
+    fund = inputs.fund_by_key[(scenario.fund_id, scenario.as_of_date)]
+    redemption = inputs.redemption_by_id[redemption_scenario_id]
+    liquidity_stress = inputs.liquidity_stress_by_id[scenario.liquidity_stress_id]
+    strategy = inputs.strategy_by_id[strategy_id]
+    parameters = (
+        lmt_parameters_override
+        or inputs.parameters_by_key[
+            (scenario.fund_id, scenario.as_of_date, scenario.lmt_parameter_set_id)
+        ]
+    )
+    market_stress = (
+        inputs.market_stress_by_id[market_stress_id] if market_stress_id is not None else None
+    )
+    investor_profiles = _path_investors(inputs, scenario, redemption)
+    positions = fund_positions(inputs, fund)
+    assumptions = RedemptionPathAssumptions(
+        scenario_id=f"{scenario.scenario_id}_redemption_path",
+        start_date=fund.as_of_date,
+        stress_months=stress_months,
+        market_stress_month=market_stress_month,
+        random_seed=random_seed,
+        behavioural_feedback_multipliers_by_outcome=(
+            _behavioural_feedback_multipliers_by_outcome(
+                investor_profiles,
+                behavioural_feedback_enabled=behavioural_feedback_enabled,
+                behavioural_feedback_multiplier=behavioural_feedback_multiplier,
+            )
+        ),
+    )
+    result = run_redemption_path(
+        fund=fund,
+        positions=positions,
+        investor_profiles=investor_profiles,
+        liquidity_stress=liquidity_stress,
+        liquidation_strategy=strategy,
+        lmt_parameters=parameters,
+        assumptions=assumptions,
+        market_stress=market_stress,
+    )
+
+    liquidity_profile_rows = build_t0_liquidity_profile_rows(positions)
+    monthly_rows = build_redemption_path_monthly_rows(result)
+    investor_rows = build_redemption_path_investor_rows(result)
+    lmt_timeline_rows = build_redemption_path_lmt_timeline_rows(result)
+    configuration_rows = build_redemption_path_configuration_rows(
+        run=result,
+        market_stress=market_stress,
+        redemption=redemption,
+        strategy=strategy,
+        parameters=parameters,
+        stress_months=stress_months,
+        behavioural_feedback_enabled=behavioural_feedback_enabled,
+        behavioural_feedback_multiplier=behavioural_feedback_multiplier,
+    )
+
+    return AppRedemptionPathRun(
+        scenario=scenario,
+        fund=fund,
+        redemption=redemption,
+        market_stress=market_stress,
+        liquidity_stress=liquidity_stress,
+        strategy=strategy,
+        parameters=parameters,
+        result=result,
+        liquidity_profile_rows=liquidity_profile_rows,
+        monthly_rows=monthly_rows,
+        investor_rows=investor_rows,
+        lmt_timeline_rows=lmt_timeline_rows,
+        configuration_rows=configuration_rows,
+    )
+
+
+def build_t0_liquidity_profile_rows(
+    positions: list[AssetPosition],
+) -> list[dict[str, object]]:
+    """Return t0 liquid-resource rows by liquidity bucket for display."""
+
+    rows_by_bucket: dict[str, dict[str, object]] = {
+        bucket: {
+            "liquidity_bucket": bucket,
+            "nav_amount": ZERO,
+            "liquid_resources": ZERO,
+            "unavailable_nav": ZERO,
+            "bucket_order": _liquidity_bucket_order(bucket),
+        }
+        for bucket in LIQUIDITY_BUCKETS
+    }
+    for position in positions:
+        market_value = position.market_value or ZERO
+        if market_value <= ZERO:
+            continue
+        bucket = _liquidity_bucket(position)
+        liquid_resources = _t0_liquid_resources(position, market_value)
+        row = rows_by_bucket[bucket]
+        row["nav_amount"] = Decimal(str(row["nav_amount"])) + market_value
+        row["liquid_resources"] = Decimal(str(row["liquid_resources"])) + liquid_resources
+        row["unavailable_nav"] = Decimal(str(row["unavailable_nav"])) + max(
+            market_value - liquid_resources,
+            ZERO,
+        )
+
+    return sorted(
+        rows_by_bucket.values(),
+        key=lambda row: _liquidity_bucket_order(str(row["liquidity_bucket"])),
+    )
+
+
+def build_redemption_path_monthly_rows(
+    result: RedemptionPathResult,
+) -> list[dict[str, object]]:
+    """Return monthly redemption-path rows for charts and tables."""
+
+    rows: list[dict[str, object]] = []
+    for month in result.monthly_results:
+        new_demand = sum(
+            (state.new_redemption_amount for state in month.investor_class_states),
+            ZERO,
+        )
+        effective_demand = sum(
+            (state.effective_redemption_amount for state in month.investor_class_states),
+            ZERO,
+        )
+        paid_redemption = sum(
+            (state.paid_redemption_amount for state in month.investor_class_states),
+            ZERO,
+        )
+        deferred_redemption = sum(
+            (state.deferred_redemption_amount for state in month.investor_class_states),
+            ZERO,
+        )
+        backlog_amount = sum((entry.remaining_amount for entry in month.backlog), ZERO)
+        liquid_nav = _liquid_nav(month.positions)
+        rows.append(
+            {
+                "month": month.period.month_number,
+                "month_start": month.period.month_start,
+                "month_end": month.period.month_end,
+                "new_redemption_demand": new_demand,
+                "effective_redemption_demand": effective_demand,
+                "paid_redemption": paid_redemption,
+                "deferred_redemption": deferred_redemption,
+                "cumulative_backlog": backlog_amount,
+                "opening_nav": month.opening_nav,
+                "pre_lmt_nav": month.pre_lmt_nav,
+                "closing_nav": month.closing_nav,
+                "opening_cash": month.opening_cash,
+                "closing_cash": month.closing_cash,
+                "remaining_liquid_resources": month.liquidation_result.remaining_liquid_resources,
+                "remaining_liquid_buffer_rate": (month.lmt_assessment.remaining_liquid_buffer_rate),
+                "liquid_nav": liquid_nav,
+                "illiquid_nav": max(month.closing_nav - liquid_nav, ZERO),
+                "market_stress_applied": month.market_stress_applied,
+                "priority_outcome": month.lmt_assessment.priority_outcome.value,
+                "behavioural_feedback_source_outcome": (
+                    month.behavioural_feedback_adjustment.source_outcome.value
+                ),
+                "swing_activated": month.lmt_assessment.swing_activated,
+                "gate_activated": month.lmt_assessment.gate_activated,
+                "buffer_breached": month.lmt_assessment.buffer_breached,
+            }
+        )
+    return rows
+
+
+def build_redemption_path_investor_rows(
+    result: RedemptionPathResult,
+) -> list[dict[str, object]]:
+    """Return investor-class monthly rows for charts and tables."""
+
+    rows: list[dict[str, object]] = []
+    for month in result.monthly_results:
+        for state in month.investor_class_states:
+            rows.append(
+                {
+                    "month": month.period.month_number,
+                    "client_class": state.client_class.value,
+                    "opening_balance": state.opening_balance,
+                    "new_redemption_demand": state.new_redemption_amount,
+                    "opening_backlog": state.opening_backlog_amount,
+                    "effective_redemption_demand": state.effective_redemption_amount,
+                    "paid_redemption": state.paid_redemption_amount,
+                    "deferred_redemption": state.deferred_redemption_amount,
+                    "closing_balance": state.closing_balance,
+                    "redemption_rate": state.redemption_rate,
+                    "behavioural_feedback_multiplier": (
+                        month.behavioural_feedback_adjustment.behavioural_feedback_multipliers.get(
+                            state.client_class,
+                            ONE,
+                        )
+                    ),
+                    "behavioural_feedback_source_outcome": (
+                        month.behavioural_feedback_adjustment.source_outcome.value
+                    ),
+                }
+            )
+    return rows
+
+
+def build_redemption_path_lmt_timeline_rows(
+    result: RedemptionPathResult,
+) -> list[dict[str, object]]:
+    """Return month-level LMT outcome rows."""
+
+    return [
+        {
+            "month": month.period.month_number,
+            "swing_pricing": month.lmt_assessment.swing_activated,
+            "redemption_gate": month.lmt_assessment.gate_activated,
+            "liquidity_buffer_breach": month.lmt_assessment.buffer_breached,
+            "suspension": month.lmt_assessment.suspension_applied,
+            "priority_outcome": month.lmt_assessment.priority_outcome.value,
+            "paid_redemption": month.lmt_assessment.paid_redemption_amount,
+            "deferred_redemption": month.lmt_assessment.deferred_redemption_amount,
+            "swing_recovery": month.lmt_assessment.swing_recovery_amount,
+        }
+        for month in result.monthly_results
+    ]
+
+
+def build_redemption_path_configuration_rows(
+    *,
+    run: RedemptionPathResult,
+    market_stress: MarketStress | None,
+    redemption: RedemptionScenario,
+    strategy: LiquidationStrategyConfig,
+    parameters: LmtParameters,
+    stress_months: tuple[int, ...],
+    behavioural_feedback_enabled: bool,
+    behavioural_feedback_multiplier: Decimal,
+) -> list[dict[str, object]]:
+    """Return compact configuration rows for display."""
+
+    return [
+        {"setting": "Scenario", "value": run.scenario_id},
+        {"setting": "Redemption scenario", "value": redemption.name},
+        {"setting": "Redemption-stress months", "value": _month_list_label(stress_months)},
+        {
+            "setting": "Market stress scenario",
+            "value": market_stress.name if market_stress is not None else "No market stress",
+        },
+        {"setting": "Liquidation strategy", "value": strategy.name},
+        {"setting": "Random seed", "value": run.random_seed},
+        {"setting": "Swing threshold", "value": parameters.swing_threshold_rate},
+        {"setting": "Gate threshold", "value": parameters.gate_threshold_rate},
+        {"setting": "Liquidity buffer target", "value": parameters.minimum_buffer_rate},
+        {
+            "setting": "Behavioural feedback",
+            "value": behavioural_feedback_multiplier if behavioural_feedback_enabled else "Off",
+        },
+        {"setting": "Market contagion", "value": "Not implemented"},
+    ]
+
+
 def fund_positions(inputs: AppSampleData, fund: FundSnapshot) -> list[AssetPosition]:
     """Return raw loaded positions for one fund snapshot."""
 
@@ -391,6 +694,48 @@ def _scenario_investors(
         for investor in inputs.investor_classes
         if investor.fund_id == scenario.fund_id and investor.as_of_date == scenario.as_of_date
     ]
+
+
+def _path_investors(
+    inputs: AppSampleData,
+    scenario: ScenarioDefinition,
+    redemption: RedemptionScenario,
+) -> list[InvestorClassProfile]:
+    """Return investor assumptions adjusted by the selected redemption scenario."""
+
+    investors = _scenario_investors(inputs, scenario)
+    return [
+        investor.model_copy(
+            update={
+                "stress_redemption_rate": min(
+                    investor.stress_redemption_rate * redemption.redemption_multiplier,
+                    ONE,
+                )
+            }
+        )
+        for investor in investors
+    ]
+
+
+def _behavioural_feedback_multipliers_by_outcome(
+    investor_profiles: list[InvestorClassProfile],
+    *,
+    behavioural_feedback_enabled: bool,
+    behavioural_feedback_multiplier: Decimal,
+) -> dict[PathLmtOutcome, dict[ClientClass, Decimal]]:
+    if not behavioural_feedback_enabled:
+        return {}
+    if behavioural_feedback_multiplier < ONE:
+        raise ValueError("behavioural_feedback_multiplier must be at least 1 when enabled")
+
+    multipliers_by_class = {
+        investor.client_class: behavioural_feedback_multiplier for investor in investor_profiles
+    }
+    return {
+        PathLmtOutcome.SWING_PRICING: multipliers_by_class,
+        PathLmtOutcome.REDEMPTION_GATE: multipliers_by_class,
+        PathLmtOutcome.LIQUIDITY_BUFFER_BREACH: multipliers_by_class,
+    }
 
 
 def _total_redemption_amount(inputs: AppSampleData, scenario: ScenarioDefinition) -> Decimal:
@@ -519,3 +864,59 @@ def _asset_group_market_values(
             values.get(position.asset_group, ZERO) + position.stressed_market_value
         )
     return values
+
+
+def _liquid_nav(positions: tuple[PathPositionState, ...]) -> Decimal:
+    liquid_groups = {
+        AssetGroup.CASH,
+        AssetGroup.REVERSE_REPO,
+        AssetGroup.LISTED_ETF,
+        AssetGroup.LISTED_EQUITY,
+    }
+    return sum(
+        (position.market_value for position in positions if position.asset_group in liquid_groups),
+        ZERO,
+    )
+
+
+def _liquidity_bucket(position: AssetPosition) -> str:
+    if position.asset_group is AssetGroup.CASH:
+        return "Cash"
+
+    liquidity_days = _liquidity_days(position)
+    if liquidity_days <= 7:
+        return "0-7 days"
+    if liquidity_days <= 30:
+        return "8-30 days"
+    return ">30 days / constrained"
+
+
+def _liquidity_days(position: AssetPosition) -> int:
+    maturity_days = position.maturity_days or 0
+    if position.asset_group is AssetGroup.REVERSE_REPO:
+        return maturity_days + position.settlement_days
+    return position.settlement_days
+
+
+def _t0_liquid_resources(position: AssetPosition, market_value: Decimal) -> Decimal:
+    if position.asset_group is AssetGroup.CASH:
+        return market_value
+    if position.asset_group not in SELLABLE_GROUPS:
+        return ZERO
+    return market_value * position.base_liquidity_capacity_rate
+
+
+def _liquidity_bucket_order(bucket: str) -> int:
+    order_by_bucket = {
+        "Cash": 1,
+        "0-7 days": 2,
+        "8-30 days": 3,
+        ">30 days / constrained": 4,
+    }
+    return order_by_bucket[bucket]
+
+
+def _month_list_label(months: tuple[int, ...]) -> str:
+    if not months:
+        return "None"
+    return ", ".join(str(month) for month in months)

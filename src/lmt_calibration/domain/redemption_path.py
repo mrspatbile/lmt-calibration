@@ -15,7 +15,7 @@ ONE = Decimal("1")
 
 
 class PathLmtOutcome(StrEnum):
-    """LMT outcome used for one-month investor behaviour feedback."""
+    """LMT outcome used for one-month behavioural feedback."""
 
     SUSPENSION = "suspension"
     REDEMPTION_GATE = "redemption_gate"
@@ -63,8 +63,7 @@ class InvestorClassRedemptionRate(BaseModel):
     sampled_redemption_rate: Decimal = Field(ge=ZERO, le=ONE)
     applied_redemption_rate: Decimal = Field(ge=ZERO, le=ONE)
     stress_override_applied: bool
-    behavioural_multiplier: Decimal = Field(ge=ZERO)
-    contagion_multiplier: Decimal = Field(ge=ZERO)
+    behavioural_feedback_multiplier: Decimal = Field(ge=ONE)
 
 
 class InvestorClassRedemptionDemand(BaseModel):
@@ -91,51 +90,23 @@ class RedemptionPathAssumptions(BaseModel):
     stress_months: tuple[int, ...] = ()
     market_stress_month: int | None = None
     random_seed: int = Field(ge=0)
-    behavioural_multipliers: dict[ClientClass, Decimal] = Field(default_factory=dict)
-    contagion_multiplier: Decimal = Field(default=ONE, ge=ZERO)
-    behavioural_feedback_multipliers: dict[PathLmtOutcome, dict[ClientClass, Decimal]] = Field(
-        default_factory=dict
-    )
-    contagion_multipliers_by_outcome: dict[PathLmtOutcome, Decimal] = Field(default_factory=dict)
+    behavioural_feedback_multipliers_by_outcome: dict[
+        PathLmtOutcome, dict[ClientClass, Decimal]
+    ] = Field(default_factory=dict)
     days_per_month: int = Field(default=30, gt=0)
 
-    @field_validator("behavioural_multipliers")
-    @classmethod
-    def validate_behavioural_multipliers(
-        cls, value: dict[ClientClass, Decimal]
-    ) -> dict[ClientClass, Decimal]:
-        """Require non-negative behavioural multipliers."""
-
-        for multiplier in value.values():
-            if multiplier < ZERO:
-                raise ValueError("behavioural multipliers must be non-negative")
-        return value
-
-    @field_validator("behavioural_feedback_multipliers")
+    @field_validator("behavioural_feedback_multipliers_by_outcome")
     @classmethod
     def validate_behavioural_feedback_multipliers(
         cls,
         value: dict[PathLmtOutcome, dict[ClientClass, Decimal]],
     ) -> dict[PathLmtOutcome, dict[ClientClass, Decimal]]:
-        """Require non-negative feedback multipliers."""
+        """Require behavioural feedback multipliers of at least 1."""
 
         for multipliers_by_class in value.values():
             for multiplier in multipliers_by_class.values():
-                if multiplier < ZERO:
-                    raise ValueError("behavioural feedback multipliers must be non-negative")
-        return value
-
-    @field_validator("contagion_multipliers_by_outcome")
-    @classmethod
-    def validate_contagion_multipliers_by_outcome(
-        cls,
-        value: dict[PathLmtOutcome, Decimal],
-    ) -> dict[PathLmtOutcome, Decimal]:
-        """Require non-negative contagion multipliers."""
-
-        for multiplier in value.values():
-            if multiplier < ZERO:
-                raise ValueError("contagion multipliers must be non-negative")
+                if multiplier < ONE:
+                    raise ValueError("behavioural feedback multipliers must be at least 1")
         return value
 
     @model_validator(mode="after")
@@ -195,25 +166,24 @@ class InvestorClassMonthlyState(BaseModel):
     redemption_rate: Decimal = Field(ge=ZERO, le=ONE)
 
 
-class MonthlyBehaviourAdjustment(BaseModel):
-    """Behaviour and contagion multipliers applied to new demand in one month."""
+class MonthlyBehaviouralFeedbackAdjustment(BaseModel):
+    """Behavioural feedback multipliers applied to new redemption demand."""
 
     model_config = ConfigDict(extra="forbid", frozen=True, str_strip_whitespace=True)
 
     source_outcome: PathLmtOutcome
-    behavioural_multipliers: dict[ClientClass, Decimal]
-    contagion_multiplier: Decimal = Field(ge=ZERO)
+    behavioural_feedback_multipliers: dict[ClientClass, Decimal]
 
-    @field_validator("behavioural_multipliers")
+    @field_validator("behavioural_feedback_multipliers")
     @classmethod
-    def validate_monthly_behavioural_multipliers(
+    def validate_monthly_behavioural_feedback_multipliers(
         cls, value: dict[ClientClass, Decimal]
     ) -> dict[ClientClass, Decimal]:
-        """Require non-negative monthly behavioural multipliers."""
+        """Require monthly behavioural feedback multipliers of at least 1."""
 
         for multiplier in value.values():
-            if multiplier < ZERO:
-                raise ValueError("monthly behavioural multipliers must be non-negative")
+            if multiplier < ONE:
+                raise ValueError("monthly behavioural feedback multipliers must be at least 1")
         return value
 
 
@@ -249,7 +219,7 @@ class MonthlyRedemptionPathResult(BaseModel):
     opening_cash: Decimal = Field(ge=ZERO)
     closing_cash: Decimal = Field(ge=ZERO)
     contractual_cashflow_amount: Decimal = Field(ge=ZERO)
-    behaviour_adjustment: MonthlyBehaviourAdjustment
+    behavioural_feedback_adjustment: MonthlyBehaviouralFeedbackAdjustment
     investor_class_states: tuple[InvestorClassMonthlyState, ...]
     backlog: tuple[DeferredRedemptionBacklogEntry, ...]
     positions: tuple[PathPositionState, ...]

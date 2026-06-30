@@ -5,7 +5,9 @@ from pydantic import ValidationError
 
 from lmt_calibration.domain import (
     BetaDistributionParameters,
+    ClientClass,
     MonthlySimulationPeriod,
+    PathLmtOutcome,
     RedemptionPathAssumptions,
 )
 
@@ -47,6 +49,20 @@ def test_redemption_path_assumptions_reject_non_twelve_month_horizon() -> None:
             start_date="2026-01-01",
             random_seed=7,
             horizon_months=6,
+        )
+
+
+def test_redemption_path_assumptions_reject_behavioural_feedback_below_one() -> None:
+    with pytest.raises(ValidationError, match="at least 1"):
+        RedemptionPathAssumptions(
+            scenario_id="invalid_feedback",
+            start_date="2026-01-01",
+            random_seed=7,
+            behavioural_feedback_multipliers_by_outcome={
+                PathLmtOutcome.SWING_PRICING: {
+                    ClientClass.RETAIL: Decimal("0.99"),
+                }
+            },
         )
 
 

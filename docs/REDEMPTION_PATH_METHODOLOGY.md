@@ -139,7 +139,7 @@ Later months start from the prior month-end state:
 * current investor-class balances
 * deferred redemption backlog
 * prior-month LMT assessment outcome
-* behavioural and contagion multipliers for the new month
+* behavioural feedback multipliers for the new month
 
 The monthly view should separately show the position after market stress, after
 cashflows, after LMT assessment, and at month end.
@@ -178,8 +178,7 @@ Conceptually:
 new_redemption_amount_by_class =
     current_investor_class_balance
     × monthly_redemption_rate
-    × behavioural_multiplier
-    × contagion_multiplier
+    × behavioural_feedback_multiplier
 ```
 
 The existing methodology already distinguishes investor-class redemption
@@ -268,38 +267,35 @@ Use a configurable relationship:
 LMT or stress outcome + investor class = next-month redemption multiplier
 ```
 
-A multiplier above 1 increases next-month demand. A multiplier below 1 reduces
-next-month demand. A multiplier equal to 1 leaves demand unchanged.
+A multiplier above 1 increases next-month demand. A multiplier equal to 1 leaves
+demand unchanged. Calming effects represented by multipliers below 1 are out of
+scope.
 
-Behavioural multipliers should be explicit inputs or parameters. Behavioural
-assumptions should not be implied or unstated.
+Behavioural feedback multipliers should be explicit inputs or parameters.
+Behavioural assumptions should not be implied or unstated.
 
-## Contagion
+## Market Contagion
 
-Contagion is a separate next-month multiplier after a configured stress or LMT
-outcome.
+Market contagion is not implemented in the 12-month redemption path.
 
-For the first version:
+Market contagion is separate from behavioural feedback. Behavioural feedback
+affects future investor redemption demand. Market contagion would affect
+asset-side market or liquidity conditions under a separately approved
+methodology.
 
-```text
-Selected stress or LMT outcome = next-month contagion multiplier
-```
+This methodology does not decide whether future market contagion should affect
+prices, spreads, transaction costs, market impact, haircuts, participation
+rates, liquidation capacity, settlement, or liquidity cost.
 
-The same multiplier applies for the 12-month path unless a later methodology
-defines more granular treatment.
+## Path-Level Behavioural Feedback Assumptions
 
-Investor-class-specific contagion is out of scope for the first version.
+The first month starts with neutral behavioural feedback multipliers of 1.0.
 
-## Path-Level Feedback Assumptions
-
-The first month starts with neutral behavioural and contagion multipliers (both 1.0).
-
-Behavioural feedback applies to the next month only. After the feedback month is
-applied, the multiplier returns to neutral (1.0) unless another LMT outcome
-occurs.
+Behavioural feedback applies to the next month only. After applying for one
+month, the multiplier returns to neutral (1.0) unless another LMT outcome occurs.
 
 When multiple LMT outcomes occur in a month, the priority order determines which
-outcome generates feedback for the following month:
+outcome generates behavioural feedback for the following month:
 
 1. suspension
 2. redemption gate
@@ -307,21 +303,17 @@ outcome generates feedback for the following month:
 4. swing pricing
 5. none
 
-Only the highest-priority outcome applies feedback; lower-priority outcomes are
-not multiplied again.
+Only the highest-priority outcome applies behavioural feedback; lower-priority
+outcomes are not multiplied again.
 
 Behavioural feedback can vary by investor class. The same LMT or stress outcome
 may trigger different redemption multipliers for different investor classes in
 the following month.
 
-Contagion is a single path-level multiplier applied to all investor classes in
-the following month. Investor-class-specific contagion multipliers are not
-supported in the MVP.
-
-Deferred backlog is not multiplied again by behavioural feedback or contagion
-multipliers. Backlog carries forward at its original amount and joins new monthly
-redemption demand, which is then multiplied by the current month's applicable
-multipliers.
+Deferred backlog is not multiplied again by behavioural feedback. Backlog
+carries forward at its original amount and joins new monthly redemption demand.
+The current month’s behavioural feedback multiplier applies only to that new
+demand.
 
 Suspension treatment follows the existing project methodology. No new suspension
 methodology is implemented in this version.
@@ -389,7 +381,7 @@ At month end, the methodology determines:
 * liquid resources
 * deferred backlog
 * LMT assessment outcome
-* behavioural and contagion multipliers for the next month
+* behavioural feedback multipliers for the next month
 
 The month-end position becomes the opening position for the next simulation
 month.
@@ -439,7 +431,8 @@ For the first 12-month redemption-path version, exclude:
 * synthetic replacement bonds
 * amortising bonds and partial maturities
 * coupon accrual without explicit payment schedule
-* investor-class-specific contagion
+* market contagion
+* calming effects represented by behavioural feedback multipliers below 1
 * hardcoded behavioural economics
 * new suspension methodology
 * live market data

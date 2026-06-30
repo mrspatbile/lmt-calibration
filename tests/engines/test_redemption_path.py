@@ -15,6 +15,7 @@ from lmt_calibration.domain import (
     MarketStress,
     PathLmtOutcome,
     RedemptionPathAssumptions,
+    RedemptionPathResult,
 )
 from lmt_calibration.engines.redemption_path import run_redemption_path
 
@@ -148,7 +149,7 @@ def test_gate_paid_redemptions_are_allocated_pro_rata_and_backlog_carries_forwar
     assert result.monthly_results[1].investor_class_states[0].opening_backlog_amount > Decimal("0")
 
 
-def test_swing_outcome_applies_next_month_behavioural_multiplier() -> None:
+def test_swing_outcome_applies_next_month_behavioural_feedback_multiplier() -> None:
     result = run_redemption_path(
         fund=_fund(),
         positions=(_cash("1000"),),
@@ -161,23 +162,26 @@ def test_swing_outcome_applies_next_month_behavioural_multiplier() -> None:
             start_date="2026-01-01",
             random_seed=3,
             stress_months=(1, 2),
-            behavioural_feedback_multipliers={
+            behavioural_feedback_multipliers_by_outcome={
                 PathLmtOutcome.SWING_PRICING: {ClientClass.RETAIL: Decimal("2")}
             },
         ),
     )
 
-    assert result.monthly_results[0].behaviour_adjustment.source_outcome is PathLmtOutcome.NONE
+    assert (
+        result.monthly_results[0].behavioural_feedback_adjustment.source_outcome
+        is PathLmtOutcome.NONE
+    )
     assert result.monthly_results[0].investor_class_states[0].redemption_rate == Decimal("0.10")
     assert result.monthly_results[0].lmt_assessment.priority_outcome is PathLmtOutcome.SWING_PRICING
     assert (
-        result.monthly_results[1].behaviour_adjustment.source_outcome
+        result.monthly_results[1].behavioural_feedback_adjustment.source_outcome
         is PathLmtOutcome.SWING_PRICING
     )
     assert result.monthly_results[1].investor_class_states[0].redemption_rate == Decimal("0.20")
 
 
-def test_gate_outcome_applies_next_month_behavioural_multiplier() -> None:
+def test_gate_outcome_applies_next_month_behavioural_feedback_multiplier() -> None:
     result = run_redemption_path(
         fund=_fund(),
         positions=(_cash("1000"),),
@@ -190,8 +194,8 @@ def test_gate_outcome_applies_next_month_behavioural_multiplier() -> None:
             start_date="2026-01-01",
             random_seed=3,
             stress_months=(1, 2),
-            behavioural_feedback_multipliers={
-                PathLmtOutcome.REDEMPTION_GATE: {ClientClass.RETAIL: Decimal("0.50")}
+            behavioural_feedback_multipliers_by_outcome={
+                PathLmtOutcome.REDEMPTION_GATE: {ClientClass.RETAIL: Decimal("1.50")}
             },
         ),
     )
@@ -200,13 +204,13 @@ def test_gate_outcome_applies_next_month_behavioural_multiplier() -> None:
         result.monthly_results[0].lmt_assessment.priority_outcome is PathLmtOutcome.REDEMPTION_GATE
     )
     assert (
-        result.monthly_results[1].behaviour_adjustment.source_outcome
+        result.monthly_results[1].behavioural_feedback_adjustment.source_outcome
         is PathLmtOutcome.REDEMPTION_GATE
     )
-    assert result.monthly_results[1].investor_class_states[0].redemption_rate == Decimal("0.250")
+    assert result.monthly_results[1].investor_class_states[0].redemption_rate == Decimal("0.750")
 
 
-def test_liquidity_buffer_breach_applies_behaviour_only_when_configured() -> None:
+def test_liquidity_buffer_breach_applies_behavioural_feedback_only_when_configured() -> None:
     unconfigured = _buffer_breach_path({})
     configured = _buffer_breach_path(
         {PathLmtOutcome.LIQUIDITY_BUFFER_BREACH: {ClientClass.RETAIL: Decimal("1.50")}}
@@ -224,7 +228,7 @@ def test_liquidity_buffer_breach_applies_behaviour_only_when_configured() -> Non
     )
 
 
-def test_contagion_applies_after_configured_outcome() -> None:
+def test_behavioural_feedback_multiplier_one_is_neutral_after_outcome() -> None:
     result = run_redemption_path(
         fund=_fund(),
         positions=(_cash("1000"),),
@@ -233,16 +237,21 @@ def test_contagion_applies_after_configured_outcome() -> None:
         liquidation_strategy=_strategy(),
         lmt_parameters=_parameters(swing_threshold="0.05", gate_threshold="1"),
         assumptions=RedemptionPathAssumptions(
-            scenario_id="swing_contagion",
+            scenario_id="neutral_behavioural_feedback",
             start_date="2026-01-01",
             random_seed=3,
             stress_months=(1, 2),
-            contagion_multipliers_by_outcome={PathLmtOutcome.SWING_PRICING: Decimal("1.50")},
+            behavioural_feedback_multipliers_by_outcome={
+                PathLmtOutcome.SWING_PRICING: {ClientClass.RETAIL: Decimal("1")}
+            },
         ),
     )
 
-    assert result.monthly_results[1].behaviour_adjustment.contagion_multiplier == Decimal("1.50")
-    assert result.monthly_results[1].investor_class_states[0].redemption_rate == Decimal("0.150")
+    assert (
+        result.monthly_results[1].behavioural_feedback_adjustment.source_outcome
+        is PathLmtOutcome.SWING_PRICING
+    )
+    assert result.monthly_results[1].investor_class_states[0].redemption_rate == Decimal("0.10")
 
 
 def test_no_outcome_gives_neutral_next_month_multipliers() -> None:
@@ -261,9 +270,13 @@ def test_no_outcome_gives_neutral_next_month_multipliers() -> None:
     )
 
     assert result.monthly_results[0].lmt_assessment.priority_outcome is PathLmtOutcome.NONE
-    assert result.monthly_results[1].behaviour_adjustment.source_outcome is PathLmtOutcome.NONE
-    assert result.monthly_results[1].behaviour_adjustment.contagion_multiplier == Decimal("1")
-    assert result.monthly_results[1].behaviour_adjustment.behavioural_multipliers[
+    assert (
+        result.monthly_results[1].behavioural_feedback_adjustment.source_outcome
+        is PathLmtOutcome.NONE
+    )
+    assert result.monthly_results[
+        1
+    ].behavioural_feedback_adjustment.behavioural_feedback_multipliers[
         ClientClass.RETAIL
     ] == Decimal("1")
 
@@ -285,9 +298,9 @@ def test_multiple_outcomes_use_priority_order() -> None:
             start_date="2026-01-01",
             random_seed=3,
             stress_months=(1, 2),
-            behavioural_feedback_multipliers={
+            behavioural_feedback_multipliers_by_outcome={
                 PathLmtOutcome.SWING_PRICING: {ClientClass.RETAIL: Decimal("2")},
-                PathLmtOutcome.REDEMPTION_GATE: {ClientClass.RETAIL: Decimal("0.50")},
+                PathLmtOutcome.REDEMPTION_GATE: {ClientClass.RETAIL: Decimal("1.50")},
             },
         ),
     )
@@ -296,10 +309,10 @@ def test_multiple_outcomes_use_priority_order() -> None:
     assert first_assessment.swing_activated is True
     assert first_assessment.gate_activated is True
     assert first_assessment.priority_outcome is PathLmtOutcome.REDEMPTION_GATE
-    assert result.monthly_results[1].investor_class_states[0].redemption_rate == Decimal("0.250")
+    assert result.monthly_results[1].investor_class_states[0].redemption_rate == Decimal("0.750")
 
 
-def test_feedback_lasts_one_month_only() -> None:
+def test_behavioural_feedback_lasts_one_month_only() -> None:
     result = run_redemption_path(
         fund=_fund(),
         positions=(_cash("1000"),),
@@ -311,21 +324,28 @@ def test_feedback_lasts_one_month_only() -> None:
             scenario_id="one_month_feedback",
             start_date="2026-01-01",
             random_seed=3,
-            stress_months=(1, 2, 3),
-            behavioural_feedback_multipliers={
-                PathLmtOutcome.SWING_PRICING: {ClientClass.RETAIL: Decimal("0.50")}
+            stress_months=(1,),
+            behavioural_feedback_multipliers_by_outcome={
+                PathLmtOutcome.SWING_PRICING: {ClientClass.RETAIL: Decimal("1.50")}
             },
         ),
     )
 
     assert result.monthly_results[0].lmt_assessment.priority_outcome is PathLmtOutcome.SWING_PRICING
-    assert result.monthly_results[1].investor_class_states[0].redemption_rate == Decimal("0.100")
+    assert (
+        result.monthly_results[1].behavioural_feedback_adjustment.source_outcome
+        is PathLmtOutcome.SWING_PRICING
+    )
+    assert result.monthly_results[1].investor_class_states[0].redemption_rate == Decimal("0")
     assert result.monthly_results[1].lmt_assessment.priority_outcome is PathLmtOutcome.NONE
-    assert result.monthly_results[2].behaviour_adjustment.source_outcome is PathLmtOutcome.NONE
-    assert result.monthly_results[2].investor_class_states[0].redemption_rate == Decimal("0.20")
+    assert (
+        result.monthly_results[2].behavioural_feedback_adjustment.source_outcome
+        is PathLmtOutcome.NONE
+    )
+    assert result.monthly_results[2].investor_class_states[0].redemption_rate == Decimal("0")
 
 
-def test_backlog_is_not_multiplied_by_feedback_or_contagion() -> None:
+def test_backlog_is_not_multiplied_again_by_behavioural_feedback() -> None:
     result = run_redemption_path(
         fund=_fund(),
         positions=(_cash("1000"),),
@@ -338,10 +358,9 @@ def test_backlog_is_not_multiplied_by_feedback_or_contagion() -> None:
             start_date="2026-01-01",
             random_seed=3,
             stress_months=(1, 2),
-            behavioural_feedback_multipliers={
+            behavioural_feedback_multipliers_by_outcome={
                 PathLmtOutcome.REDEMPTION_GATE: {ClientClass.RETAIL: Decimal("2")}
             },
-            contagion_multipliers_by_outcome={PathLmtOutcome.REDEMPTION_GATE: Decimal("2")},
         ),
     )
 
@@ -541,7 +560,12 @@ def _position_value(positions: tuple, position_id: str) -> Decimal:
     )
 
 
-def _buffer_breach_path(feedback_multipliers):
+def _buffer_breach_path(
+    behavioural_feedback_multipliers: dict[
+        PathLmtOutcome,
+        dict[ClientClass, Decimal],
+    ],
+) -> RedemptionPathResult:
     return run_redemption_path(
         fund=_fund(),
         positions=(_cash("0"), _equity("euro_equity", "1000")),
@@ -574,6 +598,6 @@ def _buffer_breach_path(feedback_multipliers):
             start_date="2026-01-01",
             random_seed=3,
             stress_months=(1, 2),
-            behavioural_feedback_multipliers=feedback_multipliers,
+            behavioural_feedback_multipliers_by_outcome=behavioural_feedback_multipliers,
         ),
     )
