@@ -142,6 +142,8 @@ It handles:
 * stressed liquidity capacity
 * stressed haircut rates
 * settlement constraints
+* fallback allocation across remaining eligible capacity
+* strategy-deviation amount
 * haircut-adjusted cash raised
 * shortfall
 * dilution cost

@@ -170,6 +170,15 @@ The implemented strategies are:
 
 Each strategy respects available cash, the minimum cash buffer, stressed capacity, stressed haircuts, settlement, reverse-repo maturity, and the stress horizon.
 
+The configured strategy is the preferred allocation. If that allocation cannot raise its target because a position or asset group is unavailable, ineligible, or capacity-constrained, the engine reallocates the residual across unused eligible non-cash capacity in proportion to remaining net capacity. Cash above the minimum buffer is used only as the final fallback source. Cash or sale proceeds raised through this fallback are reported as a strategy-deviation amount.
+
+Cash above the minimum buffer is the final fallback source. Cash or sale proceeds raised through this fallback are reported as a strategy-deviation amount.
+
+Liquidity shortfall is calculated only after fallback capacity is exhausted. Sub-cent residuals are treated as monetary arithmetic dust, not as genuine liquidity shortfall.
+
+Sub-cent residuals are treated as monetary arithmetic dust rather than genuine
+liquidity shortfall.
+
 ### Minimum cash buffer
 
 `minimum_buffer_rate` from the selected LMT parameter set is the source of the minimum cash-buffer requirement:

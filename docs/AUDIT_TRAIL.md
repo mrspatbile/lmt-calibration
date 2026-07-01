@@ -114,6 +114,7 @@ The audit record includes summary-level liquidation totals:
 * gross sales (total)
 * haircut cost (total)
 * post-haircut cash raised (total)
+* strategy-deviation amount raised through fallback allocation
 * shortfall
 * dilution amount
 * dilution rate
