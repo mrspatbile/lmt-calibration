@@ -2,15 +2,24 @@
 
 ## Purpose
 
-This document defines the planned 12-month redemption-path methodology for the
-Liquidity Management Tools Calibration application.
+This document defines the 12-month redemption-path methodology for the
+Liquidity Management Tools Calibration application, implemented as **Page 2** of the dashboard.
 
-The redemption-path page extends the current single-period calibration workflow
-by simulating how investor redemptions, liquidity resources, LMT effects,
-deferred redemptions, and NAV evolve over twelve monthly periods.
+The redemption-path analysis extends the single-period threshold calibration (Page 1: Market scenarios & notice-period liquidity) by simulating how investor redemptions, liquidity resources, LMT effects, deferred redemptions, and NAV evolve over twelve monthly periods.
 
-The methodology is designed as a forward-looking liquidity stress view. It is
-not a direct repetition of the current one-period scenario matrix.
+The methodology is designed as a forward-looking liquidity stress view. It is not a direct repetition of the Page 1 single-period market-scenario analysis; instead, it explores path-dependent effects where earlier LMT applications can trigger behavioural feedback and change later redemption demand and threshold signals.
+
+## Complementary relationship with Page 1
+
+**Page 1: Market scenarios & notice-period liquidity** — Answers "Can we meet redemptions within our notice/settlement horizon?" using static market stress and fixed redemption-scenario assumptions. Threshold calibration is deterministic: one redemption scenario × one market condition = one outcome.
+
+**Page 2: 12-month redemption path** — Answers "How does the fund evolve across months under sustained or phased stress?" Explores path dependency: earlier LMT use can increase next-month redemptions through behavioural feedback, change NAV through swing recovery, or defer redemptions through gates, all of which become inputs to later months.
+
+A consistent threshold set should:
+* Pass Page 1 diagnostics (adequate within notice-period horizon under stress)
+* Manage Page 2 dynamics (backlog doesn't accumulate indefinitely, NAV doesn't collapse, final month shortfall is contained)
+
+The path is not a series of twelve independent Page 1 scenarios. It carries forward the end-of-month position from each month, including NAV, cash, investor-class balances, and backlog. This sequential structure allows the analysis to capture compounding effects that a single-period view would miss.
 
 ## Core Design
 
@@ -443,26 +452,28 @@ the approved treatment of swing recovery.
 
 ## Liquidation Capacity Across Months
 
-The methodology should explicitly document how liquidation capacity evolves.
+The path aggregates daily redemptions and liquidation activity into monthly
+periods. Participation rates are daily market participation assumptions. Monthly
+capacity therefore scales daily capacity by the available liquidation days:
 
-Option A:
+```text
+monthly_liquidation_capacity_rate = min(
+    base_liquidity_capacity_rate
+    × participation_rate
+    × liquidation_days_per_month,
+    1,
+)
+```
 
-* liquidation capacity is recalculated every month
+`liquidation_days_per_month` defaults to 20 and is configurable for a path run.
+It is distinct from `days_per_month`, which controls the simplified calendar
+period used for contractual maturity cashflows.
 
-Option B:
-
-* unused or used liquidation capacity is tracked across months
-
-For the first version, use Option A.
-
-This means each month’s capacity is calculated from the current remaining
-positions and liquidity stress assumptions. Prior sales affect future capacity
-through smaller remaining positions, not through a separate adjustment for
-prior-month trading activity.
-
-Option B may be considered in a later version if persistent market-liquidity
-stress needs to constrain future trading capacity beyond the reduced position
-balance.
+Capacity is recalculated each month from the current remaining positions. Prior
+sales affect future capacity through smaller remaining positions, not through a
+separate adjustment for prior-month trading activity. The one-period scenario
+matrix continues to apply its existing stress-window capacity without monthly
+scaling.
 
 ## Month-End State
 

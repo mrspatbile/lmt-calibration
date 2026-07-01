@@ -38,23 +38,44 @@ The application should answer:
 
 > Given a fund liquidity profile, investor redemption behaviour, asset market stress, and liquidity stress assumptions, what LMT thresholds are coherent for swing pricing, redemption gates, and liquidity buffers under the tested stress case, and what diagnostic warnings explain the result?
 
-The project calibrates and assesses Liquidity Management Tool thresholds for a fund under liquidity stress assumptions. The current implementation uses single-fund, single-period stress cases and liquidation outputs to assess reference thresholds for swing pricing, redemption gates, and liquidity buffers. Warning checks are diagnostic outputs that support calibration review; they are not the central product objective.
+The project calibrates and assesses Liquidity Management Tool thresholds for a fund under liquidity stress assumptions. The current implementation provides two complementary analyses:
+
+1. **Page 1: Market scenarios & notice-period liquidity** — Single-period threshold calibration across market conditions to assess whether the fund can meet redemptions within its notice and settlement horizon.
+
+2. **Page 2: 12-month redemption path** — Multi-period simulation to explore how redemptions, liquidity resources, LMT applications, deferred backlog, and NAV evolve over twelve months.
+
+Both analyses support calibration review; diagnostic warnings and threshold comparisons are calibration aids, not decision automation.
 
 The project does not decide whether a fund manager should activate an LMT.
 
 The current implementation supports:
 
+**Page 1: Market scenarios & notice-period liquidity**
 - investor-class redemption scenarios
-- asset-side market shocks
+- asset-side market shocks across multiple conditions
 - asset-side liquidity haircuts
-- liquidation capacity constraints
+- liquidation capacity constraints within notice/settlement horizon
 - configurable liquidation strategy
 - dilution estimate
 - swing pricing threshold assessment and diagnostic warning
 - redemption gate threshold assessment and diagnostic warning
 - liquidity buffer threshold assessment and diagnostic warning
+- scenario comparison across market conditions
 - structured audit trail for scenario runs
-- Streamlit interface for scenario calibration
+
+**Page 2: 12-month redemption path**
+- multi-period simulation with monthly threshold signals
+- path-dependent LMT effects (behavioural feedback, market contagion)
+- deferred redemption backlog tracking and evolution
+- monthly threshold signals separated from user-selected LMT applications
+- signal-linked automatic LMT application mode
+- fund NAV, cash, and investor-class balance evolution month-to-month
+- matplotlib charts for redemptions, NAV, and LMT timeline
+- structured monthly audit trail
+
+**Both pages**
+- Streamlit two-page dashboard interface with parameter controls
+- theme toggle (light/dark mode)
 
 ---
 
@@ -528,10 +549,11 @@ Use the full phrase in README and documentation so that the regulatory and fund-
 
 ## Current supported scope
 
-The current implementation remains focused on:
+The current implementation includes:
 
 * one synthetic fund snapshot
-* one-period scenarios
+* **Page 1: Market scenarios & notice-period liquidity** — single-period threshold calibration across market conditions
+* **Page 2: 12-month redemption path** — fixed 12-month simulation with monthly threshold signals and path-dependent effects
 * cash, listed equities, listed ETFs, reverse repo, and repo financing exposure
 * investor-class redemption stress
 * market stress and asset-side liquidity stress preparation in `services/streamlit_mvp.py`
@@ -540,8 +562,10 @@ The current implementation remains focused on:
 * portfolio-weighted estimated execution-cost context separated from realised liquidation cost
 * swing pricing, redemption gate, and liquidity buffer reference-threshold diagnostics
 * structured audit records and JSON audit output
-* Streamlit selectors, threshold controls, market-condition comparison, diagnostic display, and supporting guidance
+* Streamlit two-page dashboard with threshold controls, market-condition comparison, redemption-path controls, matplotlib charts, and diagnostic display
 * historical market stress scenario data loaded as sample and reference context, without implying that every historical-library shock is applied by the active dashboard workflow
+* behavioural feedback multiplier (applied after LMT use, increases next-month demand)
+* market contagion adjustment (post-market-stress one-month liquidity-cost and net-proceeds adjustment)
 
 Out of current scope:
 
@@ -550,9 +574,9 @@ Out of current scope:
 * private debt
 * real estate
 * side pockets
-* 12-month redemption path
-* stochastic redemptions by investor class
-* selected stress months
+* redemption paths stratified by investor class
+* stochastic redemptions by investor class with explicit random seeds
+* selected stress months with deterministic rng
 * intra-month liquidation schedule
 * price impact comparison across liquidation strategies
 * strategy comparison view in Streamlit

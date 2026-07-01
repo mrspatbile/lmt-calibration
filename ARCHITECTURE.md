@@ -209,12 +209,28 @@ Swing recovery is calculated in the activation-assessment engine and passed thro
 
 ## Streamlit responsibilities
 
+### Market scenarios & notice-period liquidity page (Page 1)
+
 Streamlit may:
 
-* collect scenario inputs
-* show sliders and controls
-* call application services
-* display tables, charts, metrics, and warnings
+* render LMT parameter configuration (sliders for swing threshold, gate threshold, buffer target)
+* collect fund, redemption scenario, liquidation strategy, and market condition selections
+* call service layer to build scenario runs across market conditions
+* display scenario matrix table with threshold comparisons
+* show diagnostic warnings and guidance
+
+### 12-month redemption path page (Page 2)
+
+Streamlit may:
+
+* render path controls (stress months, market stress selection, behavioural feedback, market contagion multipliers)
+* collect suspension and LMT application assumptions
+* call service layer to build redemption path runs
+* render matplotlib charts for redemptions, NAV evolution, and LMT timeline
+* display path KPIs and configuration summary
+* sync signal-linked LMT applications across months
+
+### Both pages
 
 Streamlit must not:
 
@@ -224,6 +240,8 @@ Streamlit must not:
 * calculate liquidity costs or dilution
 * decide whether an LMT should be activated
 * validate raw CSV schemas directly
+* calculate redemption paths
+* compute monthly backlog or investor-class balance evolution
 
 ## Audit responsibilities
 
@@ -245,23 +263,41 @@ Scenario engines and services do not write audit files automatically. Audit writ
 
 ## Current implementation
 
-The current implementation includes:
+### Page 1: Market scenarios & notice-period liquidity
 
-* one-period scenario calibration
+Single-period liquidity stress analysis for threshold calibration:
+
 * configurable liquidation strategy (most_liquid_first, pro_rata, hybrid, custom_weights)
 * investor-class redemption stress
 * asset market stress and liquidity stress assumptions
 * cash, listed equities, listed ETFs, reverse repos, and repo financing exposures
 * portfolio-weighted estimated execution-cost breakdown by bid-ask spread, transaction cost, and market impact
-* LMT threshold assessment and diagnostic warnings
+* LMT threshold assessment and diagnostic warnings for swing pricing, redemption gates, and liquidity buffers
+* scenario comparison across market conditions
+
+### Page 2: 12-month redemption path
+
+Forward-looking multi-period simulation:
+
+* fixed 12-month horizon with monthly liquidation capacity scaling
+* monthly threshold signals (swing pricing, redemption gates, liquidity buffer) separated from user-selected LMT applications
+* deferred redemption backlog tracking and evolution
+* optional market stress with one-month liquidity-cost and net-proceeds adjustment (market contagion)
+* behavioural feedback multiplier (applied after LMT use, increases next-month demand)
+* fund NAV, cash, position, and investor-class balance evolution month-to-month
+* matplotlib charts rendering redemptions, NAV, and LMT timeline
+* user controls for stress months, market stress scenario, behavioural feedback, and market contagion
+
+### Shared features
+
 * structured audit record models and a JSON writer; automatic writing from the Streamlit application is not integrated
-* Streamlit calibration dashboard with scenario comparison across market conditions
+* Streamlit dashboard with two-page interface
 * theme toggle and interactive parameter adjustment
 
 Future versions may include:
 
-* 12-month redemption paths by investor class
-* stochastic redemptions by investor class with explicit deterministic random seeds
+* redemption paths stratified by investor class
+* stochastic redemptions with explicit deterministic random seeds
 * reverse stress testing
 * strategy comparison views
 * historical scenario application

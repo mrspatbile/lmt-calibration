@@ -19,6 +19,7 @@ COLORS = {
     "cyan": "#39c2d6",
     "orange": "#f5793b",
     "blue_paid": "#2d6fe8",  # Paid redemption
+    "shortfall": "#ef4444",  # Unfunded liquidity shortfall
     "blue_bright": "#2563eb",  # Backlog line in NAV context
     "nav_liquid": "#2f5aa8",  # Liquid NAV (medium blue from brief)
     "nav_illiquid": "#1c5a5e",  # Illiquid NAV (teal from brief)
@@ -31,6 +32,7 @@ LIGHT_COLORS = {
     "cyan": "#0f6e56",
     "orange": "#d97706",
     "blue_paid": "#2563eb",
+    "shortfall": "#b91c1c",
     "blue_bright": "#1d4ed8",
     "nav_liquid": "#2f5aa8",
     "nav_illiquid": "#1f4b5f",
@@ -56,7 +58,7 @@ def plot_redemption_profile(
     fund_name: str = "Fund",
     as_of_date: str = None,
 ) -> plt.Figure:
-    """Plot redemptions: paid, deferred, and backlog over time.
+    """Plot paid, deferred, backlog, and unfunded liquidity shortfall over time.
 
     Parameters
     ----------
@@ -80,6 +82,10 @@ def plot_redemption_profile(
     paid_m = df["paid_redemption"].astype(float) / 1e6
     deferred_m = df["deferred_redemption"].astype(float) / 1e6
     backlog_m = df["cumulative_backlog"].astype(float) / 1e6
+    liquidity_shortfall_m = (
+        df.get("liquidity_shortfall", pd.Series(0.0, index=df.index)).astype(float) / 1e6
+    )
+    has_liquidity_shortfall = bool((liquidity_shortfall_m > 0).any())
     months = df["month"].values
 
     # Generate month labels
@@ -125,6 +131,16 @@ def plot_redemption_profile(
         markersize=6,
     )
 
+    if has_liquidity_shortfall:
+        ax.bar(
+            months,
+            -liquidity_shortfall_m,
+            color=COLORS["shortfall"],
+            alpha=0.75,
+            label="Liquidity shortfall (unfunded)",
+            width=0.6,
+        )
+
     # Formatting - smaller tick labels for quiet reference
     ax.set_xticks(months)
     ax.set_xticklabels(month_labels, fontsize=7, color=COLORS["muted"])
@@ -133,7 +149,8 @@ def plot_redemption_profile(
 
     # Y-axis: fixed to 60% of initial NAV, 5 gridlines, M-suffixed format with EUR symbol
     y_max = float(initial_nav) / 1e6 * 0.6
-    ax.set_ylim(0, y_max)
+    y_min = -float(liquidity_shortfall_m.max()) * 1.25 if has_liquidity_shortfall else 0
+    ax.set_ylim(y_min, y_max)
     ax.yaxis.set_major_locator(plt.MaxNLocator(5))
     top = y_max
     ax.yaxis.set_major_formatter(
@@ -290,10 +307,7 @@ def plot_redemption_and_nav_combined(
     as_of_date: str = None,
     dark_mode: bool = True,
 ) -> plt.Figure:
-    """Combined plot: redemptions and NAV evolution with shared x-axis.
-
-    Three compact subplots with synchronized month labels.
-    """
+    """Combined plot: redemptions, shortfall, liquidity cost, and NAV evolution."""
     df = pd.DataFrame(monthly_rows)
     colors = _palette(dark_mode=dark_mode)
 
@@ -301,6 +315,10 @@ def plot_redemption_and_nav_combined(
     paid_m = df["paid_redemption"].astype(float) / 1e6
     deferred_m = df["deferred_redemption"].astype(float) / 1e6
     backlog_m = df["cumulative_backlog"].astype(float) / 1e6
+    liquidity_shortfall_m = (
+        df.get("liquidity_shortfall", pd.Series(0.0, index=df.index)).astype(float) / 1e6
+    )
+    has_liquidity_shortfall = bool((liquidity_shortfall_m > 0).any())
     realised_liquidity_cost_m = (
         df.get("realised_liquidity_cost", pd.Series(0.0, index=df.index)).astype(float) / 1e6
     )
@@ -318,15 +336,28 @@ def plot_redemption_and_nav_combined(
         (computation_date + timedelta(days=30 * i)).strftime("%b/%y") for i in range(len(months))
     ]
 
-    # Keep liquidity cost separate from redemption bars while sharing the monthly timeline.
-    fig, (ax1, ax_cost, ax2) = plt.subplots(
-        3,
-        1,
-        figsize=(7, 6.0),
-        sharex=True,
-        dpi=120,
-        gridspec_kw={"height_ratios": [2.2, 0.8, 2.2]},
-    )
+    # Give small liquidity shortfalls their own scale immediately below redemptions.
+    if has_liquidity_shortfall:
+        fig, axes = plt.subplots(
+            4,
+            1,
+            figsize=(7, 6.8),
+            sharex=True,
+            dpi=120,
+            gridspec_kw={"height_ratios": [2.2, 0.8, 0.8, 2.2]},
+        )
+        ax1, ax_shortfall, ax_cost, ax2 = axes
+    else:
+        fig, axes = plt.subplots(
+            3,
+            1,
+            figsize=(7, 6.0),
+            sharex=True,
+            dpi=120,
+            gridspec_kw={"height_ratios": [2.2, 0.8, 2.2]},
+        )
+        ax1, ax_cost, ax2 = axes
+        ax_shortfall = None
     fig.patch.set_facecolor(colors["bg"])
     fig.patch.set_alpha(0 if dark_mode else 1)
     fig.subplots_adjust(hspace=0.58, top=0.93, right=0.98, bottom=0.11, left=0.09)
@@ -336,7 +367,7 @@ def plot_redemption_and_nav_combined(
 
     # Subtitle for redemptions plot
     ax1.set_title(
-        "Paid / deferred / backlog",
+        "Paid redemptions, deferred redemptions, and backlog",
         loc="left",
         fontsize=9,
         color=colors["text"],
@@ -410,7 +441,54 @@ def plot_redemption_and_nav_combined(
     for text in legend1.get_texts():
         text.set_color(colors["text"])
 
-    # ===== MIDDLE SUBPLOT: REALISED LIQUIDITY COST =====
+    # ===== OPTIONAL SUBPLOT: LIQUIDITY SHORTFALL =====
+    if ax_shortfall is not None:
+        shortfall_max_m = float(liquidity_shortfall_m.max())
+        ax_shortfall.set_facecolor(colors["bg"])
+        ax_shortfall.set_title(
+            "Liquidity shortfall (unfunded)",
+            loc="left",
+            fontsize=8,
+            color=colors["text"],
+            fontweight="normal",
+            pad=6,
+        )
+        ax_shortfall.bar(
+            months,
+            -liquidity_shortfall_m,
+            color=colors["shortfall"],
+            alpha=0.75,
+            width=0.6,
+        )
+        ax_shortfall.axhline(0, color=colors["muted"], linewidth=0.6)
+        ax_shortfall.set_ylim(-shortfall_max_m * 1.25, 0)
+        ax_shortfall.set_ylabel("")
+        ax_shortfall.yaxis.set_major_locator(plt.MaxNLocator(3))
+
+        def shortfall_formatter(value: float, _: float) -> str:
+            if shortfall_max_m < 0.01:
+                return f"€{value * 1000:.1f}k"
+            return f"€{value:.2f}M"
+
+        ax_shortfall.yaxis.set_major_formatter(FuncFormatter(shortfall_formatter))
+        ax_shortfall.tick_params(axis="y", labelcolor=colors["muted"], labelsize=7)
+        ax_shortfall.tick_params(axis="x", labelbottom=False, length=0)
+        ax_shortfall.grid(
+            True,
+            axis="y",
+            alpha=0.3,
+            linestyle="-",
+            linewidth=0.5,
+            color=colors["grid"],
+        )
+        ax_shortfall.set_axisbelow(True)
+        for spine in ax_shortfall.spines.values():
+            spine.set_color(colors["muted"])
+            spine.set_linewidth(0.5)
+        ax_shortfall.spines["top"].set_visible(False)
+        ax_shortfall.spines["right"].set_visible(False)
+
+    # ===== REALISED LIQUIDITY COST SUBPLOT =====
     ax_cost.set_facecolor(colors["bg"])
     ax_cost.set_title(
         "Realised liquidity cost",

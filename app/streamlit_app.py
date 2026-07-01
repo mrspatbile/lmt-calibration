@@ -1301,7 +1301,9 @@ def main() -> None:
     with col_header:
         _render_main_header()
 
-    matrix_tab, path_tab = st.tabs(["Market scenario matrix", "12-month redemption path"])
+    matrix_tab, path_tab = st.tabs(
+        ["Market scenarios & notice-period liquidity", "12-month redemption path"]
+    )
 
     with matrix_tab:
         # NOW build scenario runs with updated LMT parameters and selected redemption scenario
@@ -1325,14 +1327,15 @@ def main() -> None:
 
         dashboard = _build_dashboard_result(inputs, run, positions, market_condition_runs)
 
-        _render_lmt_configuration(run)
-
         st.markdown(
             """
-            <div class='lmt-section-h'>Calibration Across Market Conditions</div>
+            <div class='lmt-section-h'>Notice-period liquidity stress</div>
+            <div class='lmt-section-d'>Assessing liquidity capacity within the configured notice and settlement horizon.</div>
             """,
             unsafe_allow_html=True,
         )
+
+        _render_lmt_configuration(run)
         _render_matrix(dashboard.scenarios)
         _render_calibration_guidance(run)
 
@@ -2103,7 +2106,7 @@ def _render_main_header() -> None:
         <div class="lmt-header-copy">
           <div class="lmt-eyebrow">LMT Calibration Tool</div>
           <h1 class="lmt-title">Liquidity Management Tools Calibration</h1>
-          <p class="lmt-subtitle">Calibrating LMT settings across market stress, redemption pressure, liquidity resources, and activation assessment outputs.</p>
+          <p class="lmt-subtitle">Calibrating Liquidity Management Tools across market stress, redemption pressure, liquidity resources, and activation assessment.</p>
         </div>
         """,
         unsafe_allow_html=True,
@@ -2129,8 +2132,12 @@ def _render_redemption_path_page(
         # Title for combined chart
         st.markdown(
             f"<div style='font-size:17px; color:{title_color}; font-weight:700; margin-bottom:0.8rem;'>"
-            "12-month redemption path and NAV evolution"
+            "12-month redemption path"
             "</div>",
+            unsafe_allow_html=True,
+        )
+        st.markdown(
+            "<div class='lmt-section-d'>Assessing fund evolution under successive monthly redemption periods and LMT applications.</div>",
             unsafe_allow_html=True,
         )
 
@@ -2151,10 +2158,6 @@ def _render_redemption_path_page(
             dark_mode=dark_mode,
         )
         st.pyplot(matrix_fig, use_container_width=True)
-        st.caption(
-            "○ signal | ● applied | ◆ suspended. Suspension remains a user-selected scenario "
-            "assumption; risk indicators remain separate."
-        )
 
 
 def _render_path_configuration_summary(run: AppRedemptionPathRun) -> None:

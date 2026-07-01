@@ -296,6 +296,7 @@ def test_redemption_path_matplotlib_charts_refresh_with_controls():
             "paid_redemption": Decimal("1200000"),
             "deferred_redemption": Decimal("250000"),
             "cumulative_backlog": Decimal("250000"),
+            "liquidity_shortfall": Decimal("400000"),
             "realised_liquidity_cost": Decimal("25000"),
             "liquid_nav": Decimal("19000000"),
             "illiquid_nav": Decimal("81000000"),
@@ -305,6 +306,7 @@ def test_redemption_path_matplotlib_charts_refresh_with_controls():
             "paid_redemption": Decimal("0"),
             "deferred_redemption": Decimal("0"),
             "cumulative_backlog": Decimal("0"),
+            "liquidity_shortfall": Decimal("0"),
             "realised_liquidity_cost": Decimal("75000"),
             "liquid_nav": Decimal("18000000"),
             "illiquid_nav": Decimal("81500000"),
@@ -323,6 +325,10 @@ def test_redemption_path_matplotlib_charts_refresh_with_controls():
     assert fig1 is not None
     assert fig1.get_figwidth() > 0
     assert fig1.get_figheight() > 0
+    assert any(patch.get_height() < 0 for patch in fig1.axes[0].patches)
+    assert "Liquidity shortfall (unfunded)" in [
+        text.get_text() for text in fig1.axes[0].get_legend().get_texts()
+    ]
 
     # Verify NAV chart generates without error
     fig2 = plot_nav_evolution(
@@ -393,12 +399,24 @@ def test_redemption_path_matplotlib_charts_refresh_with_controls():
     )
     assert fig4.axes[0].get_facecolor()[:3] == (1.0, 1.0, 1.0)
     assert fig4.axes[0].get_ylim()[1] == 60.0
+    assert fig4.axes[0].get_ylim()[0] == 0
+    assert all(patch.get_height() >= 0 for patch in fig4.axes[0].patches)
+    assert list(fig4.axes[0].lines[0].get_ydata()) == [0.25, 0.0]
     legend = fig4.axes[0].get_legend()
     assert legend is not None
     assert legend._ncols == 3
+    assert {text.get_text() for text in legend.get_texts()} == {
+        "Paid",
+        "Deferred",
+        "Backlog",
+    }
     assert legend.get_bbox_to_anchor()._bbox.y0 > 1.0
-    assert fig4.axes[1].get_title(loc="left") == "Realised liquidity cost"
-    assert fig4.axes[1].lines
+    assert fig4.axes[1].get_title(loc="left") == "Liquidity shortfall (unfunded)"
+    assert fig4.axes[1].get_ylim()[0] < 0
+    assert fig4.axes[1].get_ylim()[1] == 0
+    assert any(patch.get_height() < 0 for patch in fig4.axes[1].patches)
+    assert fig4.axes[2].get_title(loc="left") == "Realised liquidity cost"
+    assert fig4.axes[2].lines
 
     fig5 = plot_lmt_matrix(
         lmt_rows=lmt_rows,
@@ -407,3 +425,40 @@ def test_redemption_path_matplotlib_charts_refresh_with_controls():
         dark_mode=False,
     )
     assert fig5.axes[0].get_facecolor()[:3] == (1.0, 1.0, 1.0)
+
+
+def test_redemption_chart_omits_zero_liquidity_shortfall_series() -> None:
+    import matplotlib
+
+    matplotlib.use("Agg")
+
+    sys.path.insert(0, "app")
+    from chart_matplotlib import plot_redemption_and_nav_combined
+
+    monthly_rows = [
+        {
+            "month": 1,
+            "paid_redemption": Decimal("1200000"),
+            "deferred_redemption": Decimal("0"),
+            "cumulative_backlog": Decimal("0"),
+            "liquidity_shortfall": Decimal("0"),
+            "realised_liquidity_cost": Decimal("0"),
+            "liquid_nav": Decimal("19000000"),
+            "illiquid_nav": Decimal("81000000"),
+        }
+    ]
+
+    figure = plot_redemption_and_nav_combined(
+        monthly_rows=monthly_rows,
+        initial_nav=Decimal("100000000"),
+        dark_mode=False,
+    )
+
+    assert figure.axes[0].get_ylim()[0] == 0
+    assert len(figure.axes) == 3
+    assert all(
+        axis.get_title(loc="left") != "Liquidity shortfall (unfunded)" for axis in figure.axes
+    )
+    assert "Liquidity shortfall (unfunded)" not in [
+        text.get_text() for text in figure.axes[0].get_legend().get_texts()
+    ]

@@ -17,10 +17,21 @@ redemption gates, and liquidity buffers under the tested stress case, and what
 diagnostic warnings explain the result?
 ```
 
-## Current methodology scope
+## Dashboard pages and methodology scope
 
-The methodology includes a single-period liquidity stress workflow and a fixed
-12-month redemption path. It includes:
+The application presents two complementary analyses:
+
+**Page 1: Notice-period liquidity stress** (single-period analysis)
+
+Assesses whether the fund can meet redemption demands within its configured notice and settlement horizon. This analysis answers: "Given investor redemption pressure and market stress, are our LMT thresholds adequate to manage liquidity within the time we need to respond?"
+
+The notice and settlement horizon defines the period during which the fund must be able to liquidate assets and pay redemptions. Assets are eligible only if their settlement period falls within this horizon. This constraint ensures threshold calibration remains practical: thresholds reflect what the fund can actually achieve given contractual settlement delays.
+
+**Page 2: 12-month redemption path** (multi-period analysis)
+
+Extends the single-period analysis across twelve monthly periods. This answers: "How do redemptions, liquidity resources, market stress, LMT applications, and fund NAV evolve over time, and what backlog or shortfall emerges?"
+
+This methodology includes:
 
 * investor-class redemption stress
 * direct asset market shocks
@@ -119,6 +130,23 @@ stressed_liquidity_capacity_rate =
 available_liquidation_amount =
     stressed_market_value × stressed_liquidity_capacity_rate
 ```
+
+This formula remains the one-period stress treatment used by the market-scenario
+matrix. In the 12-month path, participation is interpreted as a daily market
+participation assumption. Each aggregated monthly period uses 20 available
+liquidation days by default:
+
+```text
+monthly_liquidation_capacity_rate = min(
+    base_liquidity_capacity_rate
+    × participation_rate
+    × liquidation_days_per_month,
+    1,
+)
+```
+
+`liquidation_days_per_month` is an explicit redemption-path assumption and does
+not alter the one-period liquidation capacity or stress-horizon treatment.
 
 Current stressed haircut treatment is:
 

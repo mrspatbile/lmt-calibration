@@ -148,9 +148,16 @@ The audit record includes:
 
 ## Current audit scope
 
-The current audit scope supports file-based audit records for single-period scenarios with configurable liquidation strategies.
+The current audit scope supports:
 
-Audit records are structured JSON objects containing input summaries, parameter summaries, liquidation totals, and optional threshold assessment results.
+**Page 1: Market scenarios & notice-period liquidity**
+* File-based audit records for single-period scenarios with configurable liquidation strategies
+* Structured JSON objects containing input summaries, parameter summaries, liquidation totals, and threshold assessment results
+
+**Page 2: 12-month redemption path**
+* Structured records capturing configuration (stress months, market stress, LMT applications)
+* Monthly simulation parameters and inputs
+* Support for audit trail of monthly results, backlog evolution, and LMT applications
 
 Records can be written to any output directory using the JSON audit writer.
 
@@ -163,12 +170,9 @@ Future versions may add:
 * automatic audit record writing during Streamlit dashboard runs
 * per-investor-class redemption breakdowns
 * per-position liquidation details (asset-by-asset allocation and cost)
+* monthly breakdown in redemption-path audit records (investor-class demand, backlog, LMT applications)
 * database persistence
 * scenario comparison history
 * parameter change log
 * user-selected scenario labels
-* downloadable audit report
-* 12-month redemption path records
-* monthly redemption pressure by investor class
-* monthly liquidity-management response
-* LMT threshold assessment and diagnostic path through time
+* downloadable audit reports for both pages
