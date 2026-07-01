@@ -42,6 +42,7 @@ class LiquidationResult(BaseModel):
     total_realised_execution_cost: Decimal = Field(ge=Decimal("0"))
     total_net_cash_raised: Decimal = Field(ge=Decimal("0"))
     total_realised_liquidity_cost: Decimal = Field(ge=Decimal("0"))
+    strategy_deviation_amount: Decimal = Field(default=Decimal("0"), ge=Decimal("0"))
     shortfall: Decimal = Field(ge=Decimal("0"))
     dilution_amount: Decimal = Field(ge=Decimal("0"))
     dilution_rate: Decimal = Field(ge=Decimal("0"))

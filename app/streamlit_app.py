@@ -1465,7 +1465,7 @@ def _capture_redemption_path_controls(
         with cols[month - 1]:
             if st.checkbox(
                 str(month),
-                value=(month == 1),  # Default: month 1 selected
+                value=False,
                 key=f"stress_month_{month}",
                 label_visibility="collapsed",
             ):
@@ -1482,7 +1482,16 @@ def _capture_redemption_path_controls(
         "</div>",
         unsafe_allow_html=True,
     )
-    stress_months = tuple(sorted(selected_months)) if selected_months else (1,)
+    stress_months = tuple(sorted(selected_months))
+
+    if stress_months == ():
+        st.markdown(
+            "<div style='font-size: 11px; color: #ff9999; background: rgba(255,153,153,0.1); "
+            "border-left: 2px solid #ff9999; padding: 6px 8px; margin: 8px 0; border-radius: 3px;'>"
+            "⚠️ Select at least one stress month to apply this redemption scenario."
+            "</div>",
+            unsafe_allow_html=True,
+        )
     behavioural_feedback_value = st.slider(
         "Behavioural feedback multiplier",
         min_value=1.0,
@@ -2497,6 +2506,7 @@ def _redemption_path_chart_rows(
     lmt_rows: list[dict[str, object]],
 ) -> list[dict[str, object]]:
     lmt_by_month = {row["month"]: row for row in lmt_rows}
+    has_backlog = any(Decimal(str(row["cumulative_backlog"])) > ZERO for row in monthly_rows)
     chart_rows: list[dict[str, object]] = []
     for row in monthly_rows:
         month = row["month"]
@@ -2522,14 +2532,6 @@ def _redemption_path_chart_rows(
                 },
                 {
                     "month": month,
-                    "series": "Backlog",
-                    "amount": float(row["cumulative_backlog"]),
-                    "kind": "line",
-                    "panel": "redemption",
-                    "activation_assessment": outcome,
-                },
-                {
-                    "month": month,
                     "series": "Liquid NAV",
                     "amount": float(row["liquid_nav"]),
                     "kind": "area",
@@ -2548,6 +2550,17 @@ def _redemption_path_chart_rows(
                 },
             ]
         )
+        if has_backlog:
+            chart_rows.append(
+                {
+                    "month": month,
+                    "series": "Backlog",
+                    "amount": float(row["cumulative_backlog"]),
+                    "kind": "line",
+                    "panel": "redemption",
+                    "activation_assessment": outcome,
+                }
+            )
     for row in lmt_rows:
         month = row["month"]
         for tool, signal_field, applied_field in [

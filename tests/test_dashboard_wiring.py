@@ -456,9 +456,70 @@ def test_redemption_chart_omits_zero_liquidity_shortfall_series() -> None:
 
     assert figure.axes[0].get_ylim()[0] == 0
     assert len(figure.axes) == 3
+    assert len(figure.axes[0].lines) == 0
+    assert "Backlog" not in [text.get_text() for text in figure.axes[0].get_legend().get_texts()]
     assert all(
         axis.get_title(loc="left") != "Liquidity shortfall (unfunded)" for axis in figure.axes
     )
     assert "Liquidity shortfall (unfunded)" not in [
         text.get_text() for text in figure.axes[0].get_legend().get_texts()
     ]
+
+
+def test_redemption_chart_omits_zero_backlog_series() -> None:
+    import matplotlib
+
+    matplotlib.use("Agg")
+
+    sys.path.insert(0, "app")
+    from chart_matplotlib import plot_redemption_and_nav_combined
+
+    monthly_rows_no_backlog = [
+        {
+            "month": i,
+            "paid_redemption": Decimal("1200000") if i == 1 else Decimal("100000"),
+            "deferred_redemption": Decimal("0"),
+            "cumulative_backlog": Decimal("0"),
+            "liquidity_shortfall": Decimal("0"),
+            "realised_liquidity_cost": Decimal("0"),
+            "liquid_nav": Decimal("19000000"),
+            "illiquid_nav": Decimal("81000000"),
+        }
+        for i in range(1, 13)
+    ]
+
+    figure = plot_redemption_and_nav_combined(
+        monthly_rows=monthly_rows_no_backlog,
+        initial_nav=Decimal("100000000"),
+        dark_mode=False,
+    )
+
+    legend_texts = [text.get_text() for text in figure.axes[0].get_legend().get_texts()]
+    assert "Backlog" not in legend_texts
+    assert set(legend_texts) == {"Paid", "Deferred"}
+    assert figure.axes[0].get_legend()._ncols == 2
+
+    monthly_rows_with_backlog = [
+        {
+            "month": i,
+            "paid_redemption": Decimal("1200000") if i == 1 else Decimal("100000"),
+            "deferred_redemption": Decimal("0"),
+            "cumulative_backlog": Decimal("250000") if i == 1 else Decimal("0"),
+            "liquidity_shortfall": Decimal("0"),
+            "realised_liquidity_cost": Decimal("0"),
+            "liquid_nav": Decimal("19000000"),
+            "illiquid_nav": Decimal("81000000"),
+        }
+        for i in range(1, 13)
+    ]
+
+    figure2 = plot_redemption_and_nav_combined(
+        monthly_rows=monthly_rows_with_backlog,
+        initial_nav=Decimal("100000000"),
+        dark_mode=False,
+    )
+
+    legend_texts2 = [text.get_text() for text in figure2.axes[0].get_legend().get_texts()]
+    assert "Backlog" in legend_texts2
+    assert set(legend_texts2) == {"Paid", "Deferred", "Backlog"}
+    assert figure2.axes[0].get_legend()._ncols == 3

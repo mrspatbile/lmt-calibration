@@ -71,6 +71,7 @@ class AuditLiquidationSummary(BaseModel):
     gross_sales: Decimal = Field(ge=Decimal("0"))
     post_haircut_cash_raised: Decimal = Field(ge=Decimal("0"))
     haircut_cost: Decimal = Field(ge=Decimal("0"))
+    strategy_deviation_amount: Decimal = Field(default=Decimal("0"), ge=Decimal("0"))
     shortfall: Decimal = Field(ge=Decimal("0"))
     dilution_amount: Decimal = Field(ge=Decimal("0"))
     dilution_rate: Decimal = Field(ge=Decimal("0"))

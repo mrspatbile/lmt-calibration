@@ -41,6 +41,8 @@ LIGHT_COLORS = {
     "row_band": "#111827",
 }
 
+BACKLOG_DISPLAY_EPSILON_M = 1e-6
+
 
 def _palette(*, dark_mode: bool) -> dict[str, str]:
     if dark_mode:
@@ -82,6 +84,7 @@ def plot_redemption_profile(
     paid_m = df["paid_redemption"].astype(float) / 1e6
     deferred_m = df["deferred_redemption"].astype(float) / 1e6
     backlog_m = df["cumulative_backlog"].astype(float) / 1e6
+    has_backlog = backlog_m.abs().max() > BACKLOG_DISPLAY_EPSILON_M
     liquidity_shortfall_m = (
         df.get("liquidity_shortfall", pd.Series(0.0, index=df.index)).astype(float) / 1e6
     )
@@ -120,16 +123,17 @@ def plot_redemption_profile(
         linewidth=0.8,
     )
 
-    # Backlog: orange (outstanding balance)
-    ax.plot(
-        months,
-        backlog_m,
-        color=COLORS["orange"],
-        marker="o",
-        linewidth=2.5,
-        label="Backlog",
-        markersize=6,
-    )
+    if has_backlog:
+        backlog_m_clean = backlog_m.where(backlog_m.abs() > BACKLOG_DISPLAY_EPSILON_M, 0)
+        ax.plot(
+            months,
+            backlog_m_clean,
+            color=COLORS["orange"],
+            marker="o",
+            linewidth=2.5,
+            label="Backlog",
+            markersize=6,
+        )
 
     if has_liquidity_shortfall:
         ax.bar(
@@ -315,6 +319,7 @@ def plot_redemption_and_nav_combined(
     paid_m = df["paid_redemption"].astype(float) / 1e6
     deferred_m = df["deferred_redemption"].astype(float) / 1e6
     backlog_m = df["cumulative_backlog"].astype(float) / 1e6
+    has_backlog = backlog_m.abs().max() > BACKLOG_DISPLAY_EPSILON_M
     liquidity_shortfall_m = (
         df.get("liquidity_shortfall", pd.Series(0.0, index=df.index)).astype(float) / 1e6
     )
@@ -367,7 +372,11 @@ def plot_redemption_and_nav_combined(
 
     # Subtitle for redemptions plot
     ax1.set_title(
-        "Paid redemptions, deferred redemptions, and backlog",
+        (
+            "Paid redemptions, deferred redemptions, and backlog"
+            if has_backlog
+            else "Paid and deferred redemptions"
+        ),
         loc="left",
         fontsize=9,
         color=colors["text"],
@@ -392,16 +401,17 @@ def plot_redemption_and_nav_combined(
         linewidth=0.8,
     )
 
-    # Backlog line
-    ax1.plot(
-        months,
-        backlog_m,
-        color=colors["orange"],
-        marker="o",
-        linewidth=2.5,
-        label="Backlog",
-        markersize=6,
-    )
+    if has_backlog:
+        backlog_m_clean = backlog_m.where(backlog_m.abs() > BACKLOG_DISPLAY_EPSILON_M, 0)
+        ax1.plot(
+            months,
+            backlog_m_clean,
+            color=colors["orange"],
+            marker="o",
+            linewidth=2.5,
+            label="Backlog",
+            markersize=6,
+        )
 
     ax1.set_ylabel("")
     redemption_axis_max_m = float(initial_nav * Decimal("0.60")) / 1e6
@@ -430,7 +440,7 @@ def plot_redemption_and_nav_combined(
     legend1 = ax1.legend(
         loc="lower right",
         bbox_to_anchor=(1.0, 1.02),
-        ncol=3,
+        ncol=3 if has_backlog else 2,
         frameon=False,
         fontsize=8,
         handlelength=1.2,
