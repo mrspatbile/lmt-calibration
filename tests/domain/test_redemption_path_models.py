@@ -37,6 +37,7 @@ def test_redemption_path_assumptions_validate_selected_months() -> None:
     assert assumptions.swing_pricing_months == (2,)
     assert assumptions.gate_months == (3,)
     assert assumptions.apply_lmts_in_all_signal_months is False
+    assert assumptions.liquidation_days_per_month == 20
 
     with pytest.raises(ValidationError, match="stress_months"):
         RedemptionPathAssumptions(
@@ -44,6 +45,14 @@ def test_redemption_path_assumptions_validate_selected_months() -> None:
             start_date="2026-01-01",
             random_seed=7,
             stress_months=(13,),
+        )
+
+    with pytest.raises(ValidationError, match="greater than 0"):
+        RedemptionPathAssumptions(
+            scenario_id="invalid_liquidation_days",
+            start_date="2026-01-01",
+            random_seed=7,
+            liquidation_days_per_month=0,
         )
 
 

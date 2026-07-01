@@ -252,6 +252,136 @@ def test_capacity_caps_create_reported_shortfall() -> None:
     assert result.shortfall == Decimal("100.00")
 
 
+def test_pro_rata_redistributes_capacity_capped_allocation() -> None:
+    result = calculate_liquidation_strategy(
+        scenario_id="pro_rata_fallback",
+        fund=_fund(),
+        positions=(
+            _position("small_etf", AssetGroup.LISTED_ETF, "100", "0", "0.10", 2),
+            _position("large_equity", AssetGroup.LISTED_EQUITY, "900", "0", "1", 2),
+        ),
+        redemption_amount=Decimal("500"),
+        strategy=_strategy("portfolio_profile_pro_rata", LiquidationStrategyType.PRO_RATA),
+        lmt_parameters=_parameters(),
+        stress_horizon_days=5,
+    )
+
+    assert result.total_net_cash_raised == Decimal("500.00")
+    assert result.strategy_deviation_amount == Decimal("40.00")
+    assert result.shortfall == Decimal("0")
+    assert result.asset_group_allocations == {
+        AssetGroup.LISTED_ETF: Decimal("10.00"),
+        AssetGroup.LISTED_EQUITY: Decimal("490.00"),
+    }
+
+
+def test_custom_weights_fallback_uses_other_eligible_capacity() -> None:
+    result = calculate_liquidation_strategy(
+        scenario_id="custom_weight_fallback",
+        fund=_fund(),
+        positions=(_position("listed_equity", AssetGroup.LISTED_EQUITY, "1000", "0", "1", 2),),
+        redemption_amount=Decimal("500"),
+        strategy=_strategy(
+            "balanced_custom_weights",
+            LiquidationStrategyType.CUSTOM_WEIGHTS,
+            weights={
+                AssetGroup.REVERSE_REPO: Decimal("0.20"),
+                AssetGroup.LISTED_EQUITY: Decimal("0.80"),
+            },
+        ),
+        lmt_parameters=_parameters(),
+        stress_horizon_days=5,
+    )
+
+    assert result.total_net_cash_raised == Decimal("500.00")
+    assert result.strategy_deviation_amount == Decimal("100.00")
+    assert result.shortfall == Decimal("0")
+
+
+def test_fallback_uses_cash_above_buffer_after_eligible_assets() -> None:
+    result = calculate_liquidation_strategy(
+        scenario_id="fallback_cash",
+        fund=_fund(),
+        positions=(_position("cash", AssetGroup.CASH, "300", "0", "1", 0),),
+        redemption_amount=Decimal("100"),
+        strategy=_strategy(
+            "unavailable_custom_weight",
+            LiquidationStrategyType.CUSTOM_WEIGHTS,
+            weights={AssetGroup.REVERSE_REPO: Decimal("1")},
+        ),
+        lmt_parameters=_parameters(),
+        stress_horizon_days=5,
+    )
+
+    assert result.cash_used == Decimal("100")
+    assert result.strategy_deviation_amount == Decimal("100")
+    assert result.shortfall == Decimal("0")
+
+
+def test_pro_rata_absorbs_decimal_allocation_dust() -> None:
+    result = calculate_liquidation_strategy(
+        scenario_id="pro_rata_decimal_reconciliation",
+        fund=_fund(),
+        positions=(
+            _position("first_equity", AssetGroup.LISTED_EQUITY, "1", "0.10", "1", 2),
+            _position("second_equity", AssetGroup.LISTED_EQUITY, "1", "0.10", "1", 2),
+            _position("third_equity", AssetGroup.LISTED_EQUITY, "1", "0.10", "1", 2),
+        ),
+        redemption_amount=Decimal("1"),
+        strategy=_strategy("portfolio_profile_pro_rata", LiquidationStrategyType.PRO_RATA),
+        lmt_parameters=_parameters(),
+        stress_horizon_days=5,
+    )
+
+    assert result.total_net_cash_raised == Decimal("1")
+    assert result.strategy_deviation_amount == Decimal("0")
+    assert result.shortfall == Decimal("0")
+
+
+@pytest.mark.parametrize(
+    ("strategy_id", "strategy_type", "cash_buffer_use_rate", "weights"),
+    (
+        ("dust_most_liquid", LiquidationStrategyType.MOST_LIQUID_FIRST, None, None),
+        ("dust_pro_rata", LiquidationStrategyType.PRO_RATA, None, None),
+        (
+            "dust_hybrid",
+            LiquidationStrategyType.HYBRID,
+            Decimal("0.50"),
+            None,
+        ),
+        (
+            "dust_custom",
+            LiquidationStrategyType.CUSTOM_WEIGHTS,
+            None,
+            {AssetGroup.LISTED_EQUITY: Decimal("1")},
+        ),
+    ),
+)
+def test_all_strategies_absorb_sub_cent_shortfall_dust(
+    strategy_id: str,
+    strategy_type: LiquidationStrategyType,
+    cash_buffer_use_rate: Decimal | None,
+    weights: dict[AssetGroup, Decimal] | None,
+) -> None:
+    strategy = _strategy(
+        strategy_id,
+        strategy_type,
+        cash_buffer_use_rate=cash_buffer_use_rate,
+        weights=weights,
+    )
+    result = calculate_liquidation_strategy(
+        scenario_id="sub_cent_shortfall",
+        fund=_fund(),
+        positions=(),
+        redemption_amount=Decimal("0.001"),
+        strategy=strategy,
+        lmt_parameters=_parameters(),
+        stress_horizon_days=5,
+    )
+
+    assert result.shortfall == Decimal("0")
+
+
 def test_zero_haircut_gross_sale_equals_post_haircut_cash_with_no_dilution() -> None:
     result = calculate_liquidation_strategy(
         scenario_id="base_no_haircut",

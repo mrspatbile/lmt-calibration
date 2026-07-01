@@ -87,6 +87,29 @@ def test_market_stress_is_applied_once_in_selected_month() -> None:
     assert month_3_equity == Decimal("810.00")
 
 
+def test_empty_stress_months_does_not_error() -> None:
+    result = run_redemption_path(
+        fund=_fund(),
+        positions=(
+            _cash("100"),
+            _equity("euro_equity", "900"),
+        ),
+        investor_profiles=(_investor(ClientClass.RETAIL, "1", "0.02", "0.50"),),
+        liquidity_stress=_liquidity_stress(),
+        liquidation_strategy=_strategy(),
+        lmt_parameters=_parameters(gate_threshold="1"),
+        assumptions=RedemptionPathAssumptions(
+            scenario_id="no_stress_months",
+            start_date="2026-01-01",
+            random_seed=42,
+            stress_months=(),
+        ),
+    )
+
+    assert len(result.monthly_results) == 12
+    assert all(month.opening_nav > Decimal("0") for month in result.monthly_results)
+
+
 def test_market_contagion_adjusts_only_next_month_liquidity_cost_rate() -> None:
     base_arguments = {
         "fund": _fund(),
@@ -184,6 +207,82 @@ def test_reverse_repo_maturity_becomes_cash_before_liquidation() -> None:
     assert _position_value(first_month.positions, "overnight_reverse_repo") == Decimal("0")
 
 
+def test_monthly_liquidation_capacity_scales_daily_capacity_by_available_days() -> None:
+    arguments = {
+        "fund": _fund(),
+        "positions": (
+            _equity("euro_equity", "1000").model_copy(
+                update={"base_liquidity_capacity_rate": Decimal("0.025")}
+            ),
+        ),
+        "investor_profiles": (_investor(ClientClass.RETAIL, "1", "0", "0.50"),),
+        "liquidity_stress": _liquidity_stress(),
+        "liquidation_strategy": _strategy(),
+        "lmt_parameters": _parameters(gate_threshold="1"),
+    }
+    daily_capacity_path = run_redemption_path(
+        **arguments,
+        assumptions=RedemptionPathAssumptions(
+            scenario_id="daily_capacity_path",
+            start_date="2026-01-01",
+            random_seed=1,
+            stress_months=(1,),
+            liquidation_days_per_month=1,
+        ),
+    )
+    monthly_capacity_path = run_redemption_path(
+        **arguments,
+        assumptions=RedemptionPathAssumptions(
+            scenario_id="monthly_capacity_path",
+            start_date="2026-01-01",
+            random_seed=1,
+            stress_months=(1,),
+            liquidation_days_per_month=20,
+        ),
+    )
+
+    daily_result = daily_capacity_path.monthly_results[0].liquidation_result
+    monthly_result = monthly_capacity_path.monthly_results[0].liquidation_result
+
+    assert daily_result.total_net_cash_raised == Decimal("25.0000")
+    assert daily_result.shortfall == Decimal("475.0000")
+    assert monthly_result.total_net_cash_raised == Decimal("500.00")
+    assert monthly_result.shortfall == Decimal("0.00")
+
+
+def test_monthly_liquidation_capacity_is_capped_at_position_value() -> None:
+    result = (
+        run_redemption_path(
+            fund=_fund(),
+            positions=(
+                _equity("euro_equity", "1000").model_copy(
+                    update={
+                        "base_haircut_rate": Decimal("0.50"),
+                        "base_liquidity_capacity_rate": Decimal("0.10"),
+                    }
+                ),
+            ),
+            investor_profiles=(_investor(ClientClass.RETAIL, "1", "0", "1"),),
+            liquidity_stress=_liquidity_stress(),
+            liquidation_strategy=_strategy(),
+            lmt_parameters=_parameters(gate_threshold="1"),
+            assumptions=RedemptionPathAssumptions(
+                scenario_id="monthly_capacity_cap",
+                start_date="2026-01-01",
+                random_seed=1,
+                stress_months=(1,),
+                liquidation_days_per_month=20,
+            ),
+        )
+        .monthly_results[0]
+        .liquidation_result
+    )
+
+    assert result.assets_liquidated[0].gross_sale_amount == Decimal("1000")
+    assert result.total_net_cash_raised == Decimal("500.00")
+    assert result.shortfall == Decimal("500.00")
+
+
 def test_gate_paid_redemptions_are_allocated_pro_rata_and_backlog_carries_forward() -> None:
     result = run_redemption_path(
         fund=_fund(),
@@ -252,6 +351,7 @@ def test_threshold_breach_and_liquidity_shortfall_do_not_create_lmt_backlog() ->
             start_date="2026-01-01",
             random_seed=1,
             stress_months=(1,),
+            liquidation_days_per_month=1,
         ),
     )
 
@@ -267,6 +367,38 @@ def test_threshold_breach_and_liquidity_shortfall_do_not_create_lmt_backlog() ->
         for state in first_month.investor_class_states
     )
     assert first_month.backlog == ()
+
+
+def test_full_payment_path_does_not_create_decimal_backlog_dust() -> None:
+    result = run_redemption_path(
+        fund=_fund(),
+        positions=(_cash("1000"),),
+        investor_profiles=(
+            _investor(ClientClass.RETAIL, "0.3333333333333333333333333333", "0", "0.10"),
+            _investor(
+                ClientClass.INSTITUTIONAL,
+                "0.6666666666666666666666666667",
+                "0",
+                "0.10",
+            ),
+        ),
+        liquidity_stress=_liquidity_stress(),
+        liquidation_strategy=_strategy(),
+        lmt_parameters=_parameters(gate_threshold="1"),
+        assumptions=RedemptionPathAssumptions(
+            scenario_id="no_backlog_decimal_dust",
+            start_date="2026-01-01",
+            random_seed=1,
+            stress_months=(1,),
+        ),
+    )
+
+    assert all(month.backlog == () for month in result.monthly_results)
+    assert all(
+        state.deferred_redemption_amount == Decimal("0")
+        for month in result.monthly_results
+        for state in month.investor_class_states
+    )
 
 
 def test_swing_outcome_applies_next_month_behavioural_feedback_multiplier() -> None:
@@ -807,6 +939,7 @@ def _buffer_breach_path(
             start_date="2026-01-01",
             random_seed=3,
             stress_months=(1, 2),
+            liquidation_days_per_month=1,
             behavioural_feedback_multipliers_by_outcome=behavioural_feedback_multipliers,
         ),
     )

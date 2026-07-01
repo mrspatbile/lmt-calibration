@@ -82,6 +82,7 @@ def test_streamlit_mvp_service_runs_redemption_path_without_market_stress() -> N
     assert {row["setting"] for row in run.configuration_rows} >= {
         "Market stress scenario",
         "Redemption-stress months",
+        "Liquidation days per month",
         "LMT application mode",
         "Applied swing pricing months",
         "Applied gate months",
@@ -89,6 +90,14 @@ def test_streamlit_mvp_service_runs_redemption_path_without_market_stress() -> N
         "Behavioural feedback",
         "Market contagion",
     }
+    assert (
+        next(
+            row["value"]
+            for row in run.configuration_rows
+            if row["setting"] == "Liquidation days per month"
+        )
+        == 20
+    )
 
 
 def test_streamlit_path_passes_empty_applied_months_when_no_lmt_is_selected() -> None:
@@ -160,6 +169,27 @@ def test_page_one_threshold_assessment_remains_automatic() -> None:
     assert run.lmt_activation.swing_activated is True
     assert run.lmt_activation.gate_activated is True
     assert run.lmt_activation.redemption_deferred_amount > Decimal("0")
+
+
+def test_page_one_does_not_apply_monthly_liquidation_capacity_scaling() -> None:
+    inputs = load_app_sample_data(SAMPLE_DATA_DIR)
+    fund = inputs.funds[0]
+    strategy = next(
+        item
+        for item in inputs.liquidation_strategies
+        if item.liquidation_strategy_id == "cash_then_liquid_assets"
+    )
+
+    run = run_selected_sample_scenario(
+        inputs,
+        fund_id=fund.fund_id,
+        strategy_id=strategy.liquidation_strategy_id,
+    )
+
+    sap_position = next(
+        position for position in run.positions if position.position_id == "sap_equity_position"
+    )
+    assert sap_position.stressed_liquidity_capacity_rate == Decimal("0.06000")
 
 
 def test_streamlit_mvp_service_reports_user_selected_suspension() -> None:

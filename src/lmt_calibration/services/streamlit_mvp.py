@@ -401,6 +401,7 @@ def run_sample_redemption_path(
     gate_months: tuple[int, ...] = (),
     suspension_months: tuple[int, ...] = (),
     apply_lmts_in_all_signal_months: bool = False,
+    liquidation_days_per_month: int = 20,
 ) -> AppRedemptionPathRun:
     """Assemble sample inputs and run the fixed monthly redemption path."""
 
@@ -431,6 +432,7 @@ def run_sample_redemption_path(
         apply_lmts_in_all_signal_months=apply_lmts_in_all_signal_months,
         market_stress_month=market_stress_month,
         random_seed=random_seed,
+        liquidation_days_per_month=liquidation_days_per_month,
         market_contagion_liquidity_cost_multiplier=(market_contagion_liquidity_cost_multiplier),
         behavioural_feedback_multipliers_by_outcome=(
             _behavioural_feedback_multipliers_by_outcome(
@@ -461,6 +463,7 @@ def run_sample_redemption_path(
         strategy=strategy,
         parameters=parameters,
         stress_months=stress_months,
+        liquidation_days_per_month=liquidation_days_per_month,
         apply_lmts_in_all_signal_months=apply_lmts_in_all_signal_months,
         behavioural_feedback_multiplier=behavioural_feedback_multiplier,
         market_contagion_liquidity_cost_multiplier=(market_contagion_liquidity_cost_multiplier),
@@ -574,6 +577,7 @@ def build_redemption_path_monthly_rows(
                 "market_contagion_applied": month.market_contagion_applied,
                 "realised_execution_cost": (month.liquidation_result.total_realised_execution_cost),
                 "realised_liquidity_cost": month.realised_liquidity_cost_after_contagion,
+                "strategy_deviation_amount": (month.liquidation_result.strategy_deviation_amount),
                 "gross_asset_sales": sum(
                     (
                         asset.gross_sale_amount
@@ -660,6 +664,7 @@ def build_redemption_path_configuration_rows(
     strategy: LiquidationStrategyConfig,
     parameters: LmtParameters,
     stress_months: tuple[int, ...],
+    liquidation_days_per_month: int,
     apply_lmts_in_all_signal_months: bool,
     behavioural_feedback_multiplier: Decimal,
     market_contagion_liquidity_cost_multiplier: Decimal,
@@ -670,6 +675,7 @@ def build_redemption_path_configuration_rows(
         {"setting": "Scenario", "value": run.scenario_id},
         {"setting": "Redemption scenario", "value": redemption.name},
         {"setting": "Redemption-stress months", "value": _month_list_label(stress_months)},
+        {"setting": "Liquidation days per month", "value": liquidation_days_per_month},
         {
             "setting": "LMT application mode",
             "value": (

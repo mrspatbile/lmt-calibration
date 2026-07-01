@@ -17,6 +17,7 @@ from lmt_calibration.domain import (
 
 ZERO = Decimal("0")
 ONE = Decimal("1")
+MONETARY_DUST_TOLERANCE = Decimal("0.01")
 
 SELLABLE_GROUPS = {
     AssetGroup.REVERSE_REPO,
@@ -104,6 +105,28 @@ def calculate_liquidation_strategy(
     else:
         raise LiquidationStrategyError(f"unsupported strategy type: {strategy.strategy_type}")
 
+    preferred_net_cash_raised = sum(
+        (asset.net_cash_raised for asset in liquidated_assets),
+        ZERO,
+    )
+    fallback_need = max(redemption_amount - cash_used - preferred_net_cash_raised, ZERO)
+    if fallback_need < MONETARY_DUST_TOLERANCE:
+        fallback_need = ZERO
+    fallback_assets = _allocate_fallback_pro_rata(
+        eligible_assets=eligible_assets,
+        existing_liquidations=liquidated_assets,
+        cash_need=fallback_need,
+    )
+    fallback_net_cash_raised = sum(
+        (asset.net_cash_raised for asset in fallback_assets),
+        ZERO,
+    )
+    fallback_need = max(fallback_need - fallback_net_cash_raised, ZERO)
+    fallback_cash_used = min(fallback_need, max(cash_available - cash_used, ZERO))
+    cash_used += fallback_cash_used
+    liquidated_assets = _merge_liquidated_asset_results((*liquidated_assets, *fallback_assets))
+    strategy_deviation_amount = fallback_net_cash_raised + fallback_cash_used
+
     total_post_haircut_cash_raised = sum(
         (asset.post_haircut_cash_raised for asset in liquidated_assets),
         ZERO,
@@ -116,7 +139,8 @@ def calculate_liquidation_strategy(
     total_net_cash_raised = sum((asset.net_cash_raised for asset in liquidated_assets), ZERO)
     total_realised_liquidity_cost = total_haircut_cost + total_realised_execution_cost
     total_cash_raised = cash_used + total_net_cash_raised
-    shortfall = max(redemption_amount - total_cash_raised, ZERO)
+    raw_shortfall = max(redemption_amount - total_cash_raised, ZERO)
+    shortfall = ZERO if raw_shortfall < MONETARY_DUST_TOLERANCE else raw_shortfall
     asset_group_allocations = _asset_group_allocations(cash_used, liquidated_assets)
     remaining_cash = cash_total - cash_used
     remaining_liquid_resources = _remaining_liquid_resources(
@@ -150,6 +174,7 @@ def calculate_liquidation_strategy(
         total_realised_execution_cost=total_realised_execution_cost,
         total_net_cash_raised=total_net_cash_raised,
         total_realised_liquidity_cost=total_realised_liquidity_cost,
+        strategy_deviation_amount=strategy_deviation_amount,
         shortfall=shortfall,
         dilution_amount=total_realised_liquidity_cost,
         dilution_rate=total_realised_liquidity_cost / fund.nav,
@@ -240,11 +265,13 @@ def _allocate_pro_rata(
     if total_stressed_market_value <= ZERO:
         return []
 
+    ordered_assets = sorted(eligible_assets, key=lambda item: item.position_id)
+    target_cash_amounts = _pro_rata_targets(
+        redemption_need,
+        tuple(_stressed_market_value(asset) for asset in ordered_assets),
+    )
     results: list[LiquidatedAssetResult] = []
-    for asset in sorted(eligible_assets, key=lambda item: item.position_id):
-        target_cash_raised = (
-            redemption_need * _stressed_market_value(asset) / total_stressed_market_value
-        )
+    for asset, target_cash_raised in zip(ordered_assets, target_cash_amounts, strict=True):
         gross_sale_amount = _gross_sale_amount_for_cash_need(asset, target_cash_raised)
         if gross_sale_amount > ZERO:
             results.append(_liquidated_asset_result_for_cash_need(asset, target_cash_raised))
@@ -294,11 +321,13 @@ def _allocate_group_pro_rata(
     if total_stressed_market_value <= ZERO:
         return []
 
+    ordered_assets = sorted(group_assets, key=lambda item: item.position_id)
+    target_cash_amounts = _pro_rata_targets(
+        group_need,
+        tuple(_stressed_market_value(asset) for asset in ordered_assets),
+    )
     results: list[LiquidatedAssetResult] = []
-    for asset in sorted(group_assets, key=lambda item: item.position_id):
-        target_cash_raised = (
-            group_need * _stressed_market_value(asset) / total_stressed_market_value
-        )
+    for asset, target_cash_raised in zip(ordered_assets, target_cash_amounts, strict=True):
         gross_sale_amount = _gross_sale_amount_for_cash_need(asset, target_cash_raised)
         if gross_sale_amount > ZERO:
             results.append(_liquidated_asset_result_for_cash_need(asset, target_cash_raised))
@@ -308,15 +337,17 @@ def _allocate_group_pro_rata(
 def _gross_sale_amount_for_cash_need(
     asset: StressedLiquidationPosition,
     cash_need: Decimal,
+    *,
+    available_capacity: Decimal | None = None,
 ) -> Decimal:
-    available_capacity = _available_capacity(asset)
-    if cash_need <= ZERO or available_capacity <= ZERO:
+    capacity = _available_capacity(asset) if available_capacity is None else available_capacity
+    if cash_need <= ZERO or capacity <= ZERO:
         return ZERO
     net_proceeds_rate = _net_proceeds_rate(asset)
     if net_proceeds_rate <= ZERO:
-        return available_capacity
+        return capacity
     required_gross_sale = cash_need / net_proceeds_rate
-    return min(required_gross_sale, available_capacity)
+    return min(required_gross_sale, capacity)
 
 
 def _liquidated_asset_result(
@@ -342,9 +373,15 @@ def _liquidated_asset_result(
 def _liquidated_asset_result_for_cash_need(
     asset: StressedLiquidationPosition,
     cash_need: Decimal,
+    *,
+    available_capacity: Decimal | None = None,
 ) -> LiquidatedAssetResult:
-    gross_sale_amount = _gross_sale_amount_for_cash_need(asset, cash_need)
-    if _can_raise_cash_need(asset, cash_need):
+    gross_sale_amount = _gross_sale_amount_for_cash_need(
+        asset,
+        cash_need,
+        available_capacity=available_capacity,
+    )
+    if _can_raise_cash_need(asset, cash_need, available_capacity=available_capacity):
         realised_execution_cost = gross_sale_amount * asset.realised_execution_cost_rate
         post_haircut_cash_raised = cash_need + realised_execution_cost
         return LiquidatedAssetResult(
@@ -359,12 +396,116 @@ def _liquidated_asset_result_for_cash_need(
     return _liquidated_asset_result(asset, gross_sale_amount)
 
 
-def _can_raise_cash_need(asset: StressedLiquidationPosition, cash_need: Decimal) -> bool:
+def _can_raise_cash_need(
+    asset: StressedLiquidationPosition,
+    cash_need: Decimal,
+    *,
+    available_capacity: Decimal | None = None,
+) -> bool:
     net_proceeds_rate = _net_proceeds_rate(asset)
     if cash_need <= ZERO or net_proceeds_rate <= ZERO:
         return False
     required_gross_sale = cash_need / net_proceeds_rate
-    return required_gross_sale <= _available_capacity(asset)
+    capacity = _available_capacity(asset) if available_capacity is None else available_capacity
+    return required_gross_sale <= capacity
+
+
+def _pro_rata_targets(
+    total_need: Decimal,
+    allocation_bases: Sequence[Decimal],
+) -> tuple[Decimal, ...]:
+    total_basis = sum(allocation_bases, ZERO)
+    if total_need <= ZERO or total_basis <= ZERO:
+        return tuple(ZERO for _ in allocation_bases)
+
+    targets: list[Decimal] = []
+    allocated = ZERO
+    for index, basis in enumerate(allocation_bases):
+        target = (
+            max(total_need - allocated, ZERO)
+            if index == len(allocation_bases) - 1
+            else total_need * basis / total_basis
+        )
+        targets.append(target)
+        allocated += target
+    return tuple(targets)
+
+
+def _allocate_fallback_pro_rata(
+    *,
+    eligible_assets: Sequence[StressedLiquidationPosition],
+    existing_liquidations: Sequence[LiquidatedAssetResult],
+    cash_need: Decimal,
+) -> list[LiquidatedAssetResult]:
+    if cash_need <= ZERO:
+        return []
+
+    sold_by_position = _gross_sales_by_position(existing_liquidations)
+    spare_assets: list[tuple[StressedLiquidationPosition, Decimal, Decimal]] = []
+    for asset in sorted(eligible_assets, key=lambda item: item.position_id):
+        remaining_gross_capacity = max(
+            _available_capacity(asset) - sold_by_position.get(asset.position_id, ZERO),
+            ZERO,
+        )
+        remaining_net_capacity = remaining_gross_capacity * _net_proceeds_rate(asset)
+        if remaining_net_capacity > ZERO:
+            spare_assets.append((asset, remaining_gross_capacity, remaining_net_capacity))
+
+    total_net_capacity = sum((item[2] for item in spare_assets), ZERO)
+    fallback_target = min(cash_need, total_net_capacity)
+    targets = _pro_rata_targets(
+        fallback_target,
+        tuple(item[2] for item in spare_assets),
+    )
+    return [
+        _liquidated_asset_result_for_cash_need(
+            asset,
+            target,
+            available_capacity=remaining_gross_capacity,
+        )
+        for (asset, remaining_gross_capacity, _), target in zip(
+            spare_assets,
+            targets,
+            strict=True,
+        )
+        if target > ZERO
+    ]
+
+
+def _gross_sales_by_position(
+    liquidated_assets: Sequence[LiquidatedAssetResult],
+) -> dict[str, Decimal]:
+    sold_by_position: dict[str, Decimal] = {}
+    for asset in liquidated_assets:
+        sold_by_position[asset.position_id] = (
+            sold_by_position.get(asset.position_id, ZERO) + asset.gross_sale_amount
+        )
+    return sold_by_position
+
+
+def _merge_liquidated_asset_results(
+    liquidated_assets: Sequence[LiquidatedAssetResult],
+) -> list[LiquidatedAssetResult]:
+    merged: dict[str, LiquidatedAssetResult] = {}
+    for asset in liquidated_assets:
+        current = merged.get(asset.position_id)
+        if current is None:
+            merged[asset.position_id] = asset
+            continue
+        merged[asset.position_id] = current.model_copy(
+            update={
+                "gross_sale_amount": current.gross_sale_amount + asset.gross_sale_amount,
+                "post_haircut_cash_raised": (
+                    current.post_haircut_cash_raised + asset.post_haircut_cash_raised
+                ),
+                "haircut_cost": current.haircut_cost + asset.haircut_cost,
+                "realised_execution_cost": (
+                    current.realised_execution_cost + asset.realised_execution_cost
+                ),
+                "net_cash_raised": current.net_cash_raised + asset.net_cash_raised,
+            }
+        )
+    return list(merged.values())
 
 
 def _available_capacity(asset: StressedLiquidationPosition) -> Decimal:

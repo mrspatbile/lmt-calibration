@@ -136,6 +136,7 @@ def run_redemption_path(
         stressed_positions = _stressed_positions(
             carried_positions,
             liquidity_stress,
+            liquidation_days_per_month=assumptions.liquidation_days_per_month,
             market_contagion_liquidity_cost_multiplier=(market_contagion_liquidity_cost_multiplier),
         )
         liquidation_result = (
@@ -440,6 +441,7 @@ def _stressed_positions(
     positions: Sequence[PathPositionState],
     liquidity_stress: LiquidityStress,
     *,
+    liquidation_days_per_month: int,
     market_contagion_liquidity_cost_multiplier: Decimal = ONE,
 ) -> tuple[StressedLiquidationPosition, ...]:
     return tuple(
@@ -456,6 +458,7 @@ def _stressed_positions(
             stressed_liquidity_capacity_rate=_stressed_liquidity_capacity_rate(
                 position,
                 liquidity_stress,
+                liquidation_days_per_month=liquidation_days_per_month,
             ),
             settlement_days=position.settlement_days,
             maturity_days=position.maturity_days,
@@ -498,13 +501,16 @@ def _stressed_haircut_rate(
 def _stressed_liquidity_capacity_rate(
     position: PathPositionState,
     liquidity_stress: LiquidityStress,
+    *,
+    liquidation_days_per_month: int,
 ) -> Decimal:
     if position.asset_group is AssetGroup.CASH:
         return ONE
     assumption = liquidity_stress.execution_assumptions_by_asset_group.get(position.asset_group)
-    if assumption is None:
-        return position.base_liquidity_capacity_rate
-    return position.base_liquidity_capacity_rate * assumption.participation_rate
+    daily_capacity_rate = position.base_liquidity_capacity_rate
+    if assumption is not None:
+        daily_capacity_rate *= assumption.participation_rate
+    return min(daily_capacity_rate * Decimal(liquidation_days_per_month), ONE)
 
 
 def _effective_redemption_total(
@@ -551,14 +557,22 @@ def _allocate_paid_and_deferred_by_class(
         components = components_by_class.get(demand.client_class, ())
         class_effective = sum((amount for _, amount in components), ZERO)
         class_paid = (
-            final_paid_amount * class_effective / total_effective
-            if total_effective > ZERO
-            else ZERO
+            class_effective
+            if final_paid_amount >= total_effective
+            else (
+                final_paid_amount * class_effective / total_effective
+                if total_effective > ZERO
+                else ZERO
+            )
         )
         class_requested_paid = (
-            requested_paid_amount * class_effective / total_effective
-            if total_effective > ZERO
-            else ZERO
+            class_effective
+            if requested_paid_amount >= total_effective
+            else (
+                requested_paid_amount * class_effective / total_effective
+                if total_effective > ZERO
+                else ZERO
+            )
         )
         class_backlog = ZERO
         for origin_month, amount in components:

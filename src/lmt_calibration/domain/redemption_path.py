@@ -99,6 +99,7 @@ class RedemptionPathAssumptions(BaseModel):
     ] = Field(default_factory=dict)
     market_contagion_liquidity_cost_multiplier: Decimal = Field(default=ONE, ge=ONE)
     days_per_month: int = Field(default=30, gt=0)
+    liquidation_days_per_month: int = Field(default=20, gt=0)
 
     @field_validator("behavioural_feedback_multipliers_by_outcome")
     @classmethod
