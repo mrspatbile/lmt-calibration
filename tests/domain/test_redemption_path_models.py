@@ -27,11 +27,16 @@ def test_redemption_path_assumptions_validate_selected_months() -> None:
         start_date="2026-01-01",
         random_seed=7,
         stress_months=(1, 3),
+        swing_pricing_months=(2,),
+        gate_months=(3,),
         market_stress_month=1,
     )
 
     assert assumptions.horizon_months == 12
     assert assumptions.stress_months == (1, 3)
+    assert assumptions.swing_pricing_months == (2,)
+    assert assumptions.gate_months == (3,)
+    assert assumptions.apply_lmts_in_all_signal_months is False
 
     with pytest.raises(ValidationError, match="stress_months"):
         RedemptionPathAssumptions(
@@ -49,6 +54,41 @@ def test_redemption_path_assumptions_reject_non_twelve_month_horizon() -> None:
             start_date="2026-01-01",
             random_seed=7,
             horizon_months=6,
+        )
+
+
+def test_redemption_path_assumptions_validate_suspension_months() -> None:
+    assumptions = RedemptionPathAssumptions(
+        scenario_id="suspension_path",
+        start_date="2026-01-01",
+        random_seed=7,
+        suspension_months=(2, 5),
+    )
+
+    assert assumptions.suspension_months == (2, 5)
+
+    with pytest.raises(ValidationError, match="suspension_months"):
+        RedemptionPathAssumptions(
+            scenario_id="invalid_suspension_path",
+            start_date="2026-01-01",
+            random_seed=7,
+            suspension_months=(13,),
+        )
+
+    with pytest.raises(ValidationError, match="swing_pricing_months"):
+        RedemptionPathAssumptions(
+            scenario_id="invalid_swing_month",
+            start_date="2026-01-01",
+            random_seed=7,
+            swing_pricing_months=(0,),
+        )
+
+    with pytest.raises(ValidationError, match="gate_months"):
+        RedemptionPathAssumptions(
+            scenario_id="invalid_gate_month",
+            start_date="2026-01-01",
+            random_seed=7,
+            gate_months=(13,),
         )
 
 

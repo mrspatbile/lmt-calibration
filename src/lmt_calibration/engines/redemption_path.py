@@ -42,7 +42,6 @@ CASH_POSITION_ID = "path_cash_balance"
 OUTCOME_PRIORITY = (
     PathLmtOutcome.SUSPENSION,
     PathLmtOutcome.REDEMPTION_GATE,
-    PathLmtOutcome.LIQUIDITY_BUFFER_BREACH,
     PathLmtOutcome.SWING_PRICING,
     PathLmtOutcome.NONE,
 )
@@ -106,11 +105,22 @@ def run_redemption_path(
         )
         effective_total = _effective_redemption_total(demands, backlog)
         effective_redemption_rate = effective_total / pre_lmt_nav if pre_lmt_nav > ZERO else ZERO
-        gate_activated = effective_redemption_rate >= lmt_parameters.gate_threshold_rate
+        swing_signal = effective_redemption_rate >= lmt_parameters.swing_threshold_rate
+        gate_signal = effective_redemption_rate >= lmt_parameters.gate_threshold_rate
+        suspension_applied = month_number in assumptions.suspension_months
+        swing_applied = not suspension_applied and (
+            month_number in assumptions.swing_pricing_months
+            or (assumptions.apply_lmts_in_all_signal_months and swing_signal)
+        )
+        gate_applied = not suspension_applied and (
+            month_number in assumptions.gate_months
+            or (assumptions.apply_lmts_in_all_signal_months and gate_signal)
+        )
         requested_paid_amount = _requested_paid_amount(
             effective_total=effective_total,
             pre_lmt_nav=pre_lmt_nav,
-            gate_activated=gate_activated,
+            gate_applied=gate_applied,
+            suspension_applied=suspension_applied,
             lmt_parameters=lmt_parameters,
         )
 
@@ -128,20 +138,29 @@ def run_redemption_path(
             liquidity_stress,
             market_contagion_liquidity_cost_multiplier=(market_contagion_liquidity_cost_multiplier),
         )
-        liquidation_result = calculate_liquidation_strategy(
-            scenario_id=f"{assumptions.scenario_id}_month_{month_number}",
-            fund=fund.model_copy(update={"as_of_date": period.month_start, "nav": pre_lmt_nav}),
-            positions=stressed_positions,
-            redemption_amount=requested_paid_amount,
-            strategy=liquidation_strategy,
-            lmt_parameters=lmt_parameters,
-            stress_horizon_days=liquidity_stress.stress_horizon_days,
+        liquidation_result = (
+            calculate_liquidation_strategy(
+                scenario_id=f"{assumptions.scenario_id}_month_{month_number}",
+                fund=fund.model_copy(update={"as_of_date": period.month_start, "nav": pre_lmt_nav}),
+                positions=stressed_positions,
+                redemption_amount=requested_paid_amount,
+                strategy=liquidation_strategy,
+                lmt_parameters=lmt_parameters,
+                stress_horizon_days=liquidity_stress.stress_horizon_days,
+            )
+            if pre_lmt_nav > ZERO
+            else _zero_nav_liquidation_result(
+                scenario_id=f"{assumptions.scenario_id}_month_{month_number}",
+                strategy=liquidation_strategy,
+                requested_paid_amount=requested_paid_amount,
+            )
         )
         final_paid_amount = max(requested_paid_amount - liquidation_result.shortfall, ZERO)
 
         investor_states, backlog = _allocate_paid_and_deferred_by_class(
             demands=demands,
             opening_backlog=backlog,
+            requested_paid_amount=requested_paid_amount,
             final_paid_amount=final_paid_amount,
             month_number=month_number,
         )
@@ -156,18 +175,29 @@ def run_redemption_path(
         adjusted_estimated_liquidity_cost_rate = (
             base_estimated_liquidity_cost_rate * market_contagion_liquidity_cost_multiplier
         )
+        # Apply market contagion multiplier to realised liquidity cost in the affected month
+        realised_liquidity_cost_after_contagion = (
+            liquidation_result.total_realised_liquidity_cost
+            * market_contagion_liquidity_cost_multiplier
+        )
         lmt_assessment = _monthly_lmt_assessment(
             effective_redemption_rate=effective_redemption_rate,
             effective_total=effective_total,
+            requested_paid_amount=requested_paid_amount,
             final_paid_amount=final_paid_amount,
-            gate_activated=gate_activated,
+            swing_signal=swing_signal,
+            swing_applied=swing_applied,
+            gate_signal=gate_signal,
+            gate_applied=gate_applied,
+            suspension_applied=suspension_applied,
             liquidity_cost_rate=adjusted_estimated_liquidity_cost_rate,
             liquidation_result=liquidation_result,
             lmt_parameters=lmt_parameters,
             closing_nav_before_recovery=max(
-                pre_lmt_nav - final_paid_amount - liquidation_result.total_realised_liquidity_cost,
+                pre_lmt_nav - final_paid_amount - realised_liquidity_cost_after_contagion,
                 ZERO,
             ),
+            realised_liquidity_cost_after_contagion=realised_liquidity_cost_after_contagion,
         )
         closing_cash = _closing_cash(
             positions=carried_positions,
@@ -208,6 +238,7 @@ def run_redemption_path(
                     market_contagion_liquidity_cost_multiplier
                 ),
                 market_contagion_applied=market_contagion_applied,
+                realised_liquidity_cost_after_contagion=realised_liquidity_cost_after_contagion,
                 behavioural_feedback_adjustment=behavioural_feedback_adjustment,
                 investor_class_states=investor_states,
                 backlog=backlog,
@@ -238,6 +269,32 @@ def _market_contagion_applies(
         assumptions.market_contagion_liquidity_cost_multiplier > ONE
         and assumptions.market_stress_month is not None
         and month_number == assumptions.market_stress_month + 1
+    )
+
+
+def _zero_nav_liquidation_result(
+    *,
+    scenario_id: str,
+    strategy: LiquidationStrategyConfig,
+    requested_paid_amount: Decimal,
+) -> LiquidationResult:
+    return LiquidationResult(
+        scenario_id=scenario_id,
+        liquidation_strategy_id=strategy.liquidation_strategy_id,
+        total_redemption_amount=requested_paid_amount,
+        cash_used=ZERO,
+        assets_liquidated=(),
+        total_post_haircut_cash_raised=ZERO,
+        total_haircut_cost=ZERO,
+        total_realised_execution_cost=ZERO,
+        total_net_cash_raised=ZERO,
+        total_realised_liquidity_cost=ZERO,
+        shortfall=requested_paid_amount,
+        dilution_amount=ZERO,
+        dilution_rate=ZERO,
+        remaining_liquid_resources=ZERO,
+        remaining_liquid_buffer_rate=ZERO,
+        minimum_cash_buffer_preserved=True,
     )
 
 
@@ -463,10 +520,13 @@ def _requested_paid_amount(
     *,
     effective_total: Decimal,
     pre_lmt_nav: Decimal,
-    gate_activated: bool,
+    gate_applied: bool,
+    suspension_applied: bool,
     lmt_parameters: LmtParameters,
 ) -> Decimal:
-    if not gate_activated:
+    if suspension_applied:
+        return ZERO
+    if not gate_applied:
         return effective_total
     return min(effective_total, pre_lmt_nav * lmt_parameters.gate_threshold_rate)
 
@@ -475,6 +535,7 @@ def _allocate_paid_and_deferred_by_class(
     *,
     demands: Sequence[InvestorClassRedemptionDemand],
     opening_backlog: Sequence[DeferredRedemptionBacklogEntry],
+    requested_paid_amount: Decimal,
     final_paid_amount: Decimal,
     month_number: int,
 ) -> tuple[tuple[InvestorClassMonthlyState, ...], tuple[DeferredRedemptionBacklogEntry, ...]]:
@@ -494,12 +555,17 @@ def _allocate_paid_and_deferred_by_class(
             if total_effective > ZERO
             else ZERO
         )
+        class_requested_paid = (
+            requested_paid_amount * class_effective / total_effective
+            if total_effective > ZERO
+            else ZERO
+        )
         class_backlog = ZERO
         for origin_month, amount in components:
-            component_paid = (
-                class_paid * amount / class_effective if class_effective > ZERO else ZERO
+            component_not_deferred = (
+                class_requested_paid * amount / class_effective if class_effective > ZERO else ZERO
             )
-            remaining = max(amount - component_paid, ZERO)
+            remaining = max(amount - component_not_deferred, ZERO)
             class_backlog += remaining
             if remaining > ZERO:
                 closing_backlog.append(
@@ -553,33 +619,45 @@ def _monthly_lmt_assessment(
     *,
     effective_redemption_rate: Decimal,
     effective_total: Decimal,
+    requested_paid_amount: Decimal,
     final_paid_amount: Decimal,
-    gate_activated: bool,
+    swing_signal: bool,
+    swing_applied: bool,
+    gate_signal: bool,
+    gate_applied: bool,
+    suspension_applied: bool,
     liquidity_cost_rate: Decimal,
     liquidation_result: LiquidationResult,
     lmt_parameters: LmtParameters,
     closing_nav_before_recovery: Decimal,
+    realised_liquidity_cost_after_contagion: Decimal | None = None,
 ) -> MonthlyPathLmtAssessment:
-    swing_activated = effective_redemption_rate >= lmt_parameters.swing_threshold_rate
-    applied_swing_factor_rate = min(liquidity_cost_rate, lmt_parameters.max_swing_factor_rate)
-    theoretical_recovery = (
-        final_paid_amount * applied_swing_factor_rate if swing_activated else ZERO
+    applied_swing_factor_rate = (
+        ZERO
+        if not swing_applied
+        else min(liquidity_cost_rate, lmt_parameters.max_swing_factor_rate)
     )
-    swing_recovery_amount = min(
-        theoretical_recovery,
-        liquidation_result.total_realised_liquidity_cost,
+    theoretical_recovery = final_paid_amount * applied_swing_factor_rate
+    swing_recovery_cap = (
+        realised_liquidity_cost_after_contagion
+        if realised_liquidity_cost_after_contagion is not None
+        else liquidation_result.total_realised_liquidity_cost
     )
+    swing_recovery_amount = min(theoretical_recovery, swing_recovery_cap)
     closing_nav = max(closing_nav_before_recovery + swing_recovery_amount, ZERO)
     remaining_liquid_buffer_rate = (
         liquidation_result.remaining_liquid_resources / closing_nav if closing_nav > ZERO else ZERO
     )
     return MonthlyPathLmtAssessment(
-        swing_activated=swing_activated,
-        gate_activated=gate_activated,
+        swing_signal=swing_signal,
+        swing_applied=swing_applied,
+        gate_signal=gate_signal,
+        gate_applied=gate_applied,
         buffer_breached=remaining_liquid_buffer_rate < lmt_parameters.minimum_buffer_rate,
+        suspension_applied=suspension_applied,
         effective_redemption_rate=effective_redemption_rate,
         paid_redemption_amount=final_paid_amount,
-        deferred_redemption_amount=max(effective_total - final_paid_amount, ZERO),
+        deferred_redemption_amount=max(effective_total - requested_paid_amount, ZERO),
         applied_swing_factor_rate=applied_swing_factor_rate,
         swing_recovery_amount=swing_recovery_amount,
         remaining_liquid_buffer_rate=remaining_liquid_buffer_rate,
@@ -592,11 +670,9 @@ def _assessment_with_outcomes(
     outcomes: list[PathLmtOutcome] = []
     if assessment.suspension_applied:
         outcomes.append(PathLmtOutcome.SUSPENSION)
-    if assessment.gate_activated:
+    if assessment.gate_applied:
         outcomes.append(PathLmtOutcome.REDEMPTION_GATE)
-    if assessment.buffer_breached:
-        outcomes.append(PathLmtOutcome.LIQUIDITY_BUFFER_BREACH)
-    if assessment.swing_activated:
+    if assessment.swing_applied:
         outcomes.append(PathLmtOutcome.SWING_PRICING)
     if not outcomes:
         outcomes.append(PathLmtOutcome.NONE)

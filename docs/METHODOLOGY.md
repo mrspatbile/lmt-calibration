@@ -19,7 +19,8 @@ diagnostic warnings explain the result?
 
 ## Current methodology scope
 
-The current methodology is a single-period liquidity stress workflow. It includes:
+The methodology includes a single-period liquidity stress workflow and a fixed
+12-month redemption path. It includes:
 
 * investor-class redemption stress
 * direct asset market shocks
@@ -29,16 +30,15 @@ The current methodology is a single-period liquidity stress workflow. It include
 * realised haircut and dilution cost
 * shortfall and remaining-liquidity analysis
 * swing-pricing, redemption-gate, and liquidity-buffer threshold diagnostics
+* monthly threshold signals separated from user-selected LMT applications
+* deferred-redemption backlog and investor-balance evolution through the path
 * structured audit record models and JSON output support
 
 ## Out of current scope
 
 The current methodology does not include:
 
-* multi-period or 12-month redemption paths
-* stochastic redemption simulation
 * intra-period liquidation schedules
-* deferred-redemption backlogs across periods
 * reverse stress testing
 * market contagion beyond the one-month liquidity-cost and net-proceeds
   adjustment defined for the 12-month redemption path
@@ -247,6 +247,36 @@ The displayed ratio uses the NAV for the corresponding post-redemption fund stat
 ## LMT threshold diagnostics
 
 Threshold results are diagnostic scenario states. They support calibration review and do not decide whether a fund manager should activate an LMT.
+
+### LMT governance modes
+
+The one-month view remains a rule-based impact diagnostic. Swing pricing and
+redemption gates are applied mechanically when their configured thresholds are
+breached.
+
+The 12-month path is a governance scenario simulation. Swing-pricing and gate
+threshold breaches create signals, but they do not change paid redemption,
+backlog, liquidation, recovery, NAV, or liquid resources unless the user selects
+the corresponding application month. The `Apply LMTs in all signal months`
+option links swing pricing and gates to their signals and reproduces the
+rule-based path treatment as an explicit scenario assumption.
+
+This linkage is evaluated sequentially. Applying an LMT can change backlog,
+next-month redemption demand, NAV, and liquid resources, so later threshold
+signals may differ from those in a signal-only path. Signal-linked months are
+therefore recalculated as the 12-month path evolves rather than fixed in advance.
+
+Suspension is never populated by the signal-linked option. It remains an
+exceptional, explicitly selected governance scenario.
+
+For the 12-month redemption path, suspension is represented only as an explicit
+user-selected scenario assumption. The model does not infer, recommend, or
+trigger suspension from shortfall, buffer breach, repeated gate activation,
+backlog, market stress, or another calculated result. In a selected suspension
+month, paid redemption is zero, effective demand remains deferred in backlog,
+redemption-funding liquidation and swing recovery are zero, and suspension has
+priority in the monthly outcome display. Risk and escalation indicators remain
+separate from suspension status.
 
 ### Swing-pricing threshold diagnostic
 

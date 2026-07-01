@@ -203,13 +203,15 @@ def test_gate_paid_redemptions_are_allocated_pro_rata_and_backlog_carries_forwar
             start_date="2026-01-01",
             random_seed=1,
             stress_months=(1,),
+            gate_months=(1,),
         ),
     )
 
     first_month = result.monthly_results[0]
     states = {state.client_class: state for state in first_month.investor_class_states}
 
-    assert first_month.lmt_assessment.gate_activated is True
+    assert first_month.lmt_assessment.gate_signal is True
+    assert first_month.lmt_assessment.gate_applied is True
     assert first_month.lmt_assessment.paid_redemption_amount == Decimal("100.0")
     assert states[ClientClass.RETAIL].paid_redemption_amount == Decimal("50.00")
     assert states[ClientClass.INSTITUTIONAL].paid_redemption_amount == Decimal("50.00")
@@ -219,6 +221,52 @@ def test_gate_paid_redemptions_are_allocated_pro_rata_and_backlog_carries_forwar
         "400.00"
     )
     assert result.monthly_results[1].investor_class_states[0].opening_backlog_amount > Decimal("0")
+
+
+def test_threshold_breach_and_liquidity_shortfall_do_not_create_lmt_backlog() -> None:
+    result = run_redemption_path(
+        fund=_fund(),
+        positions=(_cash("0"), _equity("euro_equity", "1000")),
+        investor_profiles=(_investor(ClientClass.RETAIL, "1", "0", "0.50"),),
+        liquidity_stress=LiquidityStress(
+            liquidity_stress_id="constrained_signal_only_liquidity",
+            version="1.0",
+            name="constrained_signal_only_liquidity",
+            description="Synthetic constrained liquidity for signal-only testing.",
+            stress_horizon_days=5,
+            execution_assumptions_by_asset_group={
+                AssetGroup.CASH: _execution_assumption(),
+                AssetGroup.LISTED_EQUITY: LiquidityExecutionAssumption(
+                    bid_ask_spread_rate=Decimal("0"),
+                    transaction_cost_rate=Decimal("0"),
+                    market_impact_rate=Decimal("0"),
+                    participation_rate=Decimal("0.20"),
+                    liquidity_haircut_rate=Decimal("0"),
+                ),
+            },
+        ),
+        liquidation_strategy=_strategy(),
+        lmt_parameters=_parameters(gate_threshold="0.10"),
+        assumptions=RedemptionPathAssumptions(
+            scenario_id="signal_only_with_liquidity_shortfall",
+            start_date="2026-01-01",
+            random_seed=1,
+            stress_months=(1,),
+        ),
+    )
+
+    first_month = result.monthly_results[0]
+
+    assert first_month.lmt_assessment.gate_signal is True
+    assert first_month.lmt_assessment.gate_applied is False
+    assert first_month.lmt_assessment.suspension_applied is False
+    assert first_month.liquidation_result.shortfall == Decimal("300.00")
+    assert first_month.lmt_assessment.deferred_redemption_amount == Decimal("0.00")
+    assert all(
+        state.deferred_redemption_amount == Decimal("0.00")
+        for state in first_month.investor_class_states
+    )
+    assert first_month.backlog == ()
 
 
 def test_swing_outcome_applies_next_month_behavioural_feedback_multiplier() -> None:
@@ -234,6 +282,7 @@ def test_swing_outcome_applies_next_month_behavioural_feedback_multiplier() -> N
             start_date="2026-01-01",
             random_seed=3,
             stress_months=(1, 2),
+            swing_pricing_months=(1,),
             behavioural_feedback_multipliers_by_outcome={
                 PathLmtOutcome.SWING_PRICING: {ClientClass.RETAIL: Decimal("2")}
             },
@@ -266,6 +315,7 @@ def test_gate_outcome_applies_next_month_behavioural_feedback_multiplier() -> No
             start_date="2026-01-01",
             random_seed=3,
             stress_months=(1, 2),
+            gate_months=(1,),
             behavioural_feedback_multipliers_by_outcome={
                 PathLmtOutcome.REDEMPTION_GATE: {ClientClass.RETAIL: Decimal("1.50")}
             },
@@ -282,22 +332,18 @@ def test_gate_outcome_applies_next_month_behavioural_feedback_multiplier() -> No
     assert result.monthly_results[1].investor_class_states[0].redemption_rate == Decimal("0.750")
 
 
-def test_liquidity_buffer_breach_applies_behavioural_feedback_only_when_configured() -> None:
+def test_liquidity_buffer_breach_is_a_signal_without_behavioural_feedback() -> None:
     unconfigured = _buffer_breach_path({})
     configured = _buffer_breach_path(
         {PathLmtOutcome.LIQUIDITY_BUFFER_BREACH: {ClientClass.RETAIL: Decimal("1.50")}}
     )
 
-    assert (
-        unconfigured.monthly_results[0].lmt_assessment.priority_outcome
-        is PathLmtOutcome.LIQUIDITY_BUFFER_BREACH
-    )
+    assert unconfigured.monthly_results[0].lmt_assessment.buffer_breached is True
+    assert unconfigured.monthly_results[0].lmt_assessment.priority_outcome is PathLmtOutcome.NONE
     assert unconfigured.monthly_results[1].investor_class_states[0].redemption_rate == Decimal(
         "0.10"
     )
-    assert configured.monthly_results[1].investor_class_states[0].redemption_rate == Decimal(
-        "0.150"
-    )
+    assert configured.monthly_results[1].investor_class_states[0].redemption_rate == Decimal("0.10")
 
 
 def test_behavioural_feedback_multiplier_one_is_neutral_after_outcome() -> None:
@@ -313,6 +359,7 @@ def test_behavioural_feedback_multiplier_one_is_neutral_after_outcome() -> None:
             start_date="2026-01-01",
             random_seed=3,
             stress_months=(1, 2),
+            swing_pricing_months=(1,),
             behavioural_feedback_multipliers_by_outcome={
                 PathLmtOutcome.SWING_PRICING: {ClientClass.RETAIL: Decimal("1")}
             },
@@ -370,6 +417,8 @@ def test_multiple_outcomes_use_priority_order() -> None:
             start_date="2026-01-01",
             random_seed=3,
             stress_months=(1, 2),
+            swing_pricing_months=(1,),
+            gate_months=(1,),
             behavioural_feedback_multipliers_by_outcome={
                 PathLmtOutcome.SWING_PRICING: {ClientClass.RETAIL: Decimal("2")},
                 PathLmtOutcome.REDEMPTION_GATE: {ClientClass.RETAIL: Decimal("1.50")},
@@ -378,8 +427,8 @@ def test_multiple_outcomes_use_priority_order() -> None:
     )
 
     first_assessment = result.monthly_results[0].lmt_assessment
-    assert first_assessment.swing_activated is True
-    assert first_assessment.gate_activated is True
+    assert first_assessment.swing_applied is True
+    assert first_assessment.gate_applied is True
     assert first_assessment.priority_outcome is PathLmtOutcome.REDEMPTION_GATE
     assert result.monthly_results[1].investor_class_states[0].redemption_rate == Decimal("0.750")
 
@@ -397,6 +446,7 @@ def test_behavioural_feedback_expires_without_another_activation() -> None:
             start_date="2026-01-01",
             random_seed=3,
             stress_months=(1,),
+            swing_pricing_months=(1,),
             behavioural_feedback_multipliers_by_outcome={
                 PathLmtOutcome.SWING_PRICING: {ClientClass.RETAIL: Decimal("1.50")}
             },
@@ -430,13 +480,14 @@ def test_repeated_lmt_activations_trigger_repeated_following_month_feedback() ->
             start_date="2026-01-01",
             random_seed=3,
             stress_months=(1, 2, 3),
+            swing_pricing_months=(1, 2, 3),
             behavioural_feedback_multipliers_by_outcome={
                 PathLmtOutcome.SWING_PRICING: {ClientClass.RETAIL: Decimal("1.50")}
             },
         ),
     )
 
-    assert [month.lmt_assessment.swing_activated for month in result.monthly_results[:3]] == [
+    assert [month.lmt_assessment.swing_applied for month in result.monthly_results[:3]] == [
         True,
         True,
         True,
@@ -459,6 +510,7 @@ def test_backlog_is_not_multiplied_again_by_behavioural_feedback() -> None:
             start_date="2026-01-01",
             random_seed=3,
             stress_months=(1, 2),
+            gate_months=(1,),
             behavioural_feedback_multipliers_by_outcome={
                 PathLmtOutcome.REDEMPTION_GATE: {ClientClass.RETAIL: Decimal("2")}
             },
@@ -487,6 +539,7 @@ def test_backlog_and_new_demand_do_not_exceed_remaining_investor_capital() -> No
             start_date="2026-01-01",
             random_seed=3,
             stress_months=tuple(range(1, 13)),
+            gate_months=tuple(range(1, 13)),
             behavioural_feedback_multipliers_by_outcome={
                 PathLmtOutcome.REDEMPTION_GATE: {ClientClass.RETAIL: Decimal("3")}
             },
@@ -518,6 +571,7 @@ def test_liquidation_still_uses_paid_redemption_only() -> None:
             start_date="2026-01-01",
             random_seed=3,
             stress_months=(1,),
+            gate_months=(1,),
         ),
     )
 

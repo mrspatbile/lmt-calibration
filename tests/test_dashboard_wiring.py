@@ -178,11 +178,33 @@ def test_redemption_path_controls_separate_feedback_and_market_contagion() -> No
     assert "market_contagion_enabled" not in app_source
     assert "path_market_contagion_multiplier" in app_source
     assert "Redemption behaviour" in app_source
+    assert "Assumed LMT applications" in app_source
     assert "Market and liquidity stress" in app_source
-    assert "Simulation settings" in app_source
+    assert "lmt-seed-label" in app_source
+    assert (
+        controls_source.index("Redemption behaviour")
+        < controls_source.index("Market and liquidity stress")
+        < controls_source.index("Assumed LMT applications")
+    )
     assert controls_source.count("lmt-path-block-heading") == 3
     assert '"Behavioural feedback multiplier"' in controls_source
     assert '"Market contagion multiplier"' in controls_source
+    assert '"Swing pricing months"' in controls_source
+    assert '"Gate months"' in controls_source
+    assert '"Suspension months"' in controls_source
+    assert '"Auto-apply LMTs when signals occur"' in controls_source
+    assert "Threshold signals identify months where an LMT may " in controls_source
+    assert "be considered. Applied months are selected" in controls_source
+    assert "_sync_signal_linked_lmt_months(baseline_path_run, path_run)" in app_source
+    assert "path_swing_signal_months" in controls_source
+    assert "path_swing_applied_months" in controls_source
+    assert "path_gate_signal_months" in controls_source
+    assert "path_gate_applied_months" in controls_source
+    assert "st.rerun()" in controls_source
+    assert "The model does not trigger or recommend " in app_source
+    assert "suspension. Selecting a month simulates zero redemption payments" in app_source
+    assert "suspension trigger" not in app_source.lower()
+    assert "automatic suspension" not in app_source.lower()
     sidebar_group_rule = app_source.split(".lmt-sidebar-group-label {", 1)[1].split("}", 1)[0]
     threshold_group_rule = app_source.split(".lmt-threshold-subsection-title {", 1)[1].split(
         "}", 1
@@ -197,17 +219,46 @@ def test_redemption_path_controls_separate_feedback_and_market_contagion() -> No
     assert "margin: 0 0 0.75rem" in path_block_rule
     path_separator_rule = app_source.split(".lmt-path-section-separator {", 1)[1].split("}", 1)[0]
     assert "border-top: 1px solid $border" in path_separator_rule
-    assert "margin: 1.8rem auto 4.5rem" in path_separator_rule
+    assert "margin: 0.45rem auto 1.125rem" in path_separator_rule
     assert "width: 50%" in path_separator_rule
-    assert controls_source.count("lmt-path-section-separator") == 2
+    assert controls_source.count("lmt-path-section-separator") == 3
+    assert "lmt-path-controls-lift" in controls_source
+    assert '[data-testid="stColumn"]:has(.lmt-path-controls-lift)' in app_source
+    assert "transform: translateY(-3.25rem)" in app_source
+    assert "lmt-governance-note" in controls_source
+    assert "lmt-assumed-lmt-offset" in controls_source
+    assumed_offset_rule = app_source.split(".lmt-assumed-lmt-offset {", 1)[1].split("}", 1)[0]
+    assert "height: 30px" in assumed_offset_rule
+    assert "lmt-market-stress-hint" in controls_source
+    market_hint_rule = app_source.split(".lmt-market-stress-hint {", 1)[1].split("}", 1)[0]
+    assert "margin-top: -0.625rem" in market_hint_rule
+    assert "color: $text" in app_source.split(".lmt-governance-note {", 1)[1].split("}", 1)[0]
+    assert '[aria-disabled="true"] span' in app_source
+    assert 'div[data-baseweb="select"] > div span' in app_source
+    assert "-webkit-text-fill-color: $text" in app_source
+    multiselect_tag_rule = app_source.split(
+        '[data-testid="stMultiSelect"] [data-baseweb="tag"] {', 1
+    )[1].split("}", 1)[0]
+    assert "background: transparent" in multiselect_tag_rule
+    assert "border: 0" in multiselect_tag_rule
+    assert "box-shadow: none" in multiselect_tag_rule
     assert "st.columns([0.75, 0.25]" in app_source
     assert "st.columns([0.9, 10, 0.9]" in app_source
-    assert "Applies after an LMT activation. Increases next-month redemption demand." in app_source
+    assert "Applies after an LMT is applied. Increases next-month redemption demand." in app_source
     assert "It does not change liquidity costs, prices," in app_source
     assert "Applies after a market stress month. Increases next-month realised" in app_source
     assert "Higher values mean the fund must sell more assets" in app_source
     assert "st.toggle(" not in controls_source
-    assert 'label_visibility="collapsed"' not in controls_source
+    assert "st.checkbox(" in controls_source
+    assert '[0.62, 0.38], gap="small", vertical_alignment="center"' in controls_source
+    assert 'key="path_random_seed"' in controls_source
+    assert 'label_visibility="collapsed"' in controls_source
+    assert ".st-key-path_random_seed button" in app_source
+    assert "height: 30px !important" in app_source
+    assert "width=80" in controls_source
+    assert "max_value=15.0" in app_source
+    assert "value=15.0" in app_source
+    assert controls_source.count('label_visibility="collapsed"') == 5
     assert "if selected_market_id is not None:" in controls_source
     assert "Turn on behavioural feedback to edit this multiplier." not in app_source
     assert (
@@ -287,15 +338,19 @@ def test_redemption_path_matplotlib_charts_refresh_with_controls():
     lmt_rows = [
         {
             "month": 1,
-            "swing_pricing": True,
-            "redemption_gate": False,
-            "suspension": False,
+            "swing_signal": True,
+            "swing_applied": False,
+            "gate_signal": False,
+            "gate_applied": False,
+            "suspension_applied": False,
         },
         {
             "month": 2,
-            "swing_pricing": False,
-            "redemption_gate": True,
-            "suspension": False,
+            "swing_signal": False,
+            "swing_applied": False,
+            "gate_signal": True,
+            "gate_applied": True,
+            "suspension_applied": True,
         },
     ]
     fig3 = plot_lmt_matrix(
@@ -306,11 +361,28 @@ def test_redemption_path_matplotlib_charts_refresh_with_controls():
     assert fig3 is not None
     assert fig3.get_figwidth() > 0
     assert fig3.get_figheight() > 0
-    assert fig3.axes[0].texts[0].get_text() == "Activated LMTs"
+    assert fig3.axes[0].texts[0].get_text() == "LMT signals and applications"
+    matrix_legend = fig3.axes[0].get_legend()
+    assert matrix_legend is not None
+    assert [text.get_text() for text in matrix_legend.get_texts()] == [
+        "signal",
+        "applied",
+        "suspended",
+    ]
+    assert matrix_legend._ncols == 3
+    assert matrix_legend.get_bbox_to_anchor()._bbox.x1 == 1.0
+    assert {handle.get_markeredgecolor() for handle in matrix_legend.legend_handles} == {"#f5793b"}
+    assert [label.get_text() for label in fig3.axes[0].get_yticklabels()] == [
+        "Swing",
+        "Gate",
+        "Suspend",
+    ]
     marker_sizes = {
         float(size) for collection in fig3.axes[0].collections for size in collection.get_sizes()
     }
     assert 24.0 in marker_sizes
+    assert 20.0 in marker_sizes
+    assert any(len(collection.get_facecolors()) == 0 for collection in fig3.axes[0].collections)
 
     fig4 = plot_redemption_and_nav_combined(
         monthly_rows=monthly_rows,
@@ -320,7 +392,7 @@ def test_redemption_path_matplotlib_charts_refresh_with_controls():
         dark_mode=False,
     )
     assert fig4.axes[0].get_facecolor()[:3] == (1.0, 1.0, 1.0)
-    assert fig4.axes[0].get_ylim()[1] == 80.0
+    assert fig4.axes[0].get_ylim()[1] == 60.0
     legend = fig4.axes[0].get_legend()
     assert legend is not None
     assert legend._ncols == 3

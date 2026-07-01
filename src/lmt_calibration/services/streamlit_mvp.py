@@ -397,6 +397,10 @@ def run_sample_redemption_path(
     market_stress_month: int | None,
     behavioural_feedback_multiplier: Decimal,
     market_contagion_liquidity_cost_multiplier: Decimal,
+    swing_pricing_months: tuple[int, ...] = (),
+    gate_months: tuple[int, ...] = (),
+    suspension_months: tuple[int, ...] = (),
+    apply_lmts_in_all_signal_months: bool = False,
 ) -> AppRedemptionPathRun:
     """Assemble sample inputs and run the fixed monthly redemption path."""
 
@@ -421,6 +425,10 @@ def run_sample_redemption_path(
         scenario_id=f"{scenario.scenario_id}_redemption_path",
         start_date=fund.as_of_date,
         stress_months=stress_months,
+        swing_pricing_months=swing_pricing_months,
+        gate_months=gate_months,
+        suspension_months=suspension_months,
+        apply_lmts_in_all_signal_months=apply_lmts_in_all_signal_months,
         market_stress_month=market_stress_month,
         random_seed=random_seed,
         market_contagion_liquidity_cost_multiplier=(market_contagion_liquidity_cost_multiplier),
@@ -453,6 +461,7 @@ def run_sample_redemption_path(
         strategy=strategy,
         parameters=parameters,
         stress_months=stress_months,
+        apply_lmts_in_all_signal_months=apply_lmts_in_all_signal_months,
         behavioural_feedback_multiplier=behavioural_feedback_multiplier,
         market_contagion_liquidity_cost_multiplier=(market_contagion_liquidity_cost_multiplier),
     )
@@ -544,6 +553,7 @@ def build_redemption_path_monthly_rows(
                 "paid_redemption": paid_redemption,
                 "deferred_redemption": deferred_redemption,
                 "cumulative_backlog": backlog_amount,
+                "liquidity_shortfall": month.liquidation_result.shortfall,
                 "opening_nav": month.opening_nav,
                 "pre_lmt_nav": month.pre_lmt_nav,
                 "closing_nav": month.closing_nav,
@@ -563,7 +573,7 @@ def build_redemption_path_monthly_rows(
                 ),
                 "market_contagion_applied": month.market_contagion_applied,
                 "realised_execution_cost": (month.liquidation_result.total_realised_execution_cost),
-                "realised_liquidity_cost": (month.liquidation_result.total_realised_liquidity_cost),
+                "realised_liquidity_cost": month.realised_liquidity_cost_after_contagion,
                 "gross_asset_sales": sum(
                     (
                         asset.gross_sale_amount
@@ -575,8 +585,10 @@ def build_redemption_path_monthly_rows(
                 "behavioural_feedback_source_outcome": (
                     month.behavioural_feedback_adjustment.source_outcome.value
                 ),
-                "swing_activated": month.lmt_assessment.swing_activated,
-                "gate_activated": month.lmt_assessment.gate_activated,
+                "swing_signal": month.lmt_assessment.swing_signal,
+                "swing_applied": month.lmt_assessment.swing_applied,
+                "gate_signal": month.lmt_assessment.gate_signal,
+                "gate_applied": month.lmt_assessment.gate_applied,
                 "buffer_breached": month.lmt_assessment.buffer_breached,
             }
         )
@@ -625,10 +637,12 @@ def build_redemption_path_lmt_timeline_rows(
     return [
         {
             "month": month.period.month_number,
-            "swing_pricing": month.lmt_assessment.swing_activated,
-            "redemption_gate": month.lmt_assessment.gate_activated,
+            "swing_signal": month.lmt_assessment.swing_signal,
+            "swing_applied": month.lmt_assessment.swing_applied,
+            "gate_signal": month.lmt_assessment.gate_signal,
+            "gate_applied": month.lmt_assessment.gate_applied,
             "liquidity_buffer_breach": month.lmt_assessment.buffer_breached,
-            "suspension": month.lmt_assessment.suspension_applied,
+            "suspension_applied": month.lmt_assessment.suspension_applied,
             "priority_outcome": month.lmt_assessment.priority_outcome.value,
             "paid_redemption": month.lmt_assessment.paid_redemption_amount,
             "deferred_redemption": month.lmt_assessment.deferred_redemption_amount,
@@ -646,6 +660,7 @@ def build_redemption_path_configuration_rows(
     strategy: LiquidationStrategyConfig,
     parameters: LmtParameters,
     stress_months: tuple[int, ...],
+    apply_lmts_in_all_signal_months: bool,
     behavioural_feedback_multiplier: Decimal,
     market_contagion_liquidity_cost_multiplier: Decimal,
 ) -> list[dict[str, object]]:
@@ -655,6 +670,44 @@ def build_redemption_path_configuration_rows(
         {"setting": "Scenario", "value": run.scenario_id},
         {"setting": "Redemption scenario", "value": redemption.name},
         {"setting": "Redemption-stress months", "value": _month_list_label(stress_months)},
+        {
+            "setting": "LMT application mode",
+            "value": (
+                "All signal months"
+                if apply_lmts_in_all_signal_months
+                else "Manually selected months"
+            ),
+        },
+        {
+            "setting": "Applied swing pricing months",
+            "value": _month_list_label(
+                tuple(
+                    month.period.month_number
+                    for month in run.monthly_results
+                    if month.lmt_assessment.swing_applied
+                )
+            ),
+        },
+        {
+            "setting": "Applied gate months",
+            "value": _month_list_label(
+                tuple(
+                    month.period.month_number
+                    for month in run.monthly_results
+                    if month.lmt_assessment.gate_applied
+                )
+            ),
+        },
+        {
+            "setting": "Applied suspension months",
+            "value": _month_list_label(
+                tuple(
+                    month.period.month_number
+                    for month in run.monthly_results
+                    if month.lmt_assessment.suspension_applied
+                )
+            ),
+        },
         {
             "setting": "Market stress scenario",
             "value": market_stress.name if market_stress is not None else "No market stress",
@@ -761,7 +814,6 @@ def _behavioural_feedback_multipliers_by_outcome(
     return {
         PathLmtOutcome.SWING_PRICING: multipliers_by_class,
         PathLmtOutcome.REDEMPTION_GATE: multipliers_by_class,
-        PathLmtOutcome.LIQUIDITY_BUFFER_BREACH: multipliers_by_class,
     }
 
 

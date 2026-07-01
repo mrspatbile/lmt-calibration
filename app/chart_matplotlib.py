@@ -8,6 +8,7 @@ from decimal import Decimal
 
 import matplotlib.pyplot as plt
 import pandas as pd
+from matplotlib.lines import Line2D
 from matplotlib.ticker import FuncFormatter
 
 # Color palette (from brief + fund-risk-workflow)
@@ -208,7 +209,7 @@ def plot_nav_evolution(
         (computation_date + timedelta(days=30 * i)).strftime("%b/%y") for i in range(len(months))
     ]
 
-    fig, ax = plt.subplots(figsize=(7, 2.4), dpi=120)
+    fig, ax = plt.subplots(figsize=(7, 2.0), dpi=120)
     fig.patch.set_facecolor(COLORS["bg"])
     fig.patch.set_alpha(0)
     ax.set_facecolor(COLORS["bg"])
@@ -372,7 +373,7 @@ def plot_redemption_and_nav_combined(
     )
 
     ax1.set_ylabel("")
-    redemption_axis_max_m = float(initial_nav * Decimal("0.80")) / 1e6
+    redemption_axis_max_m = float(initial_nav * Decimal("0.60")) / 1e6
     ax1.set_ylim(0, redemption_axis_max_m)
     ax1.tick_params(axis="y", labelcolor=colors["muted"], labelsize=8)
     ax1.yaxis.set_major_locator(plt.MaxNLocator(5))
@@ -529,10 +530,10 @@ def plot_lmt_matrix(
     as_of_date: str = None,
     dark_mode: bool = True,
 ) -> plt.Figure:
-    """Plot LMT trigger status matrix: Gate, Swing, Suspension by month.
+    """Plot compact monthly LMT signal and application states.
 
-    Binary status grid showing which months each LMT tool is triggered.
-    Filled circles = triggered, X markers = not triggered.
+    Hollow circles show threshold signals, filled circles show applied swing
+    pricing or gates, and diamonds show assumed suspension months.
 
     Parameters
     ----------
@@ -553,15 +554,12 @@ def plot_lmt_matrix(
 
     months = df["month"].values
     trigger_color = colors["orange"]
-    inactive_color = colors["muted"]
 
-    # Tool order and positions
-    tool_order = ["Swing", "Gate", "Suspension"]
-    tool_columns = ["swing_pricing", "redemption_gate", "suspension"]
+    tool_order = ["Swing", "Gate", "Suspend"]
     y_positions = {
         "Swing": 2.0,
         "Gate": 1.0,
-        "Suspension": 0.0,
+        "Suspend": 0.0,
     }
 
     # Generate month labels
@@ -581,64 +579,112 @@ def plot_lmt_matrix(
     ax.patch.set_alpha(0 if dark_mode else 1)
     fig.subplots_adjust(top=0.72, left=0.09, right=0.98, bottom=0.3)
 
-    ax.scatter(
+    ax.text(
         -0.05,
         1.18,
-        transform=ax.transAxes,
-        marker="o",
-        s=24,
-        color=trigger_color,
-        edgecolor=colors["marker_edge"],
-        linewidth=0.3,
-        clip_on=False,
-        zorder=4,
-    )
-    ax.text(
-        -0.037,
-        1.18,
-        "Activated LMTs",
+        "LMT signals and applications",
         transform=ax.transAxes,
         fontsize=8,
         color=colors["text"],
         fontweight="normal",
         va="center",
     )
+    legend = ax.legend(
+        handles=[
+            Line2D(
+                [],
+                [],
+                marker="o",
+                linestyle="none",
+                markerfacecolor="none",
+                markeredgecolor=trigger_color,
+                markersize=4.5,
+                label="signal",
+            ),
+            Line2D(
+                [],
+                [],
+                marker="o",
+                linestyle="none",
+                markerfacecolor=trigger_color,
+                markeredgecolor=trigger_color,
+                markersize=4.5,
+                label="applied",
+            ),
+            Line2D(
+                [],
+                [],
+                marker="D",
+                linestyle="none",
+                markerfacecolor=trigger_color,
+                markeredgecolor=trigger_color,
+                markersize=4,
+                label="suspended",
+            ),
+        ],
+        loc="lower right",
+        bbox_to_anchor=(1.0, 1.02),
+        ncol=3,
+        frameon=False,
+        fontsize=7,
+        handlelength=0.8,
+        handletextpad=0.3,
+        columnspacing=0.8,
+        borderaxespad=0,
+    )
+    for text in legend.get_texts():
+        text.set_color(colors["muted"])
 
     # Faint row bands with reduced height
     for tool in tool_order:
         y = y_positions[tool]
         ax.axhspan(y - 0.2, y + 0.2, color=colors["row_band"], alpha=0.03, zorder=0)
 
-    # Plot markers for each tool
-    for tool, col_name in zip(tool_order, tool_columns):
-        y = y_positions[tool]
-        trigger_status = df[col_name].astype(bool).values
+    for month, signal, applied in zip(
+        months,
+        df["swing_signal"].astype(bool),
+        df["swing_applied"].astype(bool),
+    ):
+        _plot_lmt_status_marker(
+            ax=ax,
+            month=month,
+            y=y_positions["Swing"],
+            signal=signal,
+            applied=applied,
+            color=trigger_color,
+            marker_edge=colors["marker_edge"],
+        )
 
-        for month, is_active in zip(months, trigger_status):
-            if is_active:
-                # Filled circle for triggered
-                ax.scatter(
-                    month,
-                    y,
-                    marker="o",
-                    s=24,
-                    color=trigger_color,
-                    edgecolor=colors["marker_edge"],
-                    linewidth=0.3,
-                    zorder=3,
-                )
-            else:
-                # X marker for not triggered
-                ax.scatter(
-                    month,
-                    y,
-                    marker="x",
-                    s=18,
-                    color=inactive_color,
-                    alpha=0.6,
-                    linewidth=1.0,
-                    zorder=2,
-                )
+    for month, signal, applied in zip(
+        months,
+        df["gate_signal"].astype(bool),
+        df["gate_applied"].astype(bool),
+    ):
+        _plot_lmt_status_marker(
+            ax=ax,
+            month=month,
+            y=y_positions["Gate"],
+            signal=signal,
+            applied=applied,
+            color=trigger_color,
+            marker_edge=colors["marker_edge"],
+        )
+
+    for month, suspension_applied in zip(
+        months,
+        df["suspension_applied"].astype(bool),
+    ):
+        if suspension_applied:
+            ax.scatter(
+                month,
+                y_positions["Suspend"],
+                marker="D",
+                s=20,
+                color=trigger_color,
+                edgecolor=colors["marker_edge"],
+                linewidth=0.3,
+                zorder=3,
+            )
 
     # Axes setup - compact spacing
     ax.set_yticks([y_positions[tool] for tool in tool_order])
@@ -655,3 +701,37 @@ def plot_lmt_matrix(
     ax.patch.set_alpha(0 if dark_mode else 1)
 
     return fig
+
+
+def _plot_lmt_status_marker(
+    *,
+    ax: plt.Axes,
+    month: int,
+    y: float,
+    signal: bool,
+    applied: bool,
+    color: str,
+    marker_edge: str,
+) -> None:
+    if applied:
+        ax.scatter(
+            month,
+            y,
+            marker="o",
+            s=24,
+            color=color,
+            edgecolor=marker_edge,
+            linewidth=0.3,
+            zorder=3,
+        )
+    elif signal:
+        ax.scatter(
+            month,
+            y,
+            marker="o",
+            s=24,
+            facecolors="none",
+            edgecolors=color,
+            linewidth=1.0,
+            zorder=2,
+        )

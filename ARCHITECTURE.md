@@ -182,6 +182,17 @@ It handles:
 
 Warnings and diagnostic checks support calibration review; they do not decide whether a fund manager should activate an LMT.
 
+### Redemption-path engine
+
+The fixed 12-month engine keeps threshold signals separate from applied LMT
+scenario assumptions. Swing-pricing and gate signals are calculated from the
+configured thresholds. Paid redemption, deferral, liquidation, swing recovery,
+and behavioural feedback change only when the corresponding LMT is applied.
+
+The application may link swing pricing and gates to every signal month through
+an explicit signal-linked mode. Suspension remains an independently selected
+scenario assumption and is never inferred from a model signal.
+
 ## Services layer
 
 The `services/streamlit_mvp.py` module orchestrates the complete workflow:

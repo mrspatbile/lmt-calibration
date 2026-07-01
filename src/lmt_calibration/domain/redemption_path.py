@@ -88,6 +88,10 @@ class RedemptionPathAssumptions(BaseModel):
     start_date: date
     horizon_months: int = Field(default=12, gt=0)
     stress_months: tuple[int, ...] = ()
+    swing_pricing_months: tuple[int, ...] = ()
+    gate_months: tuple[int, ...] = ()
+    suspension_months: tuple[int, ...] = ()
+    apply_lmts_in_all_signal_months: bool = False
     market_stress_month: int | None = None
     random_seed: int = Field(ge=0)
     behavioural_feedback_multipliers_by_outcome: dict[
@@ -116,9 +120,18 @@ class RedemptionPathAssumptions(BaseModel):
 
         if self.horizon_months != 12:
             raise ValueError("horizon_months must be 12 for the fixed redemption path")
-        for month_number in self.stress_months:
-            if month_number < 1 or month_number > self.horizon_months:
-                raise ValueError("stress_months must be within the path horizon")
+        selected_months = {
+            "stress_months": self.stress_months,
+            "swing_pricing_months": self.swing_pricing_months,
+            "gate_months": self.gate_months,
+            "suspension_months": self.suspension_months,
+        }
+        for field_name, month_numbers in selected_months.items():
+            if any(
+                month_number < 1 or month_number > self.horizon_months
+                for month_number in month_numbers
+            ):
+                raise ValueError(f"{field_name} must be within the path horizon")
         if self.market_stress_month is not None and (
             self.market_stress_month < 1 or self.market_stress_month > self.horizon_months
         ):
@@ -196,12 +209,14 @@ class MonthlyBehaviouralFeedbackAdjustment(BaseModel):
 
 
 class MonthlyPathLmtAssessment(BaseModel):
-    """Monthly threshold assessment and paid/deferred redemption split."""
+    """Monthly LMT signals, applied decisions, and redemption treatment."""
 
     model_config = ConfigDict(extra="forbid", frozen=True, str_strip_whitespace=True)
 
-    swing_activated: bool
-    gate_activated: bool
+    swing_signal: bool
+    swing_applied: bool
+    gate_signal: bool
+    gate_applied: bool
     buffer_breached: bool
     suspension_applied: bool = False
     outcomes: tuple[PathLmtOutcome, ...] = ()
@@ -231,6 +246,7 @@ class MonthlyRedemptionPathResult(BaseModel):
     adjusted_estimated_liquidity_cost_rate: Decimal = Field(ge=ZERO)
     market_contagion_liquidity_cost_multiplier: Decimal = Field(ge=ONE)
     market_contagion_applied: bool
+    realised_liquidity_cost_after_contagion: Decimal = Field(ge=ZERO)
     behavioural_feedback_adjustment: MonthlyBehaviouralFeedbackAdjustment
     investor_class_states: tuple[InvestorClassMonthlyState, ...]
     backlog: tuple[DeferredRedemptionBacklogEntry, ...]

@@ -110,7 +110,9 @@ Add deferred backlog from previous months
         ↓
 Compute effective redemption demand
         ↓
-Assess LMT thresholds and simulated LMT effects
+Assess swing-pricing, gate, and liquidity-buffer signals
+        ↓
+Apply user-selected LMT governance assumptions
         ↓
 Determine paid and deferred redemption
         ↓
@@ -219,25 +221,42 @@ Backlog does not disappear silently. It is either:
 The backlog record should allow reviewers to trace each deferred amount from
 the original month of deferral through eventual payment or continued deferral.
 
-## Threshold Assessment And Simulated LMT Effects
+## Threshold Signals And Applied LMT Decisions
 
-The monthly path uses simulated LMT assessment, not fund-manager discretion.
+The monthly path separates calculated threshold signals from LMT applications.
+Signals identify months where an LMT may be considered; they are not governance
+decisions.
 
 The model assesses:
 
-* swing-pricing activation
-* redemption-gate activation
+* swing-pricing threshold signal
+* redemption-gate threshold signal
 * liquidity-buffer breach
-* suspension treatment, consistent with the current project methodology
 
-Results should be labelled as simulated LMT effects or activation assessment.
+The user separately selects assumed swing-pricing, gate, and suspension months.
+A signal without a selected application has no effect on paid redemption,
+backlog, liquidation, swing recovery, NAV, or liquid resources.
 
-Diagnostic outputs support calibration review. They do not decide whether a fund
-manager should activate an LMT.
+The signal-linked option, labelled `Apply LMTs in all signal months`, applies
+swing pricing and gates whenever their respective threshold signal is present.
+This reproduces the rule-based path treatment as an explicit scenario choice.
+It never selects suspension.
+
+Signal-linked application is path-dependent rather than a fixed calendar lookup.
+An applied gate can change paid redemption and backlog, while applied swing
+pricing and behavioural feedback can change NAV or next-month demand. Those
+changes become inputs to later months and can create, remove, or shift subsequent
+threshold signals. The option therefore resolves signals and applications
+sequentially each month using the updated fund and investor position.
+
+The matrix distinguishes these states using hollow circles for signals, filled
+circles for applied swing pricing or gates, and diamonds for assumed suspension.
 
 ## Swing Pricing
 
-Swing pricing is assessed on effective redemption demand.
+The swing-pricing signal is assessed on effective redemption demand. Swing
+recovery is calculated only when swing pricing is selected for the month or the
+signal-linked option applies it.
 
 Swing recovery applies only to paid redemptions.
 
@@ -250,7 +269,9 @@ The applied swing factor remains capped by the configured maximum swing factor.
 
 ## Redemption Gates
 
-Gate assessment is based on effective redemption demand.
+The gate signal is based on effective redemption demand. Payment restriction and
+deferral occur only when the gate is selected for the month or the signal-linked
+option applies it.
 
 If the gate applies, only the paid portion is liquidated.
 
@@ -262,11 +283,33 @@ the deferred obligation.
 
 ## Suspension
 
-The first version should reuse the existing project suspension methodology.
+Suspension is a scenario assumption supplied explicitly by the user. The model
+does not decide, recommend, or trigger suspension. Liquidity shortfall, a buffer
+breach, repeated gate activation, backlog, market stress, and other calculated
+results cannot activate suspension.
 
-Do not introduce a new suspension methodology without a separate issue.
+For each user-selected suspension month:
 
-Suspension treatment may evolve in a later version.
+* paid redemption is zero
+* new effective redemption demand and existing backlog remain deferred
+* no redemption-funding liquidation takes place
+* no swing-pricing recovery is applied because no redemption is paid
+* suspension is the highest-priority monthly LMT outcome
+
+Existing backlog keeps its original investor class and origin month. New demand
+is added as backlog for the suspension month. Investor capital already represented
+by a redemption request is not requested again in later months.
+
+Threshold diagnostics and risk or escalation indicators remain separate from the
+user-selected suspension status. They may identify shortfall, persistent backlog,
+buffer pressure, extreme demand, or repeated simulated LMT activation, but they
+must not be described as suspension decisions.
+
+Suspension is shown in the activation timeline only for explicitly selected
+months and uses a distinct marker from swing pricing and redemption gates.
+Suspension-related behavioural feedback is out of scope: a suspension month does
+not create an additional redemption-demand multiplier unless a separately
+approved behavioural assumption is introduced.
 
 ## Behavioural Feedback
 
@@ -345,17 +388,17 @@ Each subsequent LMT activation creates its own next-month feedback effect. If
 LMTs are activated in several periods, behavioural feedback therefore continues
 after each activation rather than being limited to the first occurrence.
 
-When multiple LMT outcomes occur in a month, the priority order determines which
-outcome generates behavioural feedback for the following month:
+When multiple applied LMT outcomes occur in a month, the priority order determines
+which outcome generates behavioural feedback for the following month:
 
-1. suspension
-2. redemption gate
-3. liquidity-buffer breach
-4. swing pricing
-5. none
+1. user-selected suspension
+2. applied redemption gate
+3. applied swing pricing
+4. none
 
 Only the highest-priority outcome applies behavioural feedback; lower-priority
-outcomes are not multiplied again.
+outcomes are not multiplied again. Threshold signals and liquidity-buffer
+breaches do not create behavioural feedback unless an LMT is applied.
 
 Behavioural feedback can vary by investor class. The same LMT or stress outcome
 may trigger different redemption multipliers for different investor classes in
@@ -366,8 +409,8 @@ carries forward at its original amount and joins new monthly redemption demand.
 The current month’s behavioural feedback multiplier applies only to that new
 demand.
 
-Suspension treatment follows the existing project methodology. No new suspension
-methodology is implemented in this version.
+User-selected suspension retains a neutral next-month behavioural multiplier.
+The model does not infer investor reaction to suspension.
 
 ## Liquidation
 
@@ -431,7 +474,7 @@ At month end, the methodology determines:
 * NAV
 * liquid resources
 * deferred backlog
-* LMT assessment outcome
+* LMT threshold signals and applied outcome
 * behavioural feedback multipliers for the next month
 
 The month-end position becomes the opening position for the next simulation
@@ -465,11 +508,13 @@ in the methodology.
 
 ## Relationship To The Single-Period Methodology
 
-The current dashboard workflow performs one-period calibration across selected
-market conditions.
+The one-month view is a rule-based impact diagnostic. Configured swing-pricing
+and gate thresholds are applied mechanically when breached.
 
-The planned redemption-path page will simulate one selected scenario through
-time.
+The 12-month path is a governance scenario simulation. Thresholds create signals,
+while swing pricing, gates, and suspension affect the path only in user-selected
+months. The signal-linked option can apply swing pricing and gates in every
+signal month. Suspension remains explicitly selected.
 
 ## Out Of Scope
 
@@ -485,6 +530,7 @@ For the first 12-month redemption-path version, exclude:
 * market contagion beyond the one-month liquidity-cost and net-proceeds adjustment
 * calming effects represented by behavioural feedback multipliers below 1
 * hardcoded behavioural economics
-* new suspension methodology
+* automatic suspension triggers or recommendations
+* governance or regulatory decision rules for suspension
 * live market data
 * production fund-document rules

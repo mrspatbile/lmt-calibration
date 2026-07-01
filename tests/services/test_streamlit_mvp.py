@@ -1,5 +1,6 @@
 from decimal import Decimal
 from pathlib import Path
+from unittest.mock import patch
 
 import pytest
 
@@ -9,6 +10,7 @@ from lmt_calibration.services import (
     load_app_sample_data,
     run_sample_redemption_path,
     run_selected_sample_scenario,
+    streamlit_mvp,
 )
 
 SAMPLE_DATA_DIR = Path("data/sample")
@@ -80,9 +82,164 @@ def test_streamlit_mvp_service_runs_redemption_path_without_market_stress() -> N
     assert {row["setting"] for row in run.configuration_rows} >= {
         "Market stress scenario",
         "Redemption-stress months",
+        "LMT application mode",
+        "Applied swing pricing months",
+        "Applied gate months",
+        "Applied suspension months",
         "Behavioural feedback",
         "Market contagion",
     }
+
+
+def test_streamlit_path_passes_empty_applied_months_when_no_lmt_is_selected() -> None:
+    inputs = load_app_sample_data(SAMPLE_DATA_DIR)
+    fund = inputs.funds[0]
+    strategy = inputs.liquidation_strategies[0]
+    redemption = inputs.redemption_scenarios[0]
+    with patch.object(
+        streamlit_mvp,
+        "run_redemption_path",
+        wraps=streamlit_mvp.run_redemption_path,
+    ) as engine_mock:
+        run = run_sample_redemption_path(
+            inputs,
+            fund_id=fund.fund_id,
+            strategy_id=strategy.liquidation_strategy_id,
+            redemption_scenario_id=redemption.redemption_scenario_id,
+            lmt_parameters_override=None,
+            stress_months=(1,),
+            random_seed=42,
+            market_stress_id=None,
+            market_stress_month=None,
+            behavioural_feedback_multiplier=Decimal("1"),
+            market_contagion_liquidity_cost_multiplier=Decimal("1"),
+        )
+
+    assumptions = engine_mock.call_args.kwargs["assumptions"]
+    assert assumptions.apply_lmts_in_all_signal_months is False
+    assert assumptions.swing_pricing_months == ()
+    assert assumptions.gate_months == ()
+    assert assumptions.suspension_months == ()
+    assert all(not row["gate_applied"] for row in run.lmt_timeline_rows)
+    assert all(not row["suspension_applied"] for row in run.lmt_timeline_rows)
+    assert all(
+        row["cumulative_backlog"]
+        == sum(
+            (entry.remaining_amount for entry in run.result.monthly_results[index].backlog),
+            Decimal("0"),
+        )
+        for index, row in enumerate(run.monthly_rows)
+    )
+    assert all(
+        row["liquidity_shortfall"] == run.result.monthly_results[index].liquidation_result.shortfall
+        for index, row in enumerate(run.monthly_rows)
+    )
+
+
+def test_page_one_threshold_assessment_remains_automatic() -> None:
+    inputs = load_app_sample_data(SAMPLE_DATA_DIR)
+    fund = inputs.funds[0]
+    strategy = inputs.liquidation_strategies[0]
+    scenario = next(item for item in inputs.scenario_definitions if item.fund_id == fund.fund_id)
+    parameters = inputs.parameters_by_key[
+        (scenario.fund_id, scenario.as_of_date, scenario.lmt_parameter_set_id)
+    ].model_copy(
+        update={
+            "swing_threshold_rate": Decimal("0"),
+            "gate_threshold_rate": Decimal("0"),
+        }
+    )
+
+    run = run_selected_sample_scenario(
+        inputs,
+        fund_id=fund.fund_id,
+        strategy_id=strategy.liquidation_strategy_id,
+        lmt_parameters_override=parameters,
+    )
+
+    assert run.lmt_activation.swing_activated is True
+    assert run.lmt_activation.gate_activated is True
+    assert run.lmt_activation.redemption_deferred_amount > Decimal("0")
+
+
+def test_streamlit_mvp_service_reports_user_selected_suspension() -> None:
+    inputs = load_app_sample_data(SAMPLE_DATA_DIR)
+    fund = inputs.funds[0]
+    strategy = inputs.liquidation_strategies[0]
+    redemption = inputs.redemption_scenarios[0]
+
+    run = run_sample_redemption_path(
+        inputs,
+        fund_id=fund.fund_id,
+        strategy_id=strategy.liquidation_strategy_id,
+        redemption_scenario_id=redemption.redemption_scenario_id,
+        lmt_parameters_override=None,
+        stress_months=(1, 2),
+        suspension_months=(2,),
+        random_seed=42,
+        market_stress_id=None,
+        market_stress_month=None,
+        behavioural_feedback_multiplier=Decimal("1"),
+        market_contagion_liquidity_cost_multiplier=Decimal("1"),
+    )
+
+    assert [row["suspension_applied"] for row in run.lmt_timeline_rows[:3]] == [
+        False,
+        True,
+        False,
+    ]
+    assert run.lmt_timeline_rows[1]["priority_outcome"] == "suspension"
+    assert (
+        next(
+            row["value"]
+            for row in run.configuration_rows
+            if row["setting"] == "Applied suspension months"
+        )
+        == "2"
+    )
+
+
+def test_streamlit_mvp_signal_linked_mode_applies_swing_and_gate_without_suspension() -> None:
+    inputs = load_app_sample_data(SAMPLE_DATA_DIR)
+    fund = inputs.funds[0]
+    strategy = inputs.liquidation_strategies[0]
+    redemption = inputs.redemption_scenarios[0]
+    scenario = next(item for item in inputs.scenario_definitions if item.fund_id == fund.fund_id)
+    parameters = inputs.parameters_by_key[
+        (scenario.fund_id, scenario.as_of_date, scenario.lmt_parameter_set_id)
+    ].model_copy(
+        update={
+            "swing_threshold_rate": Decimal("0"),
+            "gate_threshold_rate": Decimal("0"),
+        }
+    )
+
+    run = run_sample_redemption_path(
+        inputs,
+        fund_id=fund.fund_id,
+        strategy_id=strategy.liquidation_strategy_id,
+        redemption_scenario_id=redemption.redemption_scenario_id,
+        lmt_parameters_override=parameters,
+        stress_months=(1,),
+        random_seed=42,
+        market_stress_id=None,
+        market_stress_month=None,
+        behavioural_feedback_multiplier=Decimal("1"),
+        market_contagion_liquidity_cost_multiplier=Decimal("1"),
+        apply_lmts_in_all_signal_months=True,
+    )
+
+    assert all(row["swing_signal"] == row["swing_applied"] for row in run.lmt_timeline_rows)
+    assert all(row["gate_signal"] == row["gate_applied"] for row in run.lmt_timeline_rows)
+    assert all(not row["suspension_applied"] for row in run.lmt_timeline_rows)
+    assert (
+        next(
+            row["value"]
+            for row in run.configuration_rows
+            if row["setting"] == "LMT application mode"
+        )
+        == "All signal months"
+    )
 
 
 def test_sample_normal_redemption_path_uses_stable_beta_draws() -> None:
@@ -141,6 +298,7 @@ def test_streamlit_mvp_service_prepares_behavioural_feedback_rows() -> None:
         redemption_scenario_id=redemption.redemption_scenario_id,
         lmt_parameters_override=parameters,
         stress_months=(1, 2),
+        swing_pricing_months=(1,),
         random_seed=42,
         market_stress_id=None,
         market_stress_month=None,
@@ -182,6 +340,7 @@ def test_streamlit_mvp_service_uses_one_as_neutral_behavioural_feedback() -> Non
         redemption_scenario_id=redemption.redemption_scenario_id,
         lmt_parameters_override=parameters,
         stress_months=(1, 2),
+        swing_pricing_months=(1,),
         random_seed=42,
         market_stress_id=None,
         market_stress_month=None,
