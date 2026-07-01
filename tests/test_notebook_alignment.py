@@ -4,6 +4,8 @@ import importlib.util
 import json
 from pathlib import Path
 
+import pytest
+
 WALKTHROUGH_NOTEBOOK = Path("notebooks/liquidation_strategy_walkthrough.ipynb")
 INSPECTION_NOTEBOOK = Path("notebooks/liquidation_strategy_inspection.ipynb")
 NOTEBOOK_HELPERS = Path("notebooks/_notebook_helpers.py")
@@ -72,6 +74,13 @@ def test_walkthrough_separates_behavioural_feedback_from_market_contagion() -> N
     assert "behavioural_feedback_enabled" not in source
     assert "market_contagion_enabled" not in source
     assert "market_contagion_liquidity_cost_multiplier" in source
+
+
+def test_walkthrough_uses_explicit_signal_linked_lmt_mode() -> None:
+    source = Path("notebooks/liquidation_strategy_walkthrough.ipynb").read_text(encoding="utf-8")
+
+    assert "apply_lmts_in_all_signal_months=True" in source
+    assert "Threshold signals are separated from applied LMT governance assumptions" in source
     assert "Market contagion increases incremental realised execution cost" in source
 
 
@@ -83,6 +92,27 @@ def test_inspection_notebook_is_marked_as_low_level_diagnostic() -> None:
     assert "low-level diagnostic notebook" in source
     assert "This notebook is not the application workflow" in source
     assert "application-aligned walkthrough" in source
+
+
+@pytest.mark.parametrize("notebook_path", [WALKTHROUGH_NOTEBOOK, INSPECTION_NOTEBOOK])
+def test_notebook_code_cells_execute(
+    notebook_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Execute notebook code cells in order to catch stale runtime contracts."""
+
+    notebook_path = notebook_path.resolve()
+    notebook_dir = notebook_path.parent
+    notebook = json.loads(notebook_path.read_text())
+    monkeypatch.chdir(notebook_dir)
+    monkeypatch.syspath_prepend(str(notebook_dir))
+    namespace: dict[str, object] = {"__name__": "__main__"}
+
+    for index, cell in enumerate(notebook.get("cells", [])):
+        if cell.get("cell_type") != "code":
+            continue
+        source = "".join(cell.get("source", []))
+        exec(compile(source, f"{notebook_path.name}:cell-{index}", "exec"), namespace)
 
 
 def _notebook_source(path: Path) -> str:
