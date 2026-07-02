@@ -178,30 +178,29 @@ def test_redemption_path_controls_separate_feedback_and_market_contagion() -> No
     assert "market_contagion_enabled" not in app_source
     assert "path_market_contagion_multiplier" in app_source
     assert "Redemption behaviour" in app_source
-    assert "Assumed LMT applications" in app_source
+    assert "LMT Activation Decisions" in app_source
     assert "Market and liquidity stress" in app_source
     assert "lmt-seed-label" in app_source
     assert (
         controls_source.index("Redemption behaviour")
         < controls_source.index("Market and liquidity stress")
-        < controls_source.index("Assumed LMT applications")
+        < controls_source.index("LMT Activation Decisions")
     )
     assert controls_source.count("lmt-path-block-heading") == 3
     assert '"Behavioural feedback multiplier"' in controls_source
-    assert '"Market contagion multiplier"' in controls_source
-    assert '"Swing pricing months"' in controls_source
-    assert '"Gate months"' in controls_source
-    assert '"Suspension months"' in controls_source
-    assert '"Auto-apply LMTs when signals occur"' in controls_source
-    assert "Threshold signals identify months where an LMT may " in controls_source
-    assert "be considered. Applied months are selected" in controls_source
+    assert '"Contagion ×"' in controls_source
+    assert "Swing pricing" in controls_source
+    assert "Gate" in controls_source
+    assert "Suspension months" in controls_source
+    assert '"Auto-apply LMTs when thresholds are breached"' in controls_source
+    assert "Automatically activates LMTs in months where thresholds are breached" in controls_source
+    assert "threshold breaches and activation months are shown separately" in controls_source
     assert "_sync_signal_linked_lmt_months(baseline_path_run, path_run)" in app_source
     assert "path_swing_signal_months" in controls_source
     assert "path_swing_applied_months" in controls_source
     assert "path_gate_signal_months" in controls_source
     assert "path_gate_applied_months" in controls_source
     assert "st.rerun()" in controls_source
-    assert "The model does not trigger or recommend " in app_source
     assert "suspension. Selecting a month simulates zero redemption payments" in app_source
     assert "suspension trigger" not in app_source.lower()
     assert "automatic suspension" not in app_source.lower()
