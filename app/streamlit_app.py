@@ -2656,6 +2656,7 @@ def _render_cash_account_diagnostics(run: AppRedemptionPathRun) -> None:
         }
         .streamlit-expanderContent {
             background-color: #0f172a !important;
+            padding: 2px 0 !important;
         }
         div[data-testid="stExpander"] > div:nth-child(2) {
             background-color: #0f172a !important;
@@ -2997,6 +2998,7 @@ def _render_nav_reconciliation_diagnostics(run: AppRedemptionPathRun) -> None:
         }
         .streamlit-expanderContent {
             background-color: #0f172a !important;
+            padding: 2px 0 !important;
         }
         </style>
         """,
