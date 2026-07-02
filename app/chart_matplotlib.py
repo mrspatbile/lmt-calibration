@@ -526,15 +526,15 @@ def plot_redemption_and_nav_combined(
         pad=6,
     )
 
-    # Two-line chart: Economic cost (always constant) and Fund-borne cost (drops when swing active)
+    # Two-line chart: Investor-borne cost and Fund-borne cost
     ax_cost.plot(
         months,
-        realised_liquidity_cost_m,
+        allocated_liquidity_cost_m,
         color=colors["nav_liquid"],
         marker="o",
         linewidth=2.0,
         markersize=5,
-        label="Economic cost",
+        label="Investor-borne cost",
         zorder=3,
     )
     ax_cost.plot(
@@ -551,13 +551,22 @@ def plot_redemption_and_nav_combined(
     ax_cost.fill_between(
         months,
         0,
-        realised_liquidity_cost_m,
+        allocated_liquidity_cost_m,
         color=colors["nav_liquid"],
         alpha=0.10,
         zorder=1,
     )
 
-    cost_max = float(realised_liquidity_cost_m.max()) if realised_liquidity_cost_m.max() > 0 else 1
+    cost_max = (
+        float(
+            max(
+                allocated_liquidity_cost_m.max() if allocated_liquidity_cost_m.max() > 0 else 0,
+                net_fund_borne_m.max() if net_fund_borne_m.max() > 0 else 0,
+            )
+        )
+        if len(months) > 0
+        else 1
+    )
     ax_cost.set_ylim(0, cost_max * 1.25 if cost_max > 0 else 1)
     ax_cost.set_ylabel("")
     ax_cost.yaxis.set_major_locator(plt.MaxNLocator(3))
