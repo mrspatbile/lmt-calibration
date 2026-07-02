@@ -17,9 +17,6 @@ The dashboard provides two complementary analyses:
 ![LMT calibration dashboard](figs/LMT-darkmode.png)
 <p align="center"><em>The screenshots use a synthetic example fund. The underlying data can be replaced with other fund datasets through the documented input structure.</em></p>
 
-The scenarios used for calibration combine:
-* liability-side multi-period pressure from investor redemptions by client class
-* asset-side pressure from market shocks, liquidity haircuts, and realised liquidation costs
 
 The current application handles a broad range of portfolio exposures, including repos, bonds, listed equities, listed ETFs, and selected derivatives, to model market and liquidity stress. It also supports investor bases with different client classes and redemption behaviours, which are used in multi-period redemption stress modelling.
 
@@ -106,3 +103,11 @@ uv run ruff format --check src tests app
 uv run mypy src
 uv run pytest tests -v
 ```
+
+## License
+
+This project is licensed under the PolyForm Noncommercial License 1.0.0.
+
+You may use, study, modify, and share this software for noncommercial purposes. Commercial use is not permitted without prior written permission from the copyright holder.
+
+For commercial licensing enquiries, please contact the repository owner.
