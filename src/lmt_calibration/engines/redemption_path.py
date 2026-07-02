@@ -181,6 +181,10 @@ def run_redemption_path(
             liquidation_result.total_realised_liquidity_cost
             * market_contagion_liquidity_cost_multiplier
         )
+        # Calculate fund-borne liquidity cost: when swing is applied, cost is transferred to redeeming investors
+        fund_borne_liquidity_cost_after_contagion = (
+            ZERO if swing_applied else realised_liquidity_cost_after_contagion
+        )
         lmt_assessment = _monthly_lmt_assessment(
             effective_redemption_rate=effective_redemption_rate,
             effective_total=effective_total,
@@ -195,7 +199,7 @@ def run_redemption_path(
             liquidation_result=liquidation_result,
             lmt_parameters=lmt_parameters,
             closing_nav_before_recovery=max(
-                pre_lmt_nav - final_paid_amount - realised_liquidity_cost_after_contagion,
+                pre_lmt_nav - final_paid_amount - fund_borne_liquidity_cost_after_contagion,
                 ZERO,
             ),
             realised_liquidity_cost_after_contagion=realised_liquidity_cost_after_contagion,
@@ -240,6 +244,7 @@ def run_redemption_path(
                 ),
                 market_contagion_applied=market_contagion_applied,
                 realised_liquidity_cost_after_contagion=realised_liquidity_cost_after_contagion,
+                fund_borne_liquidity_cost_after_contagion=fund_borne_liquidity_cost_after_contagion,
                 behavioural_feedback_adjustment=behavioural_feedback_adjustment,
                 investor_class_states=investor_states,
                 backlog=backlog,

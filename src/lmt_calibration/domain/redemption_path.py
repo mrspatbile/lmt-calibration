@@ -248,6 +248,7 @@ class MonthlyRedemptionPathResult(BaseModel):
     market_contagion_liquidity_cost_multiplier: Decimal = Field(ge=ONE)
     market_contagion_applied: bool
     realised_liquidity_cost_after_contagion: Decimal = Field(ge=ZERO)
+    fund_borne_liquidity_cost_after_contagion: Decimal = Field(ge=ZERO)
     behavioural_feedback_adjustment: MonthlyBehaviouralFeedbackAdjustment
     investor_class_states: tuple[InvestorClassMonthlyState, ...]
     backlog: tuple[DeferredRedemptionBacklogEntry, ...]
