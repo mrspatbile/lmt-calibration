@@ -1635,6 +1635,7 @@ def _capture_redemption_path_controls(
             label,
             value=False,
             key="stress_month_12",
+            label_visibility="collapsed",
             help=help_text,
         ):
             selected_months.append(12)

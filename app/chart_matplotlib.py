@@ -525,52 +525,63 @@ def plot_redemption_and_nav_combined(
         fontweight="normal",
         pad=6,
     )
-    ax_cost.plot(
-        months,
+
+    # Create grouped bar chart with bars side-by-side for each month
+    bar_width = 0.25
+    x_positions = list(range(len(months)))
+
+    # Positions for bars within each month group (no space between bars, touching exactly)
+    # 3 bars of width 0.25 with centers offset by 0.25 will touch
+    x_economic = [x - bar_width for x in x_positions]
+    x_allocated = [x for x in x_positions]
+    x_fund_borne = [x + bar_width for x in x_positions]
+
+    ax_cost.bar(
+        x_economic,
         realised_liquidity_cost_m,
+        width=bar_width,
         color=colors["nav_liquid"],
-        marker="o",
-        linewidth=2.0,
-        markersize=5,
         label="Economic cost",
-        zorder=3,
+        zorder=2,
     )
-    ax_cost.plot(
-        months,
+    ax_cost.bar(
+        x_allocated,
         allocated_liquidity_cost_m,
+        width=bar_width,
         color=colors["cyan"],
-        marker="s",
-        linewidth=1.8,
-        markersize=4,
-        linestyle="-",
         label="Allocated to investors",
         zorder=2,
     )
-    ax_cost.plot(
-        months,
+    ax_cost.bar(
+        x_fund_borne,
         net_fund_borne_m,
+        width=bar_width,
         color=colors["orange"],
-        marker="o",
-        linewidth=1.8,
-        markersize=4,
-        linestyle="--",
         label="Net fund-borne",
         zorder=2,
     )
-    ax_cost.fill_between(
-        months,
-        0,
-        realised_liquidity_cost_m,
-        color=colors["nav_liquid"],
-        alpha=0.15,
+
+    # Set x-axis to show month numbers with space between month groups
+    ax_cost.set_xticks(x_positions)
+    ax_cost.set_xticklabels(months, fontsize=8)
+
+    cost_max = (
+        float(
+            max(
+                realised_liquidity_cost_m.max() if realised_liquidity_cost_m.max() > 0 else 0,
+                allocated_liquidity_cost_m.max() if allocated_liquidity_cost_m.max() > 0 else 0,
+                net_fund_borne_m.max() if net_fund_borne_m.max() > 0 else 0,
+            )
+        )
+        if len(months) > 0
+        else 1
     )
-    cost_max = float(realised_liquidity_cost_m.max()) if realised_liquidity_cost_m.max() > 0 else 1
     ax_cost.set_ylim(0, cost_max * 1.25 if cost_max > 0 else 1)
     ax_cost.set_ylabel("")
     ax_cost.yaxis.set_major_locator(plt.MaxNLocator(3))
     ax_cost.yaxis.set_major_formatter(FuncFormatter(lambda value, _: f"€{value:.2f}M"))
     ax_cost.tick_params(axis="y", labelcolor=colors["muted"], labelsize=8)
-    ax_cost.tick_params(axis="x", labelbottom=False, length=0)
+    ax_cost.tick_params(axis="x", labelcolor=colors["muted"], labelsize=8, length=0)
     ax_cost.grid(True, axis="y", alpha=0.3, linestyle="-", linewidth=0.5, color=colors["grid"])
     ax_cost.set_axisbelow(True)
     for spine in ax_cost.spines.values():
