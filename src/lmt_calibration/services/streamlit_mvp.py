@@ -578,6 +578,11 @@ def build_redemption_path_monthly_rows(
                 "realised_execution_cost": (month.liquidation_result.total_realised_execution_cost),
                 "realised_liquidity_cost": month.realised_liquidity_cost_after_contagion,
                 "fund_borne_liquidity_cost": month.fund_borne_liquidity_cost_after_contagion,
+                "swing_pricing_adjustment_received": (
+                    month.lmt_assessment.swing_pricing_adjustment_received
+                ),
+                "swing_pricing_receivable_opening": month.swing_pricing_receivable_opening,
+                "swing_pricing_receivable_closing": month.swing_pricing_receivable_closing,
                 "strategy_deviation_amount": (month.liquidation_result.strategy_deviation_amount),
                 "gross_asset_sales": sum(
                     (

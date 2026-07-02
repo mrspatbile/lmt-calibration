@@ -327,9 +327,23 @@ def plot_redemption_and_nav_combined(
     realised_liquidity_cost_m = (
         df.get("realised_liquidity_cost", pd.Series(0.0, index=df.index)).astype(float) / 1e6
     )
-    fund_borne_liquidity_cost_m = (
-        df.get("fund_borne_liquidity_cost", pd.Series(0.0, index=df.index)).astype(float) / 1e6
+    swing_adjustment_received_m = (
+        df.get("swing_pricing_adjustment_received", pd.Series(0.0, index=df.index)).astype(float)
+        / 1e6
     )
+    swing_receivable_opening_m = (
+        df.get("swing_pricing_receivable_opening", pd.Series(0.0, index=df.index)).astype(float)
+        / 1e6
+    )
+    swing_receivable_closing_m = (
+        df.get("swing_pricing_receivable_closing", pd.Series(0.0, index=df.index)).astype(float)
+        / 1e6
+    )
+    # Liquidity cost allocated to redeeming investors = swing received + increase in receivable
+    swing_receivable_increase_m = swing_receivable_closing_m - swing_receivable_opening_m
+    allocated_liquidity_cost_m = swing_adjustment_received_m + swing_receivable_increase_m
+    # Net fund-borne cost = economic cost - allocated cost
+    net_fund_borne_m = realised_liquidity_cost_m - allocated_liquidity_cost_m
     illiquid_m = df["illiquid_nav"].astype(float) / 1e6
     liquid_m = df["liquid_nav"].astype(float) / 1e6
     months = df["month"].values
@@ -501,10 +515,10 @@ def plot_redemption_and_nav_combined(
         ax_shortfall.spines["top"].set_visible(False)
         ax_shortfall.spines["right"].set_visible(False)
 
-    # ===== REALISED LIQUIDITY COST SUBPLOT =====
+    # ===== LIQUIDITY COST OWNERSHIP SUBPLOT =====
     ax_cost.set_facecolor(colors["bg"])
     ax_cost.set_title(
-        "Economic liquidity cost",
+        "Realised liquidity cost",
         loc="left",
         fontsize=9,
         color=colors["text"],
@@ -516,28 +530,41 @@ def plot_redemption_and_nav_combined(
         realised_liquidity_cost_m,
         color=colors["nav_liquid"],
         marker="o",
-        linewidth=1.8,
-        markersize=4,
+        linewidth=2.0,
+        markersize=5,
         label="Economic cost",
+        zorder=3,
     )
     ax_cost.plot(
         months,
-        fund_borne_liquidity_cost_m,
+        allocated_liquidity_cost_m,
+        color=colors["cyan"],
+        marker="s",
+        linewidth=1.8,
+        markersize=4,
+        linestyle="-",
+        label="Allocated to investors",
+        zorder=2,
+    )
+    ax_cost.plot(
+        months,
+        net_fund_borne_m,
         color=colors["orange"],
         marker="o",
         linewidth=1.8,
         markersize=4,
         linestyle="--",
-        label="Fund-borne cost",
+        label="Net fund-borne",
+        zorder=2,
     )
     ax_cost.fill_between(
         months,
         0,
         realised_liquidity_cost_m,
         color=colors["nav_liquid"],
-        alpha=0.25,
+        alpha=0.15,
     )
-    cost_max = float(max(realised_liquidity_cost_m.max(), fund_borne_liquidity_cost_m.max()))
+    cost_max = float(realised_liquidity_cost_m.max()) if realised_liquidity_cost_m.max() > 0 else 1
     ax_cost.set_ylim(0, cost_max * 1.25 if cost_max > 0 else 1)
     ax_cost.set_ylabel("")
     ax_cost.yaxis.set_major_locator(plt.MaxNLocator(3))
@@ -554,7 +581,7 @@ def plot_redemption_and_nav_combined(
     legend_cost = ax_cost.legend(
         loc="lower right",
         bbox_to_anchor=(1.0, 1.02),
-        ncol=2,
+        ncol=3,
         frameon=False,
         fontsize=8,
         handlelength=1.2,
@@ -714,7 +741,7 @@ def plot_lmt_matrix(
                 markerfacecolor="none",
                 markeredgecolor=trigger_color,
                 markersize=4.5,
-                label="threshold breach",
+                label="signal",
             ),
             Line2D(
                 [],
@@ -724,7 +751,7 @@ def plot_lmt_matrix(
                 markerfacecolor=trigger_color,
                 markeredgecolor=trigger_color,
                 markersize=4.5,
-                label="LMT activated",
+                label="applied",
             ),
             Line2D(
                 [],
@@ -803,7 +830,9 @@ def plot_lmt_matrix(
 
     # Axes setup - compact spacing
     ax.set_yticks([y_positions[tool] for tool in tool_order])
-    ax.set_yticklabels(tool_order, fontsize=8, color=colors["text"])
+    # Use darker color for y-axis labels in light mode for better visibility
+    y_label_color = colors["text"] if dark_mode else "#000000"
+    ax.set_yticklabels(tool_order, fontsize=8, color=y_label_color, fontweight="600")
     ax.set_xticks(months)
     ax.set_xticklabels(month_labels, fontsize=7, color=colors["text"])
     ax.set_xlim(0.5, len(months) + 0.5)

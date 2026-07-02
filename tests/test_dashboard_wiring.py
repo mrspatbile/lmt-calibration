@@ -366,7 +366,7 @@ def test_redemption_path_matplotlib_charts_refresh_with_controls():
     assert fig3 is not None
     assert fig3.get_figwidth() > 0
     assert fig3.get_figheight() > 0
-    assert fig3.axes[0].texts[0].get_text() == "LMT signals and applications"
+    assert fig3.axes[0].texts[0].get_text() == "LMT threshold breaches and activations"
     matrix_legend = fig3.axes[0].get_legend()
     assert matrix_legend is not None
     assert [text.get_text() for text in matrix_legend.get_texts()] == [

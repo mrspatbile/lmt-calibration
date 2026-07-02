@@ -9,6 +9,7 @@ from string import Template
 
 import pandas as pd
 import streamlit as st
+from streamlit.components.v1 import html as st_html
 
 from lmt_calibration.domain import AssetPosition, LmtParameters
 from lmt_calibration.services import (
@@ -348,6 +349,11 @@ h1.lmt-title {
   font-weight: 760;
   line-height: 1.15;
   margin: 0 !important;
+}
+@media (prefers-color-scheme: light) {
+  h1.lmt-title {
+    color: #1e3a5f !important;
+  }
 }
 .lmt-subtitle {
   color: $secondary_text;
@@ -861,6 +867,9 @@ table.lmt-matrix .cell-wrapper {
 .st-key-path_random_seed label {
   margin-bottom: 2px !important;
   padding-bottom: 0 !important;
+}
+.st-key-path_random_seed button {
+  height: 30px !important;
 }
 .lmt-path-config {
   background: $surface;
@@ -1601,21 +1610,14 @@ def _capture_redemption_path_controls(
 
     cols = st.columns(12, gap="xxsmall")
     selected_months = []
-    for month in range(1, 13):
+    for month in range(1, 12):
         with cols[month - 1]:
-            label = " " if month == 12 else str(month)
-            label_visibility = "visible" if month == 12 else "collapsed"
-            help_text = (
-                "Months where investor stress redemption rates replace sampled normal-period rates."
-                if month == 12
-                else None
-            )
+            label = str(month)
             if st.checkbox(
                 label,
                 value=False,
                 key=f"stress_month_{month}",
-                label_visibility=label_visibility,
-                help=help_text,
+                label_visibility="collapsed",
             ):
                 selected_months.append(month)
             st.markdown(
@@ -1623,6 +1625,24 @@ def _capture_redemption_path_controls(
                 f"{month}</div>",
                 unsafe_allow_html=True,
             )
+
+    with cols[11]:
+        label = " "
+        help_text = (
+            "Months where investor stress redemption rates replace sampled normal-period rates."
+        )
+        if st.checkbox(
+            label,
+            value=False,
+            key="stress_month_12",
+            help=help_text,
+        ):
+            selected_months.append(12)
+        st.markdown(
+            "<div style='text-align: center; font-size: 10px; color: #9ca3af; margin-top: -1.2rem; margin-left: -6px; line-height: 1; padding: 0;'>"
+            "12</div>",
+            unsafe_allow_html=True,
+        )
 
     stress_months = tuple(sorted(selected_months))
 
@@ -1636,7 +1656,7 @@ def _capture_redemption_path_controls(
         )
 
     # Combined row: Behavioural feedback multiplier and Random seed
-    feedback_col, seed_col = st.columns([0.65, 0.35], gap="medium")
+    feedback_col, seed_col = st.columns([0.62, 0.38], gap="small", vertical_alignment="center")
 
     with feedback_col:
         behavioural_feedback_value = st.slider(
@@ -1646,7 +1666,7 @@ def _capture_redemption_path_controls(
             step=0.05,
             key="path_behavioural_feedback_multiplier",
             help=(
-                "Applies after an LMT is activated. Increases next-month redemption demand. "
+                "Applies after an LMT is applied. Increases next-month redemption demand. "
                 "It does not change liquidity costs, prices, or liquidation capacity."
             ),
         )
@@ -1658,6 +1678,7 @@ def _capture_redemption_path_controls(
             max_value=999_999,
             value=42,
             step=1,
+            width=80,
             help="Fixed seed for reproducible monthly normal redemption samples. Redemption rates during stress months are deterministic and defined by the selected stress redemption scenario.",
             key="path_random_seed",
         )
@@ -1706,8 +1727,8 @@ def _capture_redemption_path_controls(
                 step=0.05,
                 key="path_market_contagion_multiplier",
                 help=(
-                    "Applies in the month following the market stress month. Increases next-month economic liquidity "
-                    "cost. If no anti-dilution tool is active, higher values mean the fund must sell more assets to meet the same cash "
+                    "Applies after a market stress month. Increases next-month realised "
+                    "cost. Higher values mean the fund must sell more assets to meet the same cash "
                     "redemption, reducing net liquidation proceeds. It does not change redemption demand."
                 ),
             )
@@ -1736,6 +1757,10 @@ def _capture_redemption_path_controls(
             "Gates can defer unpaid redemptions into backlog, so later months may face larger total redemption needs. "
             "For this reason, threshold breaches and activation months are shown separately when they differ."
         ),
+    )
+    st.markdown(
+        "<div class='lmt-governance-note'>LMT activation decisions assume the manager follows the selected policy consistently.</div>",
+        unsafe_allow_html=True,
     )
 
     if apply_lmts_in_all_signal_months:
@@ -1767,7 +1792,6 @@ def _capture_redemption_path_controls(
         for month in range(1, 13):
             with cols[month - 1]:
                 label = " " if month == 12 else str(month)
-                label_visibility = "visible" if month == 12 else "collapsed"
                 help_text = (
                     "Select months to simulate the manager's swing pricing activation decision."
                     if month == 12
@@ -1777,7 +1801,7 @@ def _capture_redemption_path_controls(
                     label,
                     value=False,
                     key=f"swing_month_{month}",
-                    label_visibility=label_visibility,
+                    label_visibility="collapsed",
                     help=help_text,
                 ):
                     swing_selected.append(month)
@@ -1796,7 +1820,6 @@ def _capture_redemption_path_controls(
         for month in range(1, 13):
             with cols[month - 1]:
                 label = " " if month == 12 else str(month)
-                label_visibility = "visible" if month == 12 else "collapsed"
                 help_text = (
                     "Select months to simulate the manager's gate activation decision."
                     if month == 12
@@ -1806,7 +1829,7 @@ def _capture_redemption_path_controls(
                     label,
                     value=False,
                     key=f"gate_month_{month}",
-                    label_visibility=label_visibility,
+                    label_visibility="collapsed",
                     help=help_text,
                 ):
                     gate_selected.append(month)
@@ -1828,9 +1851,8 @@ def _capture_redemption_path_controls(
     for month in range(1, 13):
         with cols[month - 1]:
             label = " " if month == 12 else str(month)
-            label_visibility = "visible" if month == 12 else "collapsed"
             help_text = (
-                "Select months to simulate the manager's suspension decision."
+                "suspension. Selecting a month simulates zero redemption payments"
                 if month == 12
                 else None
             )
@@ -1838,7 +1860,7 @@ def _capture_redemption_path_controls(
                 label,
                 value=False,
                 key=f"suspension_month_{month}",
-                label_visibility=label_visibility,
+                label_visibility="collapsed",
                 help=help_text,
             ):
                 suspension_selected.append(month)
@@ -2311,6 +2333,14 @@ def _render_redemption_path_page(
         )
         st.pyplot(matrix_fig, use_container_width=True)
 
+        # Cash flow reconciliation
+        with st.expander("🔵 Cash Flow Reconciliation", expanded=False):
+            _render_cash_account_diagnostics(run)
+
+        # NAV reconciliation
+        with st.expander("🔵 NAV Reconciliation", expanded=False):
+            _render_nav_reconciliation_diagnostics(run)
+
 
 def _render_path_configuration_summary(run: AppRedemptionPathRun) -> None:
     items = []
@@ -2335,6 +2365,642 @@ def _format_config_value(value: object) -> str:
     if isinstance(value, Decimal):
         return _rate(value)
     return str(value).replace("_", " ").title()
+
+
+def _render_cash_account_diagnostics(run: AppRedemptionPathRun) -> None:
+    """Render monthly cash account as custom HTML table."""
+
+    def safe_get_field(month_result, field_name, default=ZERO):
+        """Safely get field with default for backward compatibility."""
+        try:
+            return getattr(month_result, field_name)
+        except (AttributeError, ValueError):
+            return default
+
+    def fmt(val):
+        """Format value as EUR millions with 1 decimal."""
+        if isinstance(val, Decimal):
+            val = float(val)
+        if abs(val) < 0.01:  # Treat values close to zero as zero
+            return "—"
+        return f"{val:.1f}"
+
+    def verify_reconciliation(month_result):
+        """Verify cash and NAV reconciliations."""
+        M = Decimal("1_000_000")
+
+        # Cash reconciliation: uses swing_recovery_amount (actual cash benefit from swing pricing)
+        # Note: swing_recovery_amount is capped; it's the cash benefit, not the full transferred cost
+        cash_components = (
+            month_result.opening_cash
+            + month_result.liquidation_result.total_net_cash_raised
+            + month_result.contractual_cashflow_amount
+            + safe_get_field(month_result, "gate_period_settled_cash", ZERO)
+            + month_result.lmt_assessment.swing_recovery_amount  # Actual cash benefit
+            - month_result.lmt_assessment.paid_redemption_amount
+        )
+        actual_closing_cash = month_result.closing_cash
+        cash_diff = abs(cash_components - actual_closing_cash)
+
+        # NAV reconciliation: economic cost should equal swing adjustment + fund-borne cost
+        economic_cost = month_result.realised_liquidity_cost_after_contagion
+        swing_adj = (
+            month_result.realised_liquidity_cost_after_contagion
+            if month_result.lmt_assessment.swing_applied
+            else ZERO
+        )
+        fund_borne = month_result.fund_borne_liquidity_cost_after_contagion
+        nav_diff = abs(economic_cost - (swing_adj + fund_borne))
+
+        return {
+            "cash_reconciles": cash_diff < Decimal("1"),  # Allow 1 EUR rounding
+            "cash_diff": cash_diff / M,
+            "nav_reconciles": nav_diff < Decimal("1"),
+            "nav_diff": nav_diff / M,
+        }
+
+    # Build data structure with months as columns
+    M = Decimal("1_000_000")
+    months_data = {}
+
+    for month_result in run.result.monthly_results:
+        month_num = month_result.period.month_number
+
+        opening_cash = month_result.opening_cash / M
+        min_buffer = (month_result.pre_lmt_nav * run.parameters.minimum_buffer_rate) / M
+        liquidation_proceeds = month_result.liquidation_result.total_net_cash_raised / M
+        contractual_inflows = month_result.contractual_cashflow_amount / M
+        gate_settled = safe_get_field(month_result, "gate_period_settled_cash", ZERO) / M
+
+        # Swing pricing adjustment received: cash benefit from swing on paid redemptions
+        swing_pricing_adjustment_received = (
+            safe_get_field(month_result.lmt_assessment, "swing_pricing_adjustment_received", ZERO)
+            / M
+        )
+
+        # Swing pricing receivable: balance of swing adjustment on deferred redemptions
+        swing_pricing_receivable = month_result.swing_pricing_receivable_closing / M
+
+        total_cash_received = (
+            liquidation_proceeds
+            + contractual_inflows
+            + gate_settled
+            + swing_pricing_adjustment_received
+        )
+        cash_available = opening_cash + total_cash_received
+        redemptions_paid = month_result.lmt_assessment.paid_redemption_amount / M
+        closing_cash = month_result.closing_cash / M
+        pending_settlement = safe_get_field(month_result, "gate_period_unsettled_cash", ZERO) / M
+
+        months_data[month_num] = {
+            "opening_cash": opening_cash,
+            "min_buffer": min_buffer,
+            "liquidation_proceeds": liquidation_proceeds,
+            "contractual_inflows": contractual_inflows,
+            "gate_settled": gate_settled,
+            "swing_pricing_adjustment_received": swing_pricing_adjustment_received,
+            "total_cash_received": total_cash_received,
+            "cash_available": cash_available,
+            "redemptions_paid": redemptions_paid,
+            "closing_cash": closing_cash,
+            "swing_pricing_receivable": swing_pricing_receivable,
+            "pending_settlement": pending_settlement,
+        }
+
+    # Build HTML table
+    html = """
+    <style>
+    .cash-table-container {
+        margin: 0.5rem 0;
+        background-color: #0f172a;
+        padding: 8px;
+        border-radius: 4px;
+    }
+    .cash-table {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 12px;
+        background-color: #0f172a;
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Roboto", "Oxygen", "Ubuntu", "Cantarell", "Fira Sans", "Droid Sans", "Helvetica Neue", sans-serif;
+    }
+    .cash-table thead {
+        background-color: #0f172a;
+        border-bottom: 1px solid #334155;
+    }
+    .cash-table th {
+        padding: 6px 4px;
+        color: #cbd5e1;
+        font-weight: 500;
+        text-align: center;
+        border-right: 1px solid #1e293b;
+    }
+    .cash-table th:first-child {
+        text-align: left;
+        padding-left: 8px;
+    }
+    .cash-table tbody tr {
+        border-bottom: 1px solid #1e293b;
+    }
+    .cash-table tbody tr.total-row {
+        background-color: #1e293b;
+        font-weight: 500;
+    }
+    .cash-table tbody tr.memo-row {
+        background-color: #0f172a;
+        color: #94a3b8;
+        font-size: 11px;
+    }
+    .cash-table tbody tr.group-row {
+        background-color: #0f172a;
+    }
+    .cash-table td {
+        padding: 5px 4px;
+        color: #cbd5e1;
+        border-right: 1px solid #1e293b;
+    }
+    .cash-table td:first-child {
+        text-align: left;
+        padding-left: 8px;
+        color: #cbd5e1;
+    }
+    .cash-table td.indent {
+        padding-left: 20px;
+        color: #a0aec0;
+        font-size: 11px;
+    }
+    .cash-table td.number {
+        text-align: right;
+        padding-right: 8px;
+        font-variant-numeric: tabular-nums;
+    }
+    @media (prefers-color-scheme: light) {
+        .cash-table-container {
+            background-color: #f8f9fa;
+        }
+        .cash-table {
+            background-color: #ffffff;
+        }
+        .cash-table thead {
+            background-color: #f8f9fa;
+            border-bottom-color: #d1d5db;
+        }
+        .cash-table th {
+            color: #111827;
+            border-right-color: #e5e7eb;
+        }
+        .cash-table tbody tr {
+            border-bottom-color: #e5e7eb;
+        }
+        .cash-table tbody tr.total-row {
+            background-color: #f3f4f6;
+            color: #111827;
+        }
+        .cash-table tbody tr.memo-row {
+            background-color: #ffffff;
+            color: #6b7280;
+        }
+        .cash-table tbody tr.group-row {
+            background-color: #ffffff;
+        }
+        .cash-table td {
+            color: #111827;
+            border-right-color: #e5e7eb;
+        }
+        .cash-table td:first-child {
+            color: #111827;
+        }
+        .cash-table td.indent {
+            color: #374151;
+        }
+    }
+    </style>
+    <div class="cash-table-container">
+    <table class="cash-table">
+    <thead>
+    <tr>
+    <th>Cash account (EUR m)</th>
+    """
+
+    # Month headers
+    for month_num in sorted(months_data.keys()):
+        html += f"<th>{month_num}</th>"
+    html += "</tr>\n</thead>\n<tbody>\n"
+
+    # Row definitions in order
+    rows = [
+        ("opening_cash", "Opening cash", False, False),
+        ("min_buffer", "Minimum cash buffer", False, True),
+        ("liquidation_proceeds", "Asset liquidation proceeds", True, False),
+        ("contractual_inflows", "Asset maturities & income", True, False),
+        ("gate_settled", "Gate-period liquidity build-up", True, False),
+        ("swing_pricing_adjustment_received", "Swing pricing adjustment received", True, False),
+        ("total_cash_received", "Total cash received", False, False),
+        ("cash_available", "Cash available", False, False),
+        ("redemptions_paid", "Redemptions paid", False, False),
+        ("closing_cash", "Closing cash", False, False),
+        ("swing_pricing_receivable", "Swing pricing receivable", False, True),
+        ("pending_settlement", "Pending settlement (next period)", False, True),
+    ]
+
+    # Build rows
+    for key, label, is_indent, is_memo in rows:
+        row_class = (
+            "memo-row"
+            if is_memo
+            else "total-row"
+            if key in ["total_cash_received", "cash_available", "closing_cash"]
+            else "group-row"
+        )
+        html += f"<tr class='{row_class}'>"
+
+        # Label cell
+        label_class = "indent" if is_indent else ""
+        html += f"<td class='{label_class}'>{label}</td>"
+
+        # Data cells
+        for month_num in sorted(months_data.keys()):
+            value = months_data[month_num][key]
+            formatted = fmt(value)
+            html += f"<td class='number'>{formatted}</td>"
+
+        html += "</tr>\n"
+
+    html += "</tbody>\n</table>\n</div>"
+
+    st_html(html, height=360, scrolling=True)
+
+    # Verify reconciliations
+    reconciliation_issues = []
+    for month_result in run.result.monthly_results:
+        recon = verify_reconciliation(month_result)
+        if not recon["cash_reconciles"] or not recon["nav_reconciles"]:
+            reconciliation_issues.append(
+                f"Month {month_result.period.month_number}: "
+                f"{'Cash diff=' + str(recon['cash_diff']) + ' EUR m' if not recon['cash_reconciles'] else ''} "
+                f"{'NAV diff=' + str(recon['nav_diff']) + ' EUR m' if not recon['nav_reconciles'] else ''}"
+            )
+
+    # Dark background styling for expander header and content
+    st.markdown(
+        """
+        <style>
+        [data-testid="stExpander"] {
+            background-color: #0f172a !important;
+        }
+        [data-testid="stExpander"] > div {
+            background-color: #0f172a !important;
+        }
+        [data-testid="stExpander"] > div > div {
+            background-color: #0f172a !important;
+        }
+        .streamlit-expanderContent {
+            background-color: #0f172a !important;
+        }
+        div[data-testid="stExpander"] > div:nth-child(2) {
+            background-color: #0f172a !important;
+        }
+        [data-testid="stExpander"] details,
+        [data-testid="stExpander"] summary,
+        [data-testid="stExpander"] summary:hover,
+        [data-testid="stExpander"] summary:focus,
+        [data-testid="stExpander"] summary[aria-expanded="true"],
+        [data-testid="stExpander"] button,
+        [data-testid="stExpander"] button:hover,
+        [data-testid="stExpander"] button:focus {
+            background-color: #0f172a !important;
+            color: rgba(255, 255, 255, 0.8) !important;
+        }
+        [data-testid="stExpander"] summary div,
+        [data-testid="stExpander"] summary p,
+        [data-testid="stExpander"] summary span {
+            background-color: transparent !important;
+            color: rgba(255, 255, 255, 0.8) !important;
+        }
+        </style>
+        """,
+        unsafe_allow_html=True,
+    )
+
+
+def _render_nav_reconciliation_diagnostics(run: AppRedemptionPathRun) -> None:
+    """Render NAV reconciliation table showing how NAV evolves through each month.
+
+    Displays the relationship between:
+    - Economic liquidity cost (generated by liquidation)
+    - Swing pricing adjustment (transferred to redeeming investors when applied)
+    - Fund-borne liquidity cost (portion borne by fund/remaining investors)
+    """
+
+    def safe_get_field(obj, field_name, default=ZERO):
+        """Safely get a field from an object, returning default if not present."""
+        try:
+            return getattr(obj, field_name)
+        except (AttributeError, ValueError):
+            return default
+
+    def fmt(val):
+        """Format value as EUR millions with 1 decimal."""
+        if isinstance(val, Decimal):
+            val = float(val)
+        if abs(val) < 0.01:  # Treat values close to zero as zero
+            return "—"
+        return f"{val:.1f}"
+
+    def verify_nav_reconciliation(month_result):
+        """Verify NAV reconciliation: Opening + Market - Redemptions - Fund-borne + Swing recovery - Gate cost = Closing."""
+        M = Decimal("1_000_000")
+
+        opening_nav = month_result.opening_nav
+        market_gain = month_result.pre_lmt_nav - month_result.opening_nav
+        paid_redemption = month_result.lmt_assessment.paid_redemption_amount
+        fund_borne_cost = month_result.fund_borne_liquidity_cost_after_contagion
+        swing_recovery = month_result.lmt_assessment.swing_recovery_amount
+        gate_cost = safe_get_field(month_result, "gate_period_execution_cost", ZERO)
+
+        # Calculate what closing NAV should be
+        calculated_closing = (
+            opening_nav
+            + market_gain
+            - paid_redemption
+            - fund_borne_cost
+            + swing_recovery
+            - gate_cost
+        )
+        actual_closing = month_result.closing_nav
+
+        nav_diff = abs(calculated_closing - actual_closing)
+
+        return {
+            "reconciles": nav_diff < Decimal("1"),  # Allow 1 EUR rounding
+            "diff": nav_diff / M,
+        }
+
+    # Build data structure with months as columns
+    M = Decimal("1_000_000")
+    months_data = {}
+
+    for month_result in run.result.monthly_results:
+        month_num = month_result.period.month_number
+
+        opening_nav = month_result.opening_nav / M
+        market_gain_loss = (month_result.pre_lmt_nav - month_result.opening_nav) / M
+
+        # Economic liquidity cost: total cost generated by liquidation
+        economic_cost = month_result.realised_liquidity_cost_after_contagion / M
+
+        # Swing pricing adjustment received: transferred to paid redemptions via swung price
+        swing_pricing_adj_received = (
+            safe_get_field(month_result.lmt_assessment, "swing_pricing_adjustment_received", ZERO)
+            / M
+        )
+
+        # Swing pricing receivable: increase in receivable balance for deferred redemptions
+        swing_receivable_increase = (
+            month_result.swing_pricing_receivable_closing
+            - month_result.swing_pricing_receivable_opening
+        ) / M
+
+        # Liquidity cost allocated to redeeming investors: swing received + receivable increase
+        allocated_to_investors = swing_pricing_adj_received + swing_receivable_increase
+
+        # Fund-borne liquidity cost: portion of economic cost borne by fund
+        fund_borne_cost = month_result.fund_borne_liquidity_cost_after_contagion / M
+
+        # Net fund-borne cost should equal economic cost minus allocated cost
+        net_fund_borne = economic_cost - allocated_to_investors
+
+        # Redemptions paid
+        redemptions_paid = month_result.lmt_assessment.paid_redemption_amount / M
+
+        # Gate-period execution cost (if present)
+        gate_execution_cost = safe_get_field(month_result, "gate_period_execution_cost", ZERO) / M
+
+        closing_nav = month_result.closing_nav / M
+
+        months_data[month_num] = {
+            "opening_nav": opening_nav,
+            "market_gain_loss": market_gain_loss,
+            "economic_cost": economic_cost,
+            "swing_pricing_adj_received": swing_pricing_adj_received,
+            "swing_receivable_increase": swing_receivable_increase,
+            "allocated_to_investors": allocated_to_investors,
+            "fund_borne_cost": fund_borne_cost,
+            "net_fund_borne": net_fund_borne,
+            "redemptions_paid": redemptions_paid,
+            "gate_execution_cost": gate_execution_cost,
+            "closing_nav": closing_nav,
+        }
+
+    # Build HTML table
+    html = """
+    <style>
+    .nav-table-container {
+        margin: 0.5rem 0;
+        background-color: #0f172a;
+        padding: 8px;
+        border-radius: 4px;
+    }
+    .nav-table {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 12px;
+        background-color: #0f172a;
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Roboto", "Oxygen", "Ubuntu", "Cantarell", "Fira Sans", "Droid Sans", "Helvetica Neue", sans-serif;
+    }
+    .nav-table thead {
+        background-color: #0f172a;
+        border-bottom: 1px solid #334155;
+    }
+    .nav-table th {
+        padding: 6px 4px;
+        color: #cbd5e1;
+        font-weight: 500;
+        text-align: center;
+        border-right: 1px solid #1e293b;
+    }
+    .nav-table th:first-child {
+        text-align: left;
+        padding-left: 8px;
+    }
+    .nav-table tbody tr {
+        border-bottom: 1px solid #1e293b;
+    }
+    .nav-table tbody tr.total-row {
+        background-color: #1e293b;
+        font-weight: 500;
+    }
+    .nav-table tbody tr.memo-row {
+        background-color: #0f172a;
+        color: #94a3b8;
+        font-size: 11px;
+    }
+    .nav-table tbody tr.group-row {
+        background-color: #0f172a;
+    }
+    .nav-table tbody tr.cost-breakdown {
+        background-color: #0f172a;
+    }
+    .nav-table td {
+        padding: 5px 4px;
+        color: #cbd5e1;
+        border-right: 1px solid #1e293b;
+    }
+    .nav-table td:first-child {
+        text-align: left;
+        padding-left: 8px;
+        color: #cbd5e1;
+    }
+    .nav-table td.indent1 {
+        padding-left: 20px;
+        color: #a0aec0;
+        font-size: 11px;
+    }
+    .nav-table td.indent2 {
+        padding-left: 40px;
+        color: #7f8ba8;
+        font-size: 11px;
+    }
+    .nav-table td.number {
+        text-align: right;
+        padding-right: 8px;
+        font-variant-numeric: tabular-nums;
+    }
+    @media (prefers-color-scheme: light) {
+        .nav-table-container {
+            background-color: #f8f9fa;
+        }
+        .nav-table {
+            background-color: #ffffff;
+        }
+        .nav-table thead {
+            background-color: #f8f9fa;
+            border-bottom-color: #d1d5db;
+        }
+        .nav-table th {
+            color: #111827;
+            border-right-color: #e5e7eb;
+        }
+        .nav-table tbody tr {
+            border-bottom-color: #e5e7eb;
+        }
+        .nav-table tbody tr.total-row {
+            background-color: #f3f4f6;
+            color: #111827;
+        }
+        .nav-table tbody tr.memo-row {
+            background-color: #ffffff;
+            color: #6b7280;
+        }
+        .nav-table tbody tr.group-row {
+            background-color: #ffffff;
+        }
+        .nav-table tbody tr.cost-breakdown {
+            background-color: #ffffff;
+        }
+        .nav-table td {
+            color: #111827;
+            border-right-color: #e5e7eb;
+        }
+        .nav-table td:first-child {
+            color: #111827;
+        }
+        .nav-table td.indent1 {
+            color: #374151;
+        }
+        .nav-table td.indent2 {
+            color: #4b5563;
+        }
+    }
+    </style>
+    <div class="nav-table-container">
+    <table class="nav-table">
+    <thead>
+    <tr>
+    <th>NAV reconciliation (EUR m)</th>
+    """
+
+    # Month headers
+    for month_num in sorted(months_data.keys()):
+        html += f"<th>{month_num}</th>"
+    html += "</tr>\n</thead>\n<tbody>\n"
+
+    # Row definitions in order
+    rows = [
+        ("opening_nav", "Opening NAV", False, False, "total-row"),
+        ("market_gain_loss", "Market gain / (loss)", False, False, "group-row"),
+        ("net_fund_borne", "Net fund-borne liquidity cost", False, False, "group-row"),
+        (
+            "economic_cost",
+            "  Economic liquidity cost",
+            True,
+            False,
+            "cost-breakdown",
+        ),
+        (
+            "allocated_to_investors",
+            "  Allocated to redeeming investors",
+            True,
+            False,
+            "cost-breakdown",
+        ),
+        ("redemptions_paid", "Redemptions paid", False, False, "group-row"),
+        ("gate_execution_cost", "Gate-period execution cost", False, False, "memo-row"),
+        ("closing_nav", "Closing NAV", False, False, "total-row"),
+    ]
+
+    # Build rows
+    for key, label, is_indent, is_memo, row_class_override in rows:
+        # Skip gate execution cost rows if all values are zero
+        skip_row = False
+        if key == "gate_execution_cost":
+            all_zero = all(months_data[month_num][key] == ZERO for month_num in months_data.keys())
+            skip_row = all_zero
+
+        if skip_row:
+            continue
+
+        row_class = row_class_override
+        html += f"<tr class='{row_class}'>"
+
+        # Label cell
+        if is_indent:
+            label_class = "indent1"
+        else:
+            label_class = ""
+        html += f"<td class='{label_class}'>{label}</td>"
+
+        # Data cells
+        for month_num in sorted(months_data.keys()):
+            value = months_data[month_num][key]
+            formatted = fmt(value)
+            html += f"<td class='number'>{formatted}</td>"
+
+        html += "</tr>\n"
+
+    html += "</tbody>\n</table>\n</div>"
+
+    st_html(html, height=400, scrolling=True)
+
+    # Dark background styling for expander
+    st.markdown(
+        """
+        <style>
+        [data-testid="stExpander"] {
+            background-color: #0f172a !important;
+        }
+        [data-testid="stExpander"] > div {
+            background-color: #0f172a !important;
+        }
+        [data-testid="stExpander"] > div > div {
+            background-color: #0f172a !important;
+        }
+        .streamlit-expanderContent {
+            background-color: #0f172a !important;
+        }
+        </style>
+        """,
+        unsafe_allow_html=True,
+    )
 
 
 def _render_path_kpis(run: AppRedemptionPathRun) -> None:

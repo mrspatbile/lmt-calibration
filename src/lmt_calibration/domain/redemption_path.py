@@ -227,6 +227,7 @@ class MonthlyPathLmtAssessment(BaseModel):
     deferred_redemption_amount: Decimal = Field(ge=ZERO)
     applied_swing_factor_rate: Decimal = Field(ge=ZERO, le=ONE)
     swing_recovery_amount: Decimal = Field(ge=ZERO)
+    swing_pricing_adjustment_received: Decimal = Field(default=ZERO, ge=ZERO)
     remaining_liquid_buffer_rate: Decimal = Field(ge=ZERO)
 
 
@@ -249,12 +250,18 @@ class MonthlyRedemptionPathResult(BaseModel):
     market_contagion_applied: bool
     realised_liquidity_cost_after_contagion: Decimal = Field(ge=ZERO)
     fund_borne_liquidity_cost_after_contagion: Decimal = Field(ge=ZERO)
+    swing_pricing_receivable_opening: Decimal = Field(default=ZERO, ge=ZERO)
+    swing_pricing_receivable_closing: Decimal = Field(default=ZERO, ge=ZERO)
     behavioural_feedback_adjustment: MonthlyBehaviouralFeedbackAdjustment
     investor_class_states: tuple[InvestorClassMonthlyState, ...]
     backlog: tuple[DeferredRedemptionBacklogEntry, ...]
     positions: tuple[PathPositionState, ...]
     liquidation_result: LiquidationResult
     lmt_assessment: MonthlyPathLmtAssessment
+    gate_period_liquidation_result: LiquidationResult | None = None
+    gate_period_cash_generated: Decimal = Field(default=ZERO, ge=ZERO)
+    gate_period_settled_cash: Decimal = Field(default=ZERO, ge=ZERO)
+    gate_period_unsettled_cash: Decimal = Field(default=ZERO, ge=ZERO)
 
 
 class RedemptionPathResult(BaseModel):
