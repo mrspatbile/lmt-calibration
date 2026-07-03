@@ -310,6 +310,7 @@ def plot_redemption_and_nav_combined(
     fund_name: str = "Fund",
     as_of_date: str = None,
     dark_mode: bool = True,
+    fixed_redemption_axis: bool = True,
 ) -> plt.Figure:
     """Combined plot: redemptions, shortfall, liquidity cost, and NAV evolution."""
     df = pd.DataFrame(monthly_rows)
@@ -363,20 +364,20 @@ def plot_redemption_and_nav_combined(
         fig, axes = plt.subplots(
             4,
             1,
-            figsize=(7, 6.8),
+            figsize=(7, 5.73),
             sharex=True,
             dpi=120,
-            gridspec_kw={"height_ratios": [2.2, 0.8, 0.8, 2.2]},
+            gridspec_kw={"height_ratios": [2.2, 0.8, 0.8, 1.2375]},
         )
         ax1, ax_shortfall, ax_cost, ax2 = axes
     else:
         fig, axes = plt.subplots(
             3,
             1,
-            figsize=(7, 6.0),
+            figsize=(7, 4.92),
             sharex=True,
             dpi=120,
-            gridspec_kw={"height_ratios": [2.2, 0.8, 2.2]},
+            gridspec_kw={"height_ratios": [2.2, 0.8, 1.2375]},
         )
         ax1, ax_cost, ax2 = axes
         ax_shortfall = None
@@ -431,8 +432,9 @@ def plot_redemption_and_nav_combined(
         )
 
     ax1.set_ylabel("")
-    redemption_axis_max_m = float(initial_nav * Decimal("0.60")) / 1e6
-    ax1.set_ylim(0, redemption_axis_max_m)
+    if fixed_redemption_axis:
+        redemption_axis_max_m = float(initial_nav * Decimal("0.60")) / 1e6
+        ax1.set_ylim(0, redemption_axis_max_m)
     ax1.tick_params(axis="y", labelcolor=colors["muted"], labelsize=8)
     ax1.yaxis.set_major_locator(plt.MaxNLocator(5))
     top1 = ax1.get_ylim()[1]

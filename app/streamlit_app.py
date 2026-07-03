@@ -236,11 +236,13 @@ div[data-testid="stRadio"] {
   color: $bg !important;
 }
 [data-testid="stTabs"] {
-  margin-top: -8px;
+  margin-top: -20px;
 }
 [data-testid="stTabs"] [data-baseweb="tab-list"] {
+  align-items: flex-end;
   gap: 6px;
-  margin: 12px 0 16px;
+  margin: 12px 0 6px;
+  padding-bottom: 0;
 }
 [data-testid="stTabs"] [data-baseweb="tab"] {
   background: $surface;
@@ -248,7 +250,12 @@ div[data-testid="stRadio"] {
   border-radius: 8px 8px 0 0;
   color: $secondary_text;
   font-weight: 700;
+  margin-bottom: -1px;
   padding: 8px 16px;
+}
+[data-testid="stTabs"] [data-baseweb="tab-border"],
+[data-testid="stTabs"] [data-baseweb="tab-highlight"] {
+  bottom: 0 !important;
 }
 [data-testid="stTabs"] [aria-selected="true"] {
   background: $tertiary;
@@ -816,12 +823,36 @@ table.lmt-matrix .cell-wrapper {
   max-width: 90px;
 }
 [data-testid="stColumn"]:has(.lmt-path-controls-lift) {
-  transform: translateY(-3.25rem);
+  transform: translateY(-3px);
 }
-.lmt-path-section-separator {
-  border-top: 1px solid $border;
-  margin: 0.45rem auto 1.125rem;
-  width: 50%;
+[data-testid="stColumn"]:has(.lmt-path-controls-lift) > [data-testid="stVerticalBlock"] {
+  align-self: flex-start;
+  height: auto;
+}
+.st-key-path_redemption_behaviour_panel,
+.st-key-path_market_liquidity_panel,
+.st-key-path_lmt_activation_panel {
+  background: $surface;
+  border: 1px solid $border;
+  border-radius: 8px;
+  box-sizing: border-box;
+  margin-bottom: 5px;
+  padding: 12px 14px 8px;
+}
+.st-key-path_lmt_activation_panel {
+  margin-bottom: 0;
+}
+.lmt-path-subgroup-label {
+  color: $text;
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1.2;
+  white-space: nowrap;
+}
+.lmt-path-subgroup-rule {
+  background: $border;
+  flex: 1;
+  height: 1px;
 }
 .lmt-governance-note {
   color: $text;
@@ -835,9 +866,6 @@ table.lmt-matrix .cell-wrapper {
   line-height: 1.35;
   margin-top: -0.625rem;
 }
-.lmt-assumed-lmt-offset {
-  height: 30px;
-}
 .lmt-seed-label {
   color: $text;
   font-size: 13px;
@@ -849,6 +877,28 @@ table.lmt-matrix .cell-wrapper {
   height: 28px !important;
   min-height: 24px !important;
   border-radius: 8px !important;
+}
+.st-key-path_random_seed {
+  margin-left: auto;
+  width: 80px;
+}
+.st-key-path_random_seed [data-testid="stWidgetLabel"],
+.st-key-path_random_seed [data-testid="stWidgetLabel"] p {
+  justify-content: flex-end;
+  text-align: right;
+}
+.st-key-path_behavioural_feedback_multiplier [data-testid="stWidgetLabel"] p {
+  white-space: nowrap !important;
+}
+.st-key-path_fixed_redemption_axis {
+  margin-left: auto;
+  position: relative;
+  transform: translateY(12px);
+  width: max-content;
+  z-index: 2;
+}
+.st-key-path_fixed_redemption_axis [data-testid="stWidgetLabel"] p {
+  white-space: nowrap !important;
 }
 
 .st-key-path_random_seed [data-baseweb="input"] input {
@@ -896,6 +946,35 @@ table.lmt-matrix .cell-wrapper {
   color: $text;
   font-size: 12px;
   text-align: right;
+}
+
+[data-testid="stExpander"],
+[data-testid="stExpander"] details,
+[data-testid="stExpander"] summary,
+[data-testid="stExpander"] summary:hover,
+[data-testid="stExpander"] summary:focus,
+[data-testid="stExpander"] summary[aria-expanded="true"],
+[data-testid="stExpander"] button,
+[data-testid="stExpander"] button:hover,
+[data-testid="stExpander"] button:focus,
+.streamlit-expanderContent {
+  background: $surface !important;
+  color: $text !important;
+}
+[data-testid="stExpander"] summary div,
+[data-testid="stExpander"] summary p,
+[data-testid="stExpander"] summary span {
+  background: transparent !important;
+  color: $text !important;
+}
+.streamlit-expanderContent {
+  padding: 0 !important;
+}
+[data-testid="stExpander"] [data-testid="stExpanderDetails"] {
+  padding-top: 0 !important;
+}
+[data-testid="stExpander"] [data-testid="stExpanderDetails"] > [data-testid="stVerticalBlock"] {
+  gap: 0 !important;
 }
 
 /* Input and control styling - dark surface for all input types */
@@ -1049,6 +1128,9 @@ section[data-testid="stSidebar"] label {
   margin-bottom: 2px !important;
   font-size: 12px !important;
 }
+.st-key-market_stress_month_select [data-testid="stWidgetLabel"] p {
+  white-space: nowrap !important;
+}
 
 /* Contagion multiplier slider height reduction */
 .st-key-path_market_contagion_multiplier [data-baseweb="slider"] {
@@ -1067,6 +1149,9 @@ LIGHT_MODE_CSS = """
 <style>
 .lmt-subtitle {
   color: #374151 !important;
+}
+.lmt-path-subgroup-label {
+  color: #000000 !important;
 }
 [role="radiogroup"] [role="radio"],
 [role="radiogroup"] [role="radio"] * {
@@ -1225,10 +1310,7 @@ def render_lmt_group_spacer() -> None:
 
 
 def render_lmt_subgroup_heading(label: str) -> None:
-    """Render LMT subgroup heading with blue accent, white text, and hairline.
-
-    Uses inline styles to ensure colors are not overridden by Streamlit defaults.
-    """
+    """Render a theme-aware LMT subgroup heading."""
     st.markdown(
         f"""
         <div style="
@@ -1245,18 +1327,8 @@ def render_lmt_subgroup_heading(label: str) -> None:
                 background: #3b82f6;
                 border-radius: 2px;
             "></span>
-            <span style="
-                color: rgba(255, 255, 255, 0.92);
-                font-size: 13px;
-                font-weight: 600;
-                line-height: 1.2;
-                white-space: nowrap;
-            ">{label}</span>
-            <span style="
-                flex: 1;
-                height: 1px;
-                background: rgba(255, 255, 255, 0.75);
-            "></span>
+            <span class="lmt-path-subgroup-label">{label}</span>
+            <span class="lmt-path-subgroup-rule"></span>
         </div>
         """,
         unsafe_allow_html=True,
@@ -1489,7 +1561,7 @@ def main() -> None:
         _render_calibration_guidance(run)
 
     with path_tab:
-        chart_column, control_column = st.columns([0.75, 0.25], gap="medium")
+        chart_column, control_column = st.columns([0.72, 0.28], gap="medium")
 
         with control_column:
             path_controls = _capture_redemption_path_controls(inputs, selected_redemption_id)
@@ -1586,293 +1658,289 @@ def _capture_redemption_path_controls(
         if s.redemption_scenario_id == selected_redemption_id
     )
 
-    st.markdown("<div class='lmt-path-controls-lift'></div>", unsafe_allow_html=True)
-    st.markdown(
-        "<div class='lmt-path-block-heading first'>Redemption behaviour</div>",
-        unsafe_allow_html=True,
-    )
-
-    st.markdown(
-        f"<div style='font-size: 13px; color: #c9d4e3; margin-bottom: 0.75rem;'>"
-        f"Using: <span style='color: #39c2d6;'>{scenario_name}</span> "
-        f"<span style='font-size: 11px; color: #9ca3af;'>(configured in the left panel)</span>"
-        f"</div>",
-        unsafe_allow_html=True,
-    )
-
-    # Month-selection row (single line, 12 months, no gaps)
-    st.markdown(
-        "<div style='font-size: 13px; color: #9ca3af; margin-bottom: 0; padding-bottom: 0;'>"
-        "Redemption-stress months"
-        "</div>",
-        unsafe_allow_html=True,
-    )
-
-    cols = st.columns(12, gap="xxsmall")
-    selected_months = []
-    for month in range(1, 12):
-        with cols[month - 1]:
-            label = str(month)
-            if st.checkbox(
-                label,
-                value=False,
-                key=f"stress_month_{month}",
-                label_visibility="collapsed",
-            ):
-                selected_months.append(month)
-            st.markdown(
-                f"<div style='text-align: center; font-size: 10px; color: #9ca3af; margin-top: -1.2rem; margin-left: -6px; line-height: 1; padding: 0;'>"
-                f"{month}</div>",
-                unsafe_allow_html=True,
-            )
-
-    with cols[11]:
-        label = " "
-        help_text = (
-            "Months where investor stress redemption rates replace sampled normal-period rates."
-        )
-        if st.checkbox(
-            label,
-            value=False,
-            key="stress_month_12",
-            label_visibility="collapsed",
-            help=help_text,
-        ):
-            selected_months.append(12)
+    with st.container(key="path_redemption_behaviour_panel"):
         st.markdown(
-            "<div style='text-align: center; font-size: 10px; color: #9ca3af; margin-top: -1.2rem; margin-left: -6px; line-height: 1; padding: 0;'>"
-            "12</div>",
+            "<div class='lmt-path-controls-lift lmt-path-block-heading first'>Redemption behaviour</div>",
             unsafe_allow_html=True,
         )
 
-    stress_months = tuple(sorted(selected_months))
-
-    if stress_months == ():
         st.markdown(
-            "<div style='font-size: 11px; color: #ff9999; background: rgba(255,153,153,0.1); "
-            "border-left: 2px solid #ff9999; padding: 6px 8px; margin: 8px 0; border-radius: 3px;'>"
-            "⚠️ Select at least one stress month to apply this redemption scenario."
+            f"<div style='font-size: 13px; color: #c9d4e3; margin-bottom: 0.75rem;'>"
+            f"Using: <span style='color: #39c2d6;'>{scenario_name}</span> "
+            f"<span style='font-size: 11px; color: #9ca3af;'>(configured in the left panel)</span>"
+            f"</div>",
+            unsafe_allow_html=True,
+        )
+
+        # Month-selection row (single line, 12 months, no gaps)
+        st.markdown(
+            "<div style='font-size: 13px; color: #9ca3af; margin-bottom: 0; padding-bottom: 0;'>"
+            "Redemption-stress months"
             "</div>",
             unsafe_allow_html=True,
         )
 
-    # Combined row: Behavioural feedback multiplier and Random seed
-    feedback_col, seed_col = st.columns([0.62, 0.38], gap="small", vertical_alignment="center")
-
-    with feedback_col:
-        behavioural_feedback_value = st.slider(
-            "Behavioural feedback multiplier",
-            min_value=1.0,
-            max_value=3.0,
-            step=0.05,
-            key="path_behavioural_feedback_multiplier",
-            help=(
-                "Applies after an LMT is applied. Increases next-month redemption demand. "
-                "It does not change liquidity costs, prices, or liquidation capacity."
-            ),
-        )
-
-    with seed_col:
-        random_seed = st.number_input(
-            "Seed",
-            min_value=0,
-            max_value=999_999,
-            value=42,
-            step=1,
-            width=80,
-            help="Fixed seed for reproducible monthly normal redemption samples. Redemption rates during stress months are deterministic and defined by the selected stress redemption scenario.",
-            key="path_random_seed",
-        )
-
-    behavioural_feedback_multiplier = Decimal(str(behavioural_feedback_value))
-
-    st.markdown("<div style='height: 12px;'></div>", unsafe_allow_html=True)
-    st.markdown(
-        "<div class='lmt-path-section-separator'></div>"
-        "<div class='lmt-path-block-heading'>Market and liquidity stress</div>",
-        unsafe_allow_html=True,
-    )
-    market_options = {"Normal market conditions": None}
-    market_options.update(
-        {
-            stress.name.replace("_", " ").title(): stress.market_stress_id
-            for stress in inputs.market_stresses
-            if stress.market_stress_id != "normal_market_conditions"
-        }
-    )
-    selected_market_label = st.selectbox(
-        "Market stress scenario", list(market_options), key="market_stress_scenario_select"
-    )
-    selected_market_id = market_options[selected_market_label]
-    market_stress_month = None
-    if selected_market_id is not None:
-        # Compact row: stress month and contagion multiplier
-        month_col, contagion_col = st.columns(
-            [0.33, 0.67], gap="medium", vertical_alignment="bottom"
-        )
-
-        with month_col:
-            market_stress_month = st.selectbox(
-                "Stress month",
-                options=list(range(1, 13)),
-                index=0,
-                key="market_stress_month_select",
-                help="Month in which the selected market stress occurs.",
-            )
-
-        with contagion_col:
-            market_contagion_value = st.slider(
-                "Contagion ×",
-                min_value=1.0,
-                max_value=5.0,
-                step=0.05,
-                key="path_market_contagion_multiplier",
-                help=(
-                    "Applies after a market stress month. Increases next-month realised "
-                    "cost. Higher values mean the fund must sell more assets to meet the same cash "
-                    "redemption, reducing net liquidation proceeds. It does not change redemption demand."
-                ),
-            )
-    else:
-        st.session_state.path_market_contagion_multiplier = 1.0
-        market_contagion_value = 1.0
-        st.markdown(
-            "<div class='lmt-market-stress-hint'>"
-            "Select a stressed market scenario to configure the stress month and the market contagion multiplier for the following month."
-            "</div>",
-            unsafe_allow_html=True,
-        )
-    market_contagion_liquidity_cost_multiplier = Decimal(str(market_contagion_value))
-
-    st.markdown(
-        "<div class='lmt-assumed-lmt-offset'></div>"
-        "<div class='lmt-path-section-separator'></div>"
-        "<div class='lmt-path-block-heading'>LMT Activation Decisions</div>",
-        unsafe_allow_html=True,
-    )
-    apply_lmts_in_all_signal_months = st.checkbox(
-        "Auto-apply LMTs when thresholds are breached",
-        value=False,
-        help=(
-            "Automatically activates LMTs in months where thresholds are breached. "
-            "Gates can defer unpaid redemptions into backlog, so later months may face larger total redemption needs. "
-            "For this reason, threshold breaches and activation months are shown separately when they differ."
-        ),
-    )
-    st.markdown(
-        "<div class='lmt-governance-note'>LMT activation decisions assume the manager follows the selected policy consistently.</div>",
-        unsafe_allow_html=True,
-    )
-
-    if apply_lmts_in_all_signal_months:
-        swing_pricing_months: tuple[int, ...] = ()
-        gate_months: tuple[int, ...] = ()
-
-        # Fetch ex-ante signal months and simulated applied months
-        swing_signal_months = tuple(st.session_state.get("path_swing_signal_months", ()))
-        swing_applied_months = tuple(st.session_state.get("path_swing_applied_months", ()))
-        gate_signal_months = tuple(st.session_state.get("path_gate_signal_months", ()))
-        gate_applied_months = tuple(st.session_state.get("path_gate_applied_months", ()))
-
-        # Swing pricing subgroup
-        render_lmt_subgroup_heading("Swing pricing")
-        render_readonly_months("", swing_signal_months, swing_applied_months)
-        render_lmt_group_spacer()
-
-        # Gate subgroup
-        st.markdown("<div style='height: 10px;'></div>", unsafe_allow_html=True)
-        render_lmt_subgroup_heading("Gate")
-        render_readonly_months("", gate_signal_months, gate_applied_months)
-        render_lmt_group_spacer()
-
-    else:
-        # Swing pricing subgroup
-        render_lmt_subgroup_heading("Swing pricing")
         cols = st.columns(12, gap="xxsmall")
-        swing_selected = []
-        for month in range(1, 13):
+        selected_months = []
+        for month in range(1, 12):
             with cols[month - 1]:
-                label = " " if month == 12 else str(month)
-                help_text = (
-                    "Select months to simulate the manager's swing pricing activation decision."
-                    if month == 12
-                    else None
-                )
+                label = str(month)
                 if st.checkbox(
                     label,
                     value=False,
-                    key=f"swing_month_{month}",
+                    key=f"stress_month_{month}",
                     label_visibility="collapsed",
-                    help=help_text,
                 ):
-                    swing_selected.append(month)
+                    selected_months.append(month)
                 st.markdown(
                     f"<div style='text-align: center; font-size: 10px; color: #9ca3af; margin-top: -1.2rem; margin-left: -6px; line-height: 1; padding: 0;'>"
                     f"{month}</div>",
                     unsafe_allow_html=True,
                 )
-        swing_pricing_months = tuple(sorted(swing_selected))
 
-        # Gate subgroup
-        st.markdown("<div style='height: 30px;'></div>", unsafe_allow_html=True)
-        render_lmt_subgroup_heading("Gate")
+        with cols[11]:
+            label = " "
+            help_text = (
+                "Months where investor stress redemption rates replace sampled normal-period rates."
+            )
+            if st.checkbox(
+                label,
+                value=False,
+                key="stress_month_12",
+                label_visibility="collapsed",
+                help=help_text,
+            ):
+                selected_months.append(12)
+            st.markdown(
+                "<div style='text-align: center; font-size: 10px; color: #9ca3af; margin-top: -1.2rem; margin-left: -6px; line-height: 1; padding: 0;'>"
+                "12</div>",
+                unsafe_allow_html=True,
+            )
+
+        stress_months = tuple(sorted(selected_months))
+
+        if stress_months == ():
+            st.markdown(
+                "<div style='font-size: 11px; color: #ff9999; background: rgba(255,153,153,0.1); "
+                "border-left: 2px solid #ff9999; padding: 6px 8px; margin: 8px 0; border-radius: 3px;'>"
+                "⚠️ Select at least one stress month to apply this redemption scenario."
+                "</div>",
+                unsafe_allow_html=True,
+            )
+
+        # Combined row: Behavioural feedback multiplier and Random seed
+        feedback_col, seed_col = st.columns([0.70, 0.30], gap="small", vertical_alignment="top")
+
+        with feedback_col:
+            behavioural_feedback_value = st.slider(
+                "Behavioural feedback multiplier",
+                min_value=1.0,
+                max_value=3.0,
+                step=0.05,
+                key="path_behavioural_feedback_multiplier",
+                help=(
+                    "Applies after an LMT is applied. Increases next-month redemption demand. "
+                    "It does not change liquidity costs, prices, or liquidation capacity."
+                ),
+            )
+
+        with seed_col:
+            random_seed = st.number_input(
+                "Seed",
+                min_value=0,
+                max_value=999_999,
+                value=42,
+                step=1,
+                width=80,
+                help="Fixed seed for reproducible monthly normal redemption samples. Redemption rates during stress months are deterministic and defined by the selected stress redemption scenario.",
+                key="path_random_seed",
+            )
+
+        behavioural_feedback_multiplier = Decimal(str(behavioural_feedback_value))
+
+    with st.container(key="path_market_liquidity_panel"):
+        st.markdown(
+            "<div class='lmt-path-block-heading'>Market and liquidity stress</div>",
+            unsafe_allow_html=True,
+        )
+        market_options = {"Normal market conditions": None}
+        market_options.update(
+            {
+                stress.name.replace("_", " ").title(): stress.market_stress_id
+                for stress in inputs.market_stresses
+                if stress.market_stress_id != "normal_market_conditions"
+            }
+        )
+        selected_market_label = st.selectbox(
+            "Market stress scenario", list(market_options), key="market_stress_scenario_select"
+        )
+        selected_market_id = market_options[selected_market_label]
+        market_stress_month = None
+        if selected_market_id is not None:
+            # Compact row: stress month and contagion multiplier
+            month_col, contagion_col = st.columns(
+                [0.42, 0.58], gap="small", vertical_alignment="bottom"
+            )
+
+            with month_col:
+                market_stress_month = st.selectbox(
+                    "Stress month",
+                    options=list(range(1, 13)),
+                    index=0,
+                    key="market_stress_month_select",
+                    help="Month in which the selected market stress occurs.",
+                )
+
+            with contagion_col:
+                market_contagion_value = st.slider(
+                    "Contagion ×",
+                    min_value=1.0,
+                    max_value=5.0,
+                    step=0.05,
+                    key="path_market_contagion_multiplier",
+                    help=(
+                        "Applies after a market stress month. Increases next-month realised "
+                        "cost. Higher values mean the fund must sell more assets to meet the same cash "
+                        "redemption, reducing net liquidation proceeds. It does not change redemption demand."
+                    ),
+                )
+        else:
+            st.session_state.path_market_contagion_multiplier = 1.0
+            market_contagion_value = 1.0
+            st.markdown(
+                "<div class='lmt-market-stress-hint'>"
+                "Select a stressed market scenario to configure the stress month and the market contagion multiplier for the following month."
+                "</div>",
+                unsafe_allow_html=True,
+            )
+        market_contagion_liquidity_cost_multiplier = Decimal(str(market_contagion_value))
+
+    with st.container(key="path_lmt_activation_panel"):
+        st.markdown(
+            "<div class='lmt-path-block-heading'>LMT Activation Decisions</div>",
+            unsafe_allow_html=True,
+        )
+        apply_lmts_in_all_signal_months = st.checkbox(
+            "Auto-apply LMTs when thresholds are breached",
+            value=False,
+            help=(
+                "Automatically activates LMTs in months where thresholds are breached. "
+                "Gates can defer unpaid redemptions into backlog, so later months may face larger total redemption needs. "
+                "For this reason, threshold breaches and activation months are shown separately when they differ."
+            ),
+        )
+        st.markdown(
+            "<div class='lmt-governance-note'>LMT activation decisions assume the manager follows the selected policy.</div>",
+            unsafe_allow_html=True,
+        )
+
+        if apply_lmts_in_all_signal_months:
+            swing_pricing_months: tuple[int, ...] = ()
+            gate_months: tuple[int, ...] = ()
+
+            # Fetch ex-ante signal months and simulated applied months
+            swing_signal_months = tuple(st.session_state.get("path_swing_signal_months", ()))
+            swing_applied_months = tuple(st.session_state.get("path_swing_applied_months", ()))
+            gate_signal_months = tuple(st.session_state.get("path_gate_signal_months", ()))
+            gate_applied_months = tuple(st.session_state.get("path_gate_applied_months", ()))
+
+            # Swing pricing subgroup
+            render_lmt_subgroup_heading("Swing pricing")
+            render_readonly_months("", swing_signal_months, swing_applied_months)
+            render_lmt_group_spacer()
+
+            # Gate subgroup
+            st.markdown("<div style='height: 10px;'></div>", unsafe_allow_html=True)
+            render_lmt_subgroup_heading("Gate")
+            render_readonly_months("", gate_signal_months, gate_applied_months)
+            render_lmt_group_spacer()
+
+        else:
+            # Swing pricing subgroup
+            render_lmt_subgroup_heading("Swing pricing")
+            cols = st.columns(12, gap="xxsmall")
+            swing_selected = []
+            for month in range(1, 13):
+                with cols[month - 1]:
+                    label = " " if month == 12 else str(month)
+                    help_text = (
+                        "Select months to simulate the manager's swing pricing activation decision."
+                        if month == 12
+                        else None
+                    )
+                    if st.checkbox(
+                        label,
+                        value=False,
+                        key=f"swing_month_{month}",
+                        label_visibility="collapsed",
+                        help=help_text,
+                    ):
+                        swing_selected.append(month)
+                    st.markdown(
+                        f"<div style='text-align: center; font-size: 10px; color: #9ca3af; margin-top: -1.2rem; margin-left: -6px; line-height: 1; padding: 0;'>"
+                        f"{month}</div>",
+                        unsafe_allow_html=True,
+                    )
+            swing_pricing_months = tuple(sorted(swing_selected))
+
+            # Gate subgroup
+            st.markdown("<div style='height: 30px;'></div>", unsafe_allow_html=True)
+            render_lmt_subgroup_heading("Gate")
+            cols = st.columns(12, gap="xxsmall")
+            gate_selected = []
+            for month in range(1, 13):
+                with cols[month - 1]:
+                    label = " " if month == 12 else str(month)
+                    help_text = (
+                        "Select months to simulate the manager's gate activation decision."
+                        if month == 12
+                        else None
+                    )
+                    if st.checkbox(
+                        label,
+                        value=False,
+                        key=f"gate_month_{month}",
+                        label_visibility="collapsed",
+                        help=help_text,
+                    ):
+                        gate_selected.append(month)
+                    st.markdown(
+                        f"<div style='text-align: center; font-size: 10px; color: #9ca3af; margin-top: -1.2rem; margin-left: -6px; line-height: 1; padding: 0;'>"
+                        f"{month}</div>",
+                        unsafe_allow_html=True,
+                    )
+            gate_months = tuple(sorted(gate_selected))
+
+        # Suspension months subgroup
+        suspension_spacer_height = 7.5 if apply_lmts_in_all_signal_months else 22.5
+        st.markdown(
+            f"<div style='height: {suspension_spacer_height}px;'></div>", unsafe_allow_html=True
+        )
+        render_lmt_subgroup_heading("Suspension months")
         cols = st.columns(12, gap="xxsmall")
-        gate_selected = []
+        suspension_selected = []
         for month in range(1, 13):
             with cols[month - 1]:
                 label = " " if month == 12 else str(month)
                 help_text = (
-                    "Select months to simulate the manager's gate activation decision."
+                    "suspension. Selecting a month simulates zero redemption payments"
                     if month == 12
                     else None
                 )
                 if st.checkbox(
                     label,
                     value=False,
-                    key=f"gate_month_{month}",
+                    key=f"suspension_month_{month}",
                     label_visibility="collapsed",
                     help=help_text,
                 ):
-                    gate_selected.append(month)
+                    suspension_selected.append(month)
                 st.markdown(
                     f"<div style='text-align: center; font-size: 10px; color: #9ca3af; margin-top: -1.2rem; margin-left: -6px; line-height: 1; padding: 0;'>"
                     f"{month}</div>",
                     unsafe_allow_html=True,
                 )
-        gate_months = tuple(sorted(gate_selected))
-
-    # Suspension months subgroup
-    suspension_spacer_height = 10 if apply_lmts_in_all_signal_months else 30
-    st.markdown(
-        f"<div style='height: {suspension_spacer_height}px;'></div>", unsafe_allow_html=True
-    )
-    render_lmt_subgroup_heading("Suspension months")
-    cols = st.columns(12, gap="xxsmall")
-    suspension_selected = []
-    for month in range(1, 13):
-        with cols[month - 1]:
-            label = " " if month == 12 else str(month)
-            help_text = (
-                "suspension. Selecting a month simulates zero redemption payments"
-                if month == 12
-                else None
-            )
-            if st.checkbox(
-                label,
-                value=False,
-                key=f"suspension_month_{month}",
-                label_visibility="collapsed",
-                help=help_text,
-            ):
-                suspension_selected.append(month)
-            st.markdown(
-                f"<div style='text-align: center; font-size: 10px; color: #9ca3af; margin-top: -1.2rem; margin-left: -6px; line-height: 1; padding: 0;'>"
-                f"{month}</div>",
-                unsafe_allow_html=True,
-            )
-    suspension_months = tuple(sorted(suspension_selected))
-
-    st.markdown("<div class='lmt-path-section-separator'></div>", unsafe_allow_html=True)
+        suspension_months = tuple(sorted(suspension_selected))
 
     return RedemptionPathControls(
         stress_months=stress_months,
@@ -2298,23 +2366,28 @@ def _render_redemption_path_page(
 
     initial_nav = run.result.monthly_results[0].opening_nav
     as_of_date = str(run.fund.as_of_date)
-    title_color = "#c9d4e3" if dark_mode else "#111827"
 
     # Wrap chart in centered columns with side margins for breathing room
     left_margin, chart_container, right_margin = st.columns([0.9, 10, 0.9])
 
     with chart_container:
-        # Title for combined chart
-        st.markdown(
-            f"<div style='font-size:17px; color:{title_color}; font-weight:700; margin-top:-0.4rem; margin-bottom:0.3rem;'>"
-            "12-month redemption path"
-            "</div>",
-            unsafe_allow_html=True,
-        )
-        st.markdown(
-            "<div class='lmt-section-d' style='margin-top:-0.2rem;'>Assessing fund evolution under successive monthly redemption periods and LMT applications.</div>",
-            unsafe_allow_html=True,
-        )
+        subtitle_column, axis_control_column = st.columns([0.68, 0.32], vertical_alignment="bottom")
+        with subtitle_column:
+            st.markdown(
+                "<div class='lmt-section-h'>12-month redemption path</div>"
+                "<div class='lmt-section-d'>Assessing fund evolution under successive monthly redemption periods and LMT activation.</div>",
+                unsafe_allow_html=True,
+            )
+        with axis_control_column:
+            fixed_redemption_axis = st.checkbox(
+                "Fixed redemption axis (60% NAV)",
+                value=True,
+                key="path_fixed_redemption_axis",
+                help=(
+                    "Use a fixed redemption scale across scenarios for easier comparison. "
+                    "Clear this option to automatically adjust the scale to the displayed values."
+                ),
+            )
 
         # Combined chart with shared x-axis
         fig = plot_redemption_and_nav_combined(
@@ -2323,6 +2396,7 @@ def _render_redemption_path_page(
             fund_name=selected_fund_id,
             as_of_date=as_of_date,
             dark_mode=dark_mode,
+            fixed_redemption_axis=fixed_redemption_axis,
         )
         st.pyplot(fig, use_container_width=True)
 
@@ -2336,11 +2410,11 @@ def _render_redemption_path_page(
 
         # Cash flow reconciliation
         with st.expander("🔵 Cash Flow Reconciliation", expanded=False):
-            _render_cash_account_diagnostics(run)
+            _render_cash_account_diagnostics(run, dark_mode=dark_mode)
 
         # NAV reconciliation
         with st.expander("🔵 NAV Reconciliation", expanded=False):
-            _render_nav_reconciliation_diagnostics(run)
+            _render_nav_reconciliation_diagnostics(run, dark_mode=dark_mode)
 
 
 def _render_path_configuration_summary(run: AppRedemptionPathRun) -> None:
@@ -2368,7 +2442,7 @@ def _format_config_value(value: object) -> str:
     return str(value).replace("_", " ").title()
 
 
-def _render_cash_account_diagnostics(run: AppRedemptionPathRun) -> None:
+def _render_cash_account_diagnostics(run: AppRedemptionPathRun, *, dark_mode: bool) -> None:
     """Render monthly cash account as custom HTML table."""
 
     def safe_get_field(month_result, field_name, default=ZERO):
@@ -2471,8 +2545,12 @@ def _render_cash_account_diagnostics(run: AppRedemptionPathRun) -> None:
     # Build HTML table
     html = """
     <style>
+    html, body {
+        margin: 0;
+        padding: 0;
+    }
     .cash-table-container {
-        margin: 0.5rem 0;
+        margin: 0;
         background-color: #0f172a;
         padding: 8px;
         border-radius: 4px;
@@ -2534,53 +2612,51 @@ def _render_cash_account_diagnostics(run: AppRedemptionPathRun) -> None:
         padding-right: 8px;
         font-variant-numeric: tabular-nums;
     }
-    @media (prefers-color-scheme: light) {
-        .cash-table-container {
+    .light-theme.cash-table-container {
             background-color: #f8f9fa;
-        }
-        .cash-table {
+    }
+        .light-theme .cash-table {
             background-color: #ffffff;
         }
-        .cash-table thead {
+        .light-theme .cash-table thead {
             background-color: #f8f9fa;
             border-bottom-color: #d1d5db;
         }
-        .cash-table th {
+        .light-theme .cash-table th {
             color: #111827;
             border-right-color: #e5e7eb;
         }
-        .cash-table tbody tr {
+        .light-theme .cash-table tbody tr {
             border-bottom-color: #e5e7eb;
         }
-        .cash-table tbody tr.total-row {
+        .light-theme .cash-table tbody tr.total-row {
             background-color: #f3f4f6;
             color: #111827;
         }
-        .cash-table tbody tr.memo-row {
+        .light-theme .cash-table tbody tr.memo-row {
             background-color: #ffffff;
             color: #6b7280;
         }
-        .cash-table tbody tr.group-row {
+        .light-theme .cash-table tbody tr.group-row {
             background-color: #ffffff;
         }
-        .cash-table td {
+        .light-theme .cash-table td {
             color: #111827;
             border-right-color: #e5e7eb;
         }
-        .cash-table td:first-child {
+        .light-theme .cash-table td:first-child {
             color: #111827;
         }
-        .cash-table td.indent {
+        .light-theme .cash-table td.indent {
             color: #374151;
         }
-    }
     </style>
-    <div class="cash-table-container">
+    <div class="cash-table-container {mode_class}">
     <table class="cash-table">
     <thead>
     <tr>
     <th>Cash account (EUR m)</th>
-    """
+    """.replace("{mode_class}", "dark-theme" if dark_mode else "light-theme")
 
     # Month headers
     for month_num in sorted(months_data.keys()):
@@ -2628,7 +2704,8 @@ def _render_cash_account_diagnostics(run: AppRedemptionPathRun) -> None:
 
     html += "</tbody>\n</table>\n</div>"
 
-    st_html(html, height=360, scrolling=True)
+    cash_table_height = 48 + len(rows) * 24
+    st_html(html, height=cash_table_height, scrolling=True)
 
     # Verify reconciliations
     reconciliation_issues = []
@@ -2641,50 +2718,8 @@ def _render_cash_account_diagnostics(run: AppRedemptionPathRun) -> None:
                 f"{'NAV diff=' + str(recon['nav_diff']) + ' EUR m' if not recon['nav_reconciles'] else ''}"
             )
 
-    # Dark background styling for expander header and content
-    st.markdown(
-        """
-        <style>
-        [data-testid="stExpander"] {
-            background-color: #0f172a !important;
-        }
-        [data-testid="stExpander"] > div {
-            background-color: #0f172a !important;
-        }
-        [data-testid="stExpander"] > div > div {
-            background-color: #0f172a !important;
-        }
-        .streamlit-expanderContent {
-            background-color: #0f172a !important;
-            padding: 2px 0 !important;
-        }
-        div[data-testid="stExpander"] > div:nth-child(2) {
-            background-color: #0f172a !important;
-        }
-        [data-testid="stExpander"] details,
-        [data-testid="stExpander"] summary,
-        [data-testid="stExpander"] summary:hover,
-        [data-testid="stExpander"] summary:focus,
-        [data-testid="stExpander"] summary[aria-expanded="true"],
-        [data-testid="stExpander"] button,
-        [data-testid="stExpander"] button:hover,
-        [data-testid="stExpander"] button:focus {
-            background-color: #0f172a !important;
-            color: rgba(255, 255, 255, 0.8) !important;
-        }
-        [data-testid="stExpander"] summary div,
-        [data-testid="stExpander"] summary p,
-        [data-testid="stExpander"] summary span {
-            background-color: transparent !important;
-            color: rgba(255, 255, 255, 0.8) !important;
-        }
-        </style>
-        """,
-        unsafe_allow_html=True,
-    )
 
-
-def _render_nav_reconciliation_diagnostics(run: AppRedemptionPathRun) -> None:
+def _render_nav_reconciliation_diagnostics(run: AppRedemptionPathRun, *, dark_mode: bool) -> None:
     """Render NAV reconciliation table showing how NAV evolves through each month.
 
     Displays the relationship between:
@@ -2709,7 +2744,7 @@ def _render_nav_reconciliation_diagnostics(run: AppRedemptionPathRun) -> None:
         return f"{val:.1f}"
 
     def verify_nav_reconciliation(month_result):
-        """Verify NAV reconciliation: Opening + Market - Redemptions - Fund-borne + Swing recovery - Gate cost = Closing."""
+        """Verify NAV reconciliation: Opening + Market - Redemptions - Fund-borne + Swing recovery = Closing."""
         M = Decimal("1_000_000")
 
         opening_nav = month_result.opening_nav
@@ -2717,23 +2752,18 @@ def _render_nav_reconciliation_diagnostics(run: AppRedemptionPathRun) -> None:
         paid_redemption = month_result.lmt_assessment.paid_redemption_amount
         fund_borne_cost = month_result.fund_borne_liquidity_cost_after_contagion
         swing_recovery = month_result.lmt_assessment.swing_recovery_amount
-        gate_cost = safe_get_field(month_result, "gate_period_execution_cost", ZERO)
 
         # Calculate what closing NAV should be
+        # Fund-borne cost includes all fund-borne liquidity costs (immediate + gate-period)
         calculated_closing = (
-            opening_nav
-            + market_gain
-            - paid_redemption
-            - fund_borne_cost
-            + swing_recovery
-            - gate_cost
+            opening_nav + market_gain - paid_redemption - fund_borne_cost + swing_recovery
         )
         actual_closing = month_result.closing_nav
 
         nav_diff = abs(calculated_closing - actual_closing)
 
         return {
-            "reconciles": nav_diff < Decimal("1"),  # Allow 1 EUR rounding
+            "reconciles": nav_diff < Decimal("0.01"),  # Tight tolerance to catch errors
             "diff": nav_diff / M,
         }
 
@@ -2796,8 +2826,12 @@ def _render_nav_reconciliation_diagnostics(run: AppRedemptionPathRun) -> None:
     # Build HTML table
     html = """
     <style>
+    html, body {
+        margin: 0;
+        padding: 0;
+    }
     .nav-table-container {
-        margin: 0.5rem 0;
+        margin: 0;
         background-color: #0f172a;
         padding: 8px;
         border-radius: 4px;
@@ -2867,59 +2901,57 @@ def _render_nav_reconciliation_diagnostics(run: AppRedemptionPathRun) -> None:
         padding-right: 8px;
         font-variant-numeric: tabular-nums;
     }
-    @media (prefers-color-scheme: light) {
-        .nav-table-container {
+    .light-theme.nav-table-container {
             background-color: #f8f9fa;
-        }
-        .nav-table {
+    }
+        .light-theme .nav-table {
             background-color: #ffffff;
         }
-        .nav-table thead {
+        .light-theme .nav-table thead {
             background-color: #f8f9fa;
             border-bottom-color: #d1d5db;
         }
-        .nav-table th {
+        .light-theme .nav-table th {
             color: #111827;
             border-right-color: #e5e7eb;
         }
-        .nav-table tbody tr {
+        .light-theme .nav-table tbody tr {
             border-bottom-color: #e5e7eb;
         }
-        .nav-table tbody tr.total-row {
+        .light-theme .nav-table tbody tr.total-row {
             background-color: #f3f4f6;
             color: #111827;
         }
-        .nav-table tbody tr.memo-row {
+        .light-theme .nav-table tbody tr.memo-row {
             background-color: #ffffff;
             color: #6b7280;
         }
-        .nav-table tbody tr.group-row {
+        .light-theme .nav-table tbody tr.group-row {
             background-color: #ffffff;
         }
-        .nav-table tbody tr.cost-breakdown {
+        .light-theme .nav-table tbody tr.cost-breakdown {
             background-color: #ffffff;
         }
-        .nav-table td {
+        .light-theme .nav-table td {
             color: #111827;
             border-right-color: #e5e7eb;
         }
-        .nav-table td:first-child {
+        .light-theme .nav-table td:first-child {
             color: #111827;
         }
-        .nav-table td.indent1 {
+        .light-theme .nav-table td.indent1 {
             color: #374151;
         }
-        .nav-table td.indent2 {
+        .light-theme .nav-table td.indent2 {
             color: #4b5563;
         }
-    }
     </style>
-    <div class="nav-table-container">
+    <div class="nav-table-container {mode_class}">
     <table class="nav-table">
     <thead>
     <tr>
     <th>NAV reconciliation (EUR m)</th>
-    """
+    """.replace("{mode_class}", "dark-theme" if dark_mode else "light-theme")
 
     # Month headers
     for month_num in sorted(months_data.keys()):
@@ -2951,6 +2983,7 @@ def _render_nav_reconciliation_diagnostics(run: AppRedemptionPathRun) -> None:
     ]
 
     # Build rows
+    rendered_row_count = 0
     for key, label, is_indent, is_memo, row_class_override in rows:
         # Skip gate execution cost rows if all values are zero
         skip_row = False
@@ -2961,6 +2994,7 @@ def _render_nav_reconciliation_diagnostics(run: AppRedemptionPathRun) -> None:
         if skip_row:
             continue
 
+        rendered_row_count += 1
         row_class = row_class_override
         html += f"<tr class='{row_class}'>"
 
@@ -2981,29 +3015,8 @@ def _render_nav_reconciliation_diagnostics(run: AppRedemptionPathRun) -> None:
 
     html += "</tbody>\n</table>\n</div>"
 
-    st_html(html, height=400, scrolling=True)
-
-    # Dark background styling for expander
-    st.markdown(
-        """
-        <style>
-        [data-testid="stExpander"] {
-            background-color: #0f172a !important;
-        }
-        [data-testid="stExpander"] > div {
-            background-color: #0f172a !important;
-        }
-        [data-testid="stExpander"] > div > div {
-            background-color: #0f172a !important;
-        }
-        .streamlit-expanderContent {
-            background-color: #0f172a !important;
-            padding: 2px 0 !important;
-        }
-        </style>
-        """,
-        unsafe_allow_html=True,
-    )
+    nav_table_height = 48 + rendered_row_count * 24
+    st_html(html, height=nav_table_height, scrolling=True)
 
 
 def _render_path_kpis(run: AppRedemptionPathRun) -> None:
@@ -3749,10 +3762,110 @@ def _format_lmt_pills_compact(
 
 def _render_calibration_guidance(run: AppScenarioRun) -> None:
     """Render LMT Calibration Guidance using exact 6-column grid layout."""
-    st.markdown(
-        "<div class='lmt-guidance-container' style='margin-top:13px;border-radius:12px;padding:6px 10px;'><div style='display:grid;grid-template-columns:0.8fr 1.1fr 1.1fr 1.1fr 1.1fr 1.1fr;gap:8px;'><div style='grid-column:1;'><div style='color:#9ca3af;font-size:13px;font-weight:600;margin-bottom:3px;line-height:1.3;'>LMT Calibration Guidance</div><div style='color:#6b7280;font-size:10px;line-height:1.4;'>Indicative suitability based on selected fund characteristics and scenario.</div></div><div style='grid-column:2/4;margin-left:14px;'><div style='display:flex;align-items:center;gap:6px;margin-bottom:4px;'><div style='width:22px;height:2px;background:rgba(111,168,220,0.65);'></div><div style='color:#aaa;font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:0.5px;'>Anti-dilution tools</div></div><div style='display:grid;grid-template-columns:1fr 1fr;gap:6px 6px;row-gap:5px;'><div style='border:1px solid rgba(0,102,204,0.4);border-radius:2px;padding:5px 8px;background:transparent;'><span style='color:#4da6ff;font-size:11px;font-weight:600;'>Swing pricing</span> <span style='background:#0066cc;color:#fff;padding:1px 4px;border-radius:1px;font-size:9px;margin-left:8px;'>Selected</span><div style='color:#999;font-size:8px;margin-top:2px;'>Price adjustment | activation threshold | passes liquidity cost</div></div><div style='border:1px solid rgba(85,85,85,0.4);border-radius:2px;padding:5px 8px;background:transparent;'><span style='color:#ccc;font-size:11px;font-weight:600;'>Anti-dilution levy</span><div style='color:#999;font-size:8px;margin-top:2px;'>Separate levy | cost recovery | alternative to swing</div></div><div style='border:1px solid rgba(85,85,85,0.4);border-radius:2px;padding:5px 8px;background:transparent;'><span style='color:#ccc;font-size:11px;font-weight:600;'>Dual pricing</span><div style='color:#999;font-size:8px;margin-top:2px;'>Bid/offer NAV | spread-based | operationally heavier</div></div><div style='border:1px solid rgba(85,85,85,0.4);border-radius:2px;padding:5px 8px;background:transparent;'><span style='color:#ccc;font-size:11px;font-weight:600;'>Redemption fee</span><div style='color:#999;font-size:8px;margin-top:2px;'>Fixed fee | predictable costs | less stress-responsive</div></div></div></div><div style='grid-column:4/7;margin-left:10px;'><div style='display:flex;align-items:center;gap:6px;margin-bottom:4px;'><div style='width:22px;height:2px;background:rgba(111,168,220,0.65);'></div><div style='color:#aaa;font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:0.5px;'>Quantitative-based LMT<span style='font-size:0.75em;'>S</span></div></div><div style='display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px 6px;row-gap:5px;'><div style='border:1px solid rgba(0,102,204,0.4);border-radius:2px;padding:5px 8px;background:transparent;'><span style='color:#4da6ff;font-size:11px;font-weight:600;'>Redemption gate</span> <span style='background:#0066cc;color:#fff;padding:1px 4px;border-radius:1px;font-size:9px;margin-left:8px;'>Selected</span><div style='color:#999;font-size:8px;margin-top:2px;'>Partial deferral | protects liquidity</div></div><div style='border:1px solid rgba(85,85,85,0.4);border-radius:2px;padding:5px 8px;background:transparent;'><span style='color:#ccc;font-size:11px;font-weight:600;'>Notice extension</span><div style='color:#999;font-size:8px;margin-top:2px;'>More time to sell | ex-ante tool | less liquid assets</div></div><div style='border:1px solid rgba(85,85,85,0.4);border-radius:2px;padding:5px 8px;background:transparent;'><span style='color:#ccc;font-size:11px;font-weight:600;'>Side pockets</span><span style='background:rgba(136,136,136,0.5);color:#fff;padding:1px 4px;border-radius:1px;font-size:9px;margin-left:8px;'>Exceptional</span><div style='color:#999;font-size:8px;margin-top:2px;'>Segregate assets | hard-to-value/illiquid</div></div><div style='border:1px solid rgba(85,85,85,0.4);border-radius:2px;padding:5px 8px;background:transparent;'><span style='color:#ccc;font-size:11px;font-weight:600;'>Redemption in kind</span><div style='color:#999;font-size:8px;margin-top:2px;'>Institutional use | avoids forced sales</div></div><div style='border:1px solid rgba(85,85,85,0.4);border-radius:2px;padding:5px 8px;background:transparent;'><span style='color:#ccc;font-size:11px;font-weight:600;'>Suspension</span><span style='background:rgba(136,136,136,0.5);color:#fff;padding:1px 4px;border-radius:1px;font-size:9px;margin-left:8px;'>Exceptional</span><div style='color:#999;font-size:8px;margin-top:2px;'>Temporary stop | last resort</div></div><div style='background:transparent;'></div></div></div></div></div>",
-        unsafe_allow_html=True,
-    )
+    dark_mode = st.session_state.dark_mode
+    mode_class = "dark-theme" if dark_mode else "light-theme"
+
+    css = """
+    <style>
+    .lmt-tool-box {
+        border-radius: 2px;
+        padding: 5px 8px;
+        border: 1px solid rgba(85, 85, 85, 0.4);
+        background-color: rgba(55, 65, 81, 0.3);
+    }
+    .lmt-tool-box-selected {
+        border-color: rgba(0, 102, 204, 0.6);
+        background-color: rgba(0, 102, 204, 0.15);
+    }
+    .lmt-tool-box-muted {
+        border-color: rgba(85, 85, 85, 0.4);
+        background-color: rgba(55, 65, 81, 0.3);
+    }
+    .light-theme .lmt-tool-box {
+        border-color: rgba(209, 213, 219, 0.6);
+        background-color: rgba(243, 244, 246, 0.8);
+    }
+    .light-theme .lmt-tool-box-selected {
+        border-color: rgba(59, 130, 246, 0.5);
+        background-color: rgba(219, 234, 254, 0.7);
+    }
+    .light-theme .lmt-tool-box-muted {
+        border-color: rgba(209, 213, 219, 0.6);
+        background-color: rgba(243, 244, 246, 0.8);
+    }
+    </style>
+    """
+
+    html = f"""
+    <div class='{mode_class}'>
+    <div class='lmt-guidance-container' style='margin-top:13px;border-radius:12px;padding:6px 10px;'>
+    <div style='display:grid;grid-template-columns:0.8fr 1.1fr 1.1fr 1.1fr 1.1fr 1.1fr;gap:8px;'>
+    <div style='grid-column:1;'>
+        <div style='color:#9ca3af;font-size:13px;font-weight:600;margin-bottom:3px;line-height:1.3;'>LMT Calibration Guidance</div>
+        <div style='color:#6b7280;font-size:10px;line-height:1.4;'>Indicative suitability based on selected fund characteristics and scenario.</div>
+    </div>
+    <div style='grid-column:2/4;margin-left:14px;'>
+        <div style='display:flex;align-items:center;gap:6px;margin-bottom:4px;'>
+            <div style='width:22px;height:2px;background:rgba(111,168,220,0.65);'></div>
+            <div style='color:#aaa;font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:0.5px;'>Anti-dilution tools</div>
+        </div>
+        <div style='display:grid;grid-template-columns:1fr 1fr;gap:6px 6px;row-gap:5px;'>
+            <div class='lmt-tool-box lmt-tool-box-selected'>
+                <span style='color:#4da6ff;font-size:11px;font-weight:600;'>Swing pricing</span>
+                <span style='background:#0066cc;color:#fff;padding:1px 4px;border-radius:1px;font-size:9px;margin-left:8px;'>Selected</span>
+                <div style='color:#999;font-size:8px;margin-top:2px;'>Price adjustment | activation threshold | passes liquidity cost</div>
+            </div>
+            <div class='lmt-tool-box lmt-tool-box-muted'>
+                <span style='color:#ccc;font-size:11px;font-weight:600;'>Anti-dilution levy</span>
+                <div style='color:#999;font-size:8px;margin-top:2px;'>Separate levy | cost recovery | alternative to swing</div>
+            </div>
+            <div class='lmt-tool-box lmt-tool-box-muted'>
+                <span style='color:#ccc;font-size:11px;font-weight:600;'>Dual pricing</span>
+                <div style='color:#999;font-size:8px;margin-top:2px;'>Bid/offer NAV | spread-based | operationally heavier</div>
+            </div>
+            <div class='lmt-tool-box lmt-tool-box-muted'>
+                <span style='color:#ccc;font-size:11px;font-weight:600;'>Redemption fee</span>
+                <div style='color:#999;font-size:8px;margin-top:2px;'>Fixed fee | predictable costs | less stress-responsive</div>
+            </div>
+        </div>
+    </div>
+    <div style='grid-column:4/7;margin-left:10px;'>
+        <div style='display:flex;align-items:center;gap:6px;margin-bottom:4px;'>
+            <div style='width:22px;height:2px;background:rgba(111,168,220,0.65);'></div>
+            <div style='color:#aaa;font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:0.5px;'>Quantitative-based LMT<span style='font-size:0.75em;'>S</span></div>
+        </div>
+        <div style='display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px 6px;row-gap:5px;'>
+            <div class='lmt-tool-box lmt-tool-box-selected'>
+                <span style='color:#4da6ff;font-size:11px;font-weight:600;'>Redemption gate</span>
+                <span style='background:#0066cc;color:#fff;padding:1px 4px;border-radius:1px;font-size:9px;margin-left:8px;'>Selected</span>
+                <div style='color:#999;font-size:8px;margin-top:2px;'>Partial deferral | protects liquidity</div>
+            </div>
+            <div class='lmt-tool-box lmt-tool-box-muted'>
+                <span style='color:#ccc;font-size:11px;font-weight:600;'>Notice extension</span>
+                <div style='color:#999;font-size:8px;margin-top:2px;'>More time to sell | ex-ante tool | less liquid assets</div>
+            </div>
+            <div class='lmt-tool-box lmt-tool-box-muted'>
+                <span style='color:#ccc;font-size:11px;font-weight:600;'>Side pockets</span>
+                <span style='background:rgba(136,136,136,0.5);color:#fff;padding:1px 4px;border-radius:1px;font-size:9px;margin-left:8px;'>Exceptional</span>
+                <div style='color:#999;font-size:8px;margin-top:2px;'>Segregate assets | hard-to-value/illiquid</div>
+            </div>
+            <div class='lmt-tool-box lmt-tool-box-muted'>
+                <span style='color:#ccc;font-size:11px;font-weight:600;'>Redemption in kind</span>
+                <div style='color:#999;font-size:8px;margin-top:2px;'>Institutional use | avoids forced sales</div>
+            </div>
+            <div class='lmt-tool-box lmt-tool-box-muted'>
+                <span style='color:#ccc;font-size:11px;font-weight:600;'>Suspension</span>
+                <span style='background:rgba(136,136,136,0.5);color:#fff;padding:1px 4px;border-radius:1px;font-size:9px;margin-left:8px;'>Exceptional</span>
+                <div style='color:#999;font-size:8px;margin-top:2px;'>Temporary stop | last resort</div>
+            </div>
+            <div style='background:transparent;'></div>
+        </div>
+    </div>
+    </div>
+    </div>
+    """
+
+    st.markdown(css + html, unsafe_allow_html=True)
 
 
 def _badge(text: str, tone: str) -> str:

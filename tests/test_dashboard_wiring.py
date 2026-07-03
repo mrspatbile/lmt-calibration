@@ -202,6 +202,9 @@ def test_redemption_path_controls_separate_feedback_and_market_contagion() -> No
     assert "path_gate_applied_months" in controls_source
     assert "st.rerun()" in controls_source
     assert "suspension. Selecting a month simulates zero redemption payments" in app_source
+    assert (
+        "suspension_spacer_height = 7.5 if apply_lmts_in_all_signal_months else 22.5" in app_source
+    )
     assert "suspension trigger" not in app_source.lower()
     assert "automatic suspension" not in app_source.lower()
     sidebar_group_rule = app_source.split(".lmt-sidebar-group-label {", 1)[1].split("}", 1)[0]
@@ -216,18 +219,14 @@ def test_redemption_path_controls_separate_feedback_and_market_contagion() -> No
     assert "border-bottom: 2px solid $text" in path_block_rule
     assert "padding-bottom: 6px" in path_block_rule
     assert "margin: 0 0 0.75rem" in path_block_rule
-    path_separator_rule = app_source.split(".lmt-path-section-separator {", 1)[1].split("}", 1)[0]
-    assert "border-top: 1px solid $border" in path_separator_rule
-    assert "margin: 0.45rem auto 1.125rem" in path_separator_rule
-    assert "width: 50%" in path_separator_rule
-    assert controls_source.count("lmt-path-section-separator") == 3
+    assert controls_source.count("st.container(key=") == 3
+    assert 'key="path_redemption_behaviour_panel"' in controls_source
+    assert 'key="path_market_liquidity_panel"' in controls_source
+    assert 'key="path_lmt_activation_panel"' in controls_source
     assert "lmt-path-controls-lift" in controls_source
     assert '[data-testid="stColumn"]:has(.lmt-path-controls-lift)' in app_source
-    assert "transform: translateY(-3.25rem)" in app_source
+    assert "transform: translateY(-3px)" in app_source
     assert "lmt-governance-note" in controls_source
-    assert "lmt-assumed-lmt-offset" in controls_source
-    assumed_offset_rule = app_source.split(".lmt-assumed-lmt-offset {", 1)[1].split("}", 1)[0]
-    assert "height: 30px" in assumed_offset_rule
     assert "lmt-market-stress-hint" in controls_source
     market_hint_rule = app_source.split(".lmt-market-stress-hint {", 1)[1].split("}", 1)[0]
     assert "margin-top: -0.625rem" in market_hint_rule
@@ -241,7 +240,7 @@ def test_redemption_path_controls_separate_feedback_and_market_contagion() -> No
     assert "background: transparent" in multiselect_tag_rule
     assert "border: 0" in multiselect_tag_rule
     assert "box-shadow: none" in multiselect_tag_rule
-    assert "st.columns([0.75, 0.25]" in app_source
+    assert "st.columns([0.72, 0.28]" in app_source
     assert "st.columns([0.9, 10, 0.9]" in app_source
     assert "Applies after an LMT is applied. Increases next-month redemption demand." in app_source
     assert "It does not change liquidity costs, prices," in app_source
@@ -249,7 +248,7 @@ def test_redemption_path_controls_separate_feedback_and_market_contagion() -> No
     assert "Higher values mean the fund must sell more assets" in app_source
     assert "st.toggle(" not in controls_source
     assert "st.checkbox(" in controls_source
-    assert '[0.62, 0.38], gap="small", vertical_alignment="center"' in controls_source
+    assert '[0.70, 0.30], gap="small", vertical_alignment="top"' in controls_source
     assert 'key="path_random_seed"' in controls_source
     assert 'label_visibility="collapsed"' in controls_source
     assert ".st-key-path_random_seed button" in app_source
@@ -268,6 +267,59 @@ def test_redemption_path_controls_separate_feedback_and_market_contagion() -> No
     assert "behavioural_feedback_enabled" not in service_source
     assert "market_contagion_enabled" not in service_source
     assert "market_contagion_liquidity_cost_multiplier" in service_source
+
+
+def test_redemption_path_theme_styles_follow_the_app_theme() -> None:
+    """Keep path controls and reconciliation tables legible in both app themes."""
+    app_source = Path("app/streamlit_app.py").read_text(encoding="utf-8")
+
+    control_column_rule = app_source.split(
+        '[data-testid="stColumn"]:has(.lmt-path-controls-lift) {', 1
+    )[1].split("}", 1)[0]
+    control_content_rule = app_source.split(
+        '[data-testid="stColumn"]:has(.lmt-path-controls-lift) > [data-testid="stVerticalBlock"] {',
+        1,
+    )[1].split("}", 1)[0]
+    card_rule = app_source.split(".st-key-path_redemption_behaviour_panel,", 1)[1].split("}", 1)[0]
+    light_subgroup_rule = app_source.split(".lmt-path-subgroup-label {", 2)[2].split("}", 1)[0]
+
+    assert "height: auto" in control_content_rule
+    assert "background: $surface" in card_rule
+    assert "margin-bottom: 5px" in card_rule
+    assert "transform: translateY(-3px)" in control_column_rule
+    assert "color: #000000" in light_subgroup_rule
+    assert 'class="cash-table-container {mode_class}"' in app_source
+    assert 'class="nav-table-container {mode_class}"' in app_source
+    assert ".light-theme.cash-table-container" in app_source
+    assert ".light-theme.nav-table-container" in app_source
+    assert "_render_cash_account_diagnostics(run, dark_mode=dark_mode)" in app_source
+    assert "_render_nav_reconciliation_diagnostics(run, dark_mode=dark_mode)" in app_source
+    assert '[data-testid="stExpanderDetails"]' in app_source
+    assert "margin: 0;" in app_source
+    assert "height=360" not in app_source
+    assert "height=400" not in app_source
+    assert "height=cash_table_height" in app_source
+    assert "height=nav_table_height" in app_source
+    assert "margin-top: -20px" in app_source
+    assert "margin: 12px 0 6px" in app_source
+    assert "align-items: flex-end" in app_source
+    assert "margin-bottom: -1px" in app_source
+    assert '[data-baseweb="tab-border"]' in app_source
+    assert '"Fixed redemption axis (60% NAV)"' in app_source
+    assert "fixed_redemption_axis=fixed_redemption_axis" in app_source
+    assert '[0.68, 0.32], vertical_alignment="bottom"' in app_source
+    assert "<div class='lmt-section-h'>12-month redemption path</div>" in app_source
+    assert ".st-key-path_fixed_redemption_axis" in app_source
+    fixed_axis_rule = app_source.split(".st-key-path_fixed_redemption_axis {", 1)[1].split("}", 1)[
+        0
+    ]
+    assert "transform: translateY(12px)" in fixed_axis_rule
+    assert '[0.42, 0.58], gap="small", vertical_alignment="bottom"' in app_source
+    assert "white-space: nowrap !important" in app_source
+    assert ".st-key-path_behavioural_feedback_multiplier" in app_source
+    random_seed_rule = app_source.split(".st-key-path_random_seed {", 1)[1].split("}", 1)[0]
+    assert "margin-left: auto" in random_seed_rule
+    assert "width: 80px" in random_seed_rule
 
 
 def test_redemption_path_matplotlib_charts_refresh_with_controls():
@@ -416,6 +468,20 @@ def test_redemption_path_matplotlib_charts_refresh_with_controls():
     assert any(patch.get_height() < 0 for patch in fig4.axes[1].patches)
     assert fig4.axes[2].get_title(loc="left") == "Realised liquidity cost"
     assert fig4.axes[2].lines
+    assert fig4.get_figheight() == pytest.approx(5.73)
+    assert fig4.axes[-1].get_position().height / fig4.axes[
+        0
+    ].get_position().height == pytest.approx(0.5625)
+
+    fig4_auto_axis = plot_redemption_and_nav_combined(
+        monthly_rows=monthly_rows,
+        initial_nav=initial_nav,
+        fund_name="TestFund",
+        as_of_date="2026-01-15",
+        dark_mode=False,
+        fixed_redemption_axis=False,
+    )
+    assert 0 < fig4_auto_axis.axes[0].get_ylim()[1] < 60.0
 
     fig5 = plot_lmt_matrix(
         lmt_rows=lmt_rows,
@@ -455,6 +521,7 @@ def test_redemption_chart_omits_zero_liquidity_shortfall_series() -> None:
 
     assert figure.axes[0].get_ylim()[0] == 0
     assert len(figure.axes) == 3
+    assert figure.get_figheight() == pytest.approx(4.92)
     assert len(figure.axes[0].lines) == 0
     assert "Backlog" not in [text.get_text() for text in figure.axes[0].get_legend().get_texts()]
     assert all(
