@@ -273,21 +273,28 @@ def run_redemption_path(
         adjusted_estimated_liquidity_cost_rate = (
             base_estimated_liquidity_cost_rate * market_contagion_liquidity_cost_multiplier
         )
-        # Apply market contagion multiplier to realised liquidity cost in the affected month
-        realised_liquidity_cost_after_contagion = (
+        # Economic liquidity cost = immediate liquidation cost + gate-period liquidation cost
+        # All recognized in the month of liquidation, allocated via swing pricing
+        immediate_liquidation_cost_after_contagion = (
             liquidation_result.total_realised_liquidity_cost
             * market_contagion_liquidity_cost_multiplier
         )
 
-        # Add gate-period execution costs to NAV
-        gate_period_execution_cost = ZERO
+        gate_period_liquidation_cost_after_contagion = ZERO
         if gate_period_liquidation_result is not None:
-            gate_period_execution_cost = (
+            gate_period_liquidation_cost_after_contagion = (
                 gate_period_liquidation_result.total_realised_execution_cost
+                * market_contagion_liquidity_cost_multiplier
             )
-            gate_period_execution_cost *= market_contagion_liquidity_cost_multiplier
+
+        # Total economic cost (both components)
+        realised_liquidity_cost_after_contagion = (
+            immediate_liquidation_cost_after_contagion
+            + gate_period_liquidation_cost_after_contagion
+        )
 
         # Preliminary fund-borne cost for NAV calculation (will be refined below)
+        # All economic costs (immediate + gate-period) allocated via swing pricing
         preliminary_fund_borne = ZERO if swing_applied else realised_liquidity_cost_after_contagion
 
         lmt_assessment = _monthly_lmt_assessment(
@@ -304,10 +311,7 @@ def run_redemption_path(
             liquidation_result=liquidation_result,
             lmt_parameters=lmt_parameters,
             closing_nav_before_recovery=max(
-                pre_lmt_nav
-                - final_paid_amount
-                - preliminary_fund_borne
-                - gate_period_execution_cost,
+                pre_lmt_nav - final_paid_amount - preliminary_fund_borne,
                 ZERO,
             ),
             realised_liquidity_cost_after_contagion=realised_liquidity_cost_after_contagion,
@@ -328,10 +332,15 @@ def run_redemption_path(
                 cost_per_unit * lmt_assessment.deferred_redemption_amount
             )
 
-        # Now update fund-borne cost accounting for both swing received and receivable
-        fund_borne_liquidity_cost_after_contagion = (
-            ZERO if swing_applied else realised_liquidity_cost_after_contagion
-        )
+        # Allocate total economic cost (immediate + gate-period) based on swing pricing
+        if swing_applied:
+            # Swing pricing transfers all economic liquidity costs to redeeming investors
+            investor_borne_liquidity_cost_after_contagion = realised_liquidity_cost_after_contagion
+            fund_borne_liquidity_cost_after_contagion = ZERO
+        else:
+            # No swing pricing: all economic costs remain fund-borne
+            investor_borne_liquidity_cost_after_contagion = ZERO
+            fund_borne_liquidity_cost_after_contagion = realised_liquidity_cost_after_contagion
         closing_cash = _closing_cash(
             positions=carried_positions,
             liquidation_result=liquidation_result,
@@ -388,6 +397,7 @@ def run_redemption_path(
                 ),
                 market_contagion_applied=market_contagion_applied,
                 realised_liquidity_cost_after_contagion=realised_liquidity_cost_after_contagion,
+                investor_borne_liquidity_cost_after_contagion=investor_borne_liquidity_cost_after_contagion,
                 fund_borne_liquidity_cost_after_contagion=fund_borne_liquidity_cost_after_contagion,
                 swing_pricing_receivable_opening=swing_pricing_receivable,
                 swing_pricing_receivable_closing=swing_pricing_receivable_closing,

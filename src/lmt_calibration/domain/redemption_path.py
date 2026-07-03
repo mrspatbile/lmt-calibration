@@ -249,6 +249,7 @@ class MonthlyRedemptionPathResult(BaseModel):
     market_contagion_liquidity_cost_multiplier: Decimal = Field(ge=ONE)
     market_contagion_applied: bool
     realised_liquidity_cost_after_contagion: Decimal = Field(ge=ZERO)
+    investor_borne_liquidity_cost_after_contagion: Decimal = Field(default=ZERO, ge=ZERO)
     fund_borne_liquidity_cost_after_contagion: Decimal = Field(ge=ZERO)
     swing_pricing_receivable_opening: Decimal = Field(default=ZERO, ge=ZERO)
     swing_pricing_receivable_closing: Decimal = Field(default=ZERO, ge=ZERO)
@@ -259,6 +260,7 @@ class MonthlyRedemptionPathResult(BaseModel):
     liquidation_result: LiquidationResult
     lmt_assessment: MonthlyPathLmtAssessment
     gate_period_liquidation_result: LiquidationResult | None = None
+    gate_period_execution_cost: Decimal = Field(default=ZERO, ge=ZERO)
     gate_period_cash_generated: Decimal = Field(default=ZERO, ge=ZERO)
     gate_period_settled_cash: Decimal = Field(default=ZERO, ge=ZERO)
     gate_period_unsettled_cash: Decimal = Field(default=ZERO, ge=ZERO)
