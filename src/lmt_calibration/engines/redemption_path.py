@@ -69,7 +69,7 @@ def run_redemption_path(
 
     rng = Random(assumptions.random_seed)
     carried_positions = _initial_position_states(positions)
-    investor_balances = _initial_investor_balances(fund, investor_profiles)
+    investor_units = _initial_investor_units(fund, investor_profiles)
     backlog: tuple[DeferredRedemptionBacklogEntry, ...] = ()
     swing_pricing_receivable = ZERO
     monthly_results: list[MonthlyRedemptionPathResult] = []
@@ -98,10 +98,16 @@ def run_redemption_path(
             days_in_period=assumptions.days_per_month,
         )
         pre_lmt_nav = _position_nav(carried_positions)
+        nav_per_unit = _nav_per_unit(pre_lmt_nav, investor_units)
+        redeemable_balances = _redeemable_investor_balances(
+            investor_units=investor_units,
+            backlog=backlog,
+            nav_per_unit=nav_per_unit,
+        )
 
         demands = calculate_monthly_redemption_demands(
             investor_profiles=investor_profiles,
-            investor_balances=investor_balances,
+            investor_balances=redeemable_balances,
             month_number=month_number,
             stress_months=assumptions.stress_months,
             behavioural_feedback_multipliers=(
@@ -109,7 +115,11 @@ def run_redemption_path(
             ),
             rng=rng,
         )
-        effective_total = _effective_redemption_total(demands, backlog)
+        effective_total = _effective_redemption_total(
+            demands,
+            backlog,
+            current_nav=nav_per_unit,
+        )
         effective_redemption_rate = effective_total / pre_lmt_nav if pre_lmt_nav > ZERO else ZERO
         swing_signal = effective_redemption_rate >= lmt_parameters.swing_threshold_rate
         gate_signal = effective_redemption_rate >= lmt_parameters.gate_threshold_rate
@@ -196,8 +206,10 @@ def run_redemption_path(
             requested_paid_amount=requested_paid_amount,
             final_paid_amount=final_paid_amount,
             month_number=month_number,
+            opening_investor_units=investor_units,
+            current_nav=nav_per_unit,
         )
-        investor_balances = {state.client_class: state.closing_balance for state in investor_states}
+        investor_units = {state.client_class: state.closing_units for state in investor_states}
 
         # Gate-period liquidation: if gate is active, liquidate to cover backlog during deferral period
         gate_period_liquidation_result = None
@@ -206,8 +218,8 @@ def run_redemption_path(
         gate_period_unsettled_cash = ZERO
 
         if gate_applied:
-            # Calculate backlog target (amount that should be raised during gate period)
-            gate_period_liquidation_target = sum(entry.remaining_amount for entry in backlog)
+            # Value pending instructions at the current execution-month NAV.
+            gate_period_liquidation_target = _backlog_cash_value(backlog, nav_per_unit)
 
             if gate_period_liquidation_target > ZERO:
                 # Ask liquidation engine to raise cash for backlog target
@@ -224,10 +236,9 @@ def run_redemption_path(
                     stress_horizon_days=liquidity_stress.stress_horizon_days,
                 )
 
-                # Liquidation engine tells us what it can raise
-                gate_period_cash_generated = max(
-                    gate_period_liquidation_target - gate_period_liquidation_result.shortfall, ZERO
-                )
+                # Existing cash is already present in the fund cash account; only
+                # net proceeds from asset sales are incremental gate-period cash.
+                gate_period_cash_generated = gate_period_liquidation_result.total_net_cash_raised
 
                 # Split into settled vs. unsettled based on settlement timing
                 # Use maximum settlement days from liquidated positions
@@ -254,7 +265,7 @@ def run_redemption_path(
                 else:
                     # Partial settlement this month, rest next month
                     settlement_rate = max(
-                        remaining_days_in_month / max_settlement_days
+                        Decimal(remaining_days_in_month) / Decimal(max_settlement_days)
                         if max_settlement_days > 0
                         else ONE,
                         ZERO,
@@ -283,7 +294,7 @@ def run_redemption_path(
         gate_period_liquidation_cost_after_contagion = ZERO
         if gate_period_liquidation_result is not None:
             gate_period_liquidation_cost_after_contagion = (
-                gate_period_liquidation_result.total_realised_execution_cost
+                gate_period_liquidation_result.total_realised_liquidity_cost
                 * market_contagion_liquidity_cost_multiplier
             )
 
@@ -292,10 +303,6 @@ def run_redemption_path(
             immediate_liquidation_cost_after_contagion
             + gate_period_liquidation_cost_after_contagion
         )
-
-        # Preliminary fund-borne cost for NAV calculation (will be refined below)
-        # All economic costs (immediate + gate-period) allocated via swing pricing
-        preliminary_fund_borne = ZERO if swing_applied else realised_liquidity_cost_after_contagion
 
         lmt_assessment = _monthly_lmt_assessment(
             effective_redemption_rate=effective_redemption_rate,
@@ -311,36 +318,21 @@ def run_redemption_path(
             liquidation_result=liquidation_result,
             lmt_parameters=lmt_parameters,
             closing_nav_before_recovery=max(
-                pre_lmt_nav - final_paid_amount - preliminary_fund_borne,
+                pre_lmt_nav - final_paid_amount - realised_liquidity_cost_after_contagion,
                 ZERO,
             ),
-            realised_liquidity_cost_after_contagion=realised_liquidity_cost_after_contagion,
+            realised_liquidity_cost_after_contagion=(immediate_liquidation_cost_after_contagion),
         )
 
-        # Calculate swing pricing receivable for deferred redemptions
-        # Uses same proportional allocation as swing_received: cost per unit * deferred amount
-        swing_pricing_receivable_for_deferred = ZERO
-        if swing_applied and lmt_assessment.deferred_redemption_amount > ZERO:
-            # Cost per unit = economic cost / total redemptions (same as in _monthly_lmt_assessment)
-            cost_per_unit = (
-                realised_liquidity_cost_after_contagion / effective_total
-                if effective_total > ZERO
-                else ZERO
-            )
-            # Swing receivable = cost allocation for deferred redemptions
-            swing_pricing_receivable_for_deferred = (
-                cost_per_unit * lmt_assessment.deferred_redemption_amount
-            )
-
-        # Allocate total economic cost (immediate + gate-period) based on swing pricing
-        if swing_applied:
-            # Swing pricing transfers all economic liquidity costs to redeeming investors
-            investor_borne_liquidity_cost_after_contagion = realised_liquidity_cost_after_contagion
-            fund_borne_liquidity_cost_after_contagion = ZERO
-        else:
-            # No swing pricing: all economic costs remain fund-borne
-            investor_borne_liquidity_cost_after_contagion = ZERO
-            fund_borne_liquidity_cost_after_contagion = realised_liquidity_cost_after_contagion
+        # Only executed redemptions receive a swing-pricing allocation. Gate-period
+        # costs raised for pending units remain fund-borne until those units execute.
+        investor_borne_liquidity_cost_after_contagion = (
+            lmt_assessment.swing_pricing_adjustment_received
+        )
+        fund_borne_liquidity_cost_after_contagion = max(
+            realised_liquidity_cost_after_contagion - investor_borne_liquidity_cost_after_contagion,
+            ZERO,
+        )
         closing_cash = _closing_cash(
             positions=carried_positions,
             liquidation_result=liquidation_result,
@@ -364,6 +356,16 @@ def run_redemption_path(
                 closing_cash=closing_cash,
             )
         closing_nav = _position_nav(carried_positions)
+        closing_nav_per_unit = _nav_per_unit(closing_nav, investor_units)
+        investor_states = tuple(
+            state.model_copy(
+                update={
+                    "closing_nav_per_unit": closing_nav_per_unit,
+                    "closing_balance_cash": state.closing_units * closing_nav_per_unit,
+                }
+            )
+            for state in investor_states
+        )
         lmt_assessment = _assessment_with_outcomes(
             lmt_assessment.model_copy(
                 update={
@@ -375,10 +377,9 @@ def run_redemption_path(
             )
         )
 
-        # Update swing pricing receivable for deferred redemptions
-        swing_pricing_receivable_closing = (
-            swing_pricing_receivable + swing_pricing_receivable_for_deferred
-        )
+        backlog_units = sum((entry.remaining_units for entry in backlog), ZERO)
+        backlog_cash_value = _backlog_cash_value(backlog, nav_per_unit)
+        swing_pricing_receivable_closing = swing_pricing_receivable
 
         monthly_results.append(
             MonthlyRedemptionPathResult(
@@ -387,6 +388,8 @@ def run_redemption_path(
                 opening_nav=opening_nav,
                 pre_lmt_nav=pre_lmt_nav,
                 closing_nav=closing_nav,
+                nav_per_unit=nav_per_unit,
+                nav_at_gate_execution=nav_per_unit if gate_applied else None,
                 opening_cash=opening_cash,
                 closing_cash=closing_cash,
                 contractual_cashflow_amount=contractual_cashflow_amount,
@@ -404,10 +407,13 @@ def run_redemption_path(
                 behavioural_feedback_adjustment=behavioural_feedback_adjustment,
                 investor_class_states=investor_states,
                 backlog=backlog,
+                backlog_units=backlog_units,
+                backlog_cash_value=backlog_cash_value,
                 positions=carried_positions,
                 liquidation_result=liquidation_result,
                 lmt_assessment=lmt_assessment,
                 gate_period_liquidation_result=gate_period_liquidation_result,
+                gate_period_execution_cost=gate_period_liquidation_cost_after_contagion,
                 gate_period_cash_generated=gate_period_cash_generated,
                 gate_period_settled_cash=gate_period_settled_cash,
                 gate_period_unsettled_cash=gate_period_unsettled_cash,
@@ -547,12 +553,43 @@ def _initial_position_states(positions: Sequence[AssetPosition]) -> tuple[PathPo
     )
 
 
-def _initial_investor_balances(
+def _initial_investor_units(
     fund: FundSnapshot,
     investor_profiles: Sequence[InvestorClassProfile],
 ) -> dict[ClientClass, Decimal]:
     return {
         investor.client_class: fund.nav * investor.nav_share_rate for investor in investor_profiles
+    }
+
+
+def _nav_per_unit(
+    fund_nav: Decimal,
+    investor_units: dict[ClientClass, Decimal],
+) -> Decimal:
+    total_units = sum(investor_units.values(), ZERO)
+    if fund_nav > ZERO and total_units > ZERO:
+        return fund_nav / total_units
+    return ONE
+
+
+def _redeemable_investor_balances(
+    *,
+    investor_units: dict[ClientClass, Decimal],
+    backlog: Sequence[DeferredRedemptionBacklogEntry],
+    nav_per_unit: Decimal,
+) -> dict[ClientClass, Decimal]:
+    backlog_units_by_class: dict[ClientClass, Decimal] = {}
+    for entry in backlog:
+        backlog_units_by_class[entry.client_class] = (
+            backlog_units_by_class.get(entry.client_class, ZERO) + entry.remaining_units
+        )
+    return {
+        client_class: max(
+            units - backlog_units_by_class.get(client_class, ZERO),
+            ZERO,
+        )
+        * nav_per_unit
+        for client_class, units in investor_units.items()
     }
 
 
@@ -684,10 +721,20 @@ def _stressed_liquidity_capacity_rate(
 def _effective_redemption_total(
     demands: Sequence[InvestorClassRedemptionDemand],
     backlog: Sequence[DeferredRedemptionBacklogEntry],
+    *,
+    current_nav: Decimal,
 ) -> Decimal:
-    return sum((demand.redemption_amount for demand in demands), ZERO) + sum(
-        (entry.remaining_amount for entry in backlog), ZERO
+    return sum((demand.redemption_amount for demand in demands), ZERO) + _backlog_cash_value(
+        backlog,
+        current_nav,
     )
+
+
+def _backlog_cash_value(
+    backlog: Sequence[DeferredRedemptionBacklogEntry],
+    current_nav: Decimal,
+) -> Decimal:
+    return sum((entry.cash_value(current_nav) for entry in backlog), ZERO)
 
 
 def _requested_paid_amount(
@@ -712,10 +759,21 @@ def _allocate_paid_and_deferred_by_class(
     requested_paid_amount: Decimal,
     final_paid_amount: Decimal,
     month_number: int,
+    opening_investor_units: dict[ClientClass, Decimal],
+    current_nav: Decimal,
 ) -> tuple[tuple[InvestorClassMonthlyState, ...], tuple[DeferredRedemptionBacklogEntry, ...]]:
-    components_by_class = _redemption_components_by_class(demands, opening_backlog, month_number)
+    components_by_class = _redemption_components_by_class(
+        demands,
+        opening_backlog,
+        month_number,
+        current_nav=current_nav,
+    )
     total_effective = sum(
-        (amount for components in components_by_class.values() for _, amount in components),
+        (
+            units * current_nav
+            for components in components_by_class.values()
+            for _, units, _ in components
+        ),
         ZERO,
     )
     states: list[InvestorClassMonthlyState] = []
@@ -723,53 +781,73 @@ def _allocate_paid_and_deferred_by_class(
 
     for demand in sorted(demands, key=lambda item: item.client_class.value):
         components = components_by_class.get(demand.client_class, ())
-        class_effective = sum((amount for _, amount in components), ZERO)
+        class_effective_units = sum((units for _, units, _ in components), ZERO)
+        class_effective_cash = class_effective_units * current_nav
         class_paid = (
-            class_effective
+            class_effective_cash
             if final_paid_amount >= total_effective
             else (
-                final_paid_amount * class_effective / total_effective
+                final_paid_amount * class_effective_cash / total_effective
                 if total_effective > ZERO
                 else ZERO
             )
         )
         class_requested_paid = (
-            class_effective
+            class_effective_cash
             if requested_paid_amount >= total_effective
             else (
-                requested_paid_amount * class_effective / total_effective
+                requested_paid_amount * class_effective_cash / total_effective
                 if total_effective > ZERO
                 else ZERO
             )
         )
-        class_backlog = ZERO
-        for origin_month, amount in components:
-            component_not_deferred = (
-                class_requested_paid * amount / class_effective if class_effective > ZERO else ZERO
-            )
-            remaining = max(amount - component_not_deferred, ZERO)
-            class_backlog += remaining
-            if remaining > ZERO:
+        requested_units_remaining = class_requested_paid / current_nav
+        class_backlog_units = ZERO
+        for origin_month, units, nav_at_deferral in components:
+            executed_units = min(units, requested_units_remaining)
+            requested_units_remaining = max(requested_units_remaining - executed_units, ZERO)
+            remaining_units = max(units - executed_units, ZERO)
+            class_backlog_units += remaining_units
+            if remaining_units > ZERO:
                 closing_backlog.append(
                     DeferredRedemptionBacklogEntry(
                         client_class=demand.client_class,
                         origin_month=origin_month,
-                        remaining_amount=remaining,
+                        remaining_units=remaining_units,
+                        nav_at_deferral=nav_at_deferral,
                     )
                 )
+        opening_units = opening_investor_units.get(demand.client_class, ZERO)
+        opening_backlog_units = sum(
+            (
+                entry.remaining_units
+                for entry in opening_backlog
+                if entry.client_class is demand.client_class
+            ),
+            ZERO,
+        )
+        new_redemption_units = demand.redemption_amount / current_nav
+        paid_redemption_units = min(class_paid / current_nav, opening_units)
+        closing_units = max(opening_units - paid_redemption_units, ZERO)
         states.append(
             InvestorClassMonthlyState(
                 client_class=demand.client_class,
-                opening_balance=demand.opening_balance,
-                new_redemption_amount=demand.redemption_amount,
-                opening_backlog_amount=class_effective - demand.redemption_amount,
-                effective_redemption_amount=class_effective,
-                paid_redemption_amount=class_paid,
-                deferred_redemption_amount=class_backlog,
-                closing_balance=max(
-                    demand.opening_balance - demand.redemption_amount,
-                    ZERO,
-                ),
+                nav_per_unit=current_nav,
+                closing_nav_per_unit=current_nav,
+                opening_units=opening_units,
+                new_redemption_units=new_redemption_units,
+                opening_backlog_units=opening_backlog_units,
+                effective_redemption_units=class_effective_units,
+                paid_redemption_units=paid_redemption_units,
+                deferred_redemption_units=class_backlog_units,
+                closing_units=closing_units,
+                opening_balance_cash=opening_units * current_nav,
+                new_redemption_cash=demand.redemption_amount,
+                opening_backlog_cash=opening_backlog_units * current_nav,
+                effective_redemption_cash=class_effective_cash,
+                paid_redemption_cash=class_paid,
+                deferred_redemption_cash=class_backlog_units * current_nav,
+                closing_balance_cash=closing_units * current_nav,
                 redemption_rate=demand.redemption_rate,
             )
         )
@@ -781,18 +859,24 @@ def _redemption_components_by_class(
     demands: Sequence[InvestorClassRedemptionDemand],
     opening_backlog: Sequence[DeferredRedemptionBacklogEntry],
     month_number: int,
-) -> dict[ClientClass, tuple[tuple[int, Decimal], ...]]:
-    components: dict[ClientClass, list[tuple[int, Decimal]]] = {}
-    for entry in opening_backlog:
+    *,
+    current_nav: Decimal,
+) -> dict[ClientClass, tuple[tuple[int, Decimal, Decimal], ...]]:
+    components: dict[ClientClass, list[tuple[int, Decimal, Decimal]]] = {}
+    for entry in sorted(opening_backlog, key=lambda item: item.origin_month):
         components.setdefault(entry.client_class, []).append(
-            (entry.origin_month, entry.remaining_amount)
+            (entry.origin_month, entry.remaining_units, entry.nav_at_deferral)
         )
     for demand in demands:
         components.setdefault(demand.client_class, []).append(
-            (month_number, demand.redemption_amount)
+            (month_number, demand.redemption_amount / current_nav, current_nav)
         )
     return {
-        client_class: tuple((origin, amount) for origin, amount in entries if amount > ZERO)
+        client_class: tuple(
+            (origin, units, nav_at_deferral)
+            for origin, units, nav_at_deferral in entries
+            if units > ZERO
+        )
         for client_class, entries in components.items()
     }
 
@@ -829,7 +913,7 @@ def _monthly_lmt_assessment(
     # When swing is applied, economic cost is allocated to investors proportionally to redemption amount
     # cost_per_unit = economic_cost / effective_total
     # swing_received = cost_per_unit * final_paid_amount (only for paid redemptions this month)
-    # This ensures: swing_received + swing_receivable = economic_cost when swing applied
+    # The unallocated share remains fund-borne; deferred units receive no current-month charge.
     cost_per_unit = (
         economic_cost / effective_total if swing_applied and effective_total > ZERO else ZERO
     )

@@ -6,10 +6,33 @@ from pydantic import ValidationError
 from lmt_calibration.domain import (
     BetaDistributionParameters,
     ClientClass,
+    DeferredRedemptionBacklogEntry,
     MonthlySimulationPeriod,
     PathLmtOutcome,
     RedemptionPathAssumptions,
 )
+
+
+def test_deferred_backlog_stores_units_and_values_them_at_current_nav() -> None:
+    entry = DeferredRedemptionBacklogEntry(
+        client_class=ClientClass.INSTITUTIONAL,
+        origin_month=2,
+        remaining_units=Decimal("125"),
+        nav_at_deferral=Decimal("1.04"),
+    )
+
+    assert entry.remaining_units == Decimal("125")
+    assert entry.nav_at_deferral == Decimal("1.04")
+    assert entry.cash_value(Decimal("1.10")) == Decimal("137.50")
+    assert entry.cash_value(Decimal("0.90")) == Decimal("112.50")
+
+    with pytest.raises(ValidationError, match="remaining_amount"):
+        DeferredRedemptionBacklogEntry(
+            client_class=ClientClass.INSTITUTIONAL,
+            origin_month=2,
+            remaining_amount=Decimal("125"),
+            nav_at_deferral=Decimal("1.04"),
+        )
 
 
 def test_monthly_simulation_period_rejects_end_before_start() -> None:

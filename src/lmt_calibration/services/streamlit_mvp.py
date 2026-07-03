@@ -529,22 +529,21 @@ def build_redemption_path_monthly_rows(
     rows: list[dict[str, object]] = []
     for month in result.monthly_results:
         new_demand = sum(
-            (state.new_redemption_amount for state in month.investor_class_states),
+            (state.new_redemption_cash for state in month.investor_class_states),
             ZERO,
         )
         effective_demand = sum(
-            (state.effective_redemption_amount for state in month.investor_class_states),
+            (state.effective_redemption_cash for state in month.investor_class_states),
             ZERO,
         )
         paid_redemption = sum(
-            (state.paid_redemption_amount for state in month.investor_class_states),
+            (state.paid_redemption_cash for state in month.investor_class_states),
             ZERO,
         )
         deferred_redemption = sum(
-            (state.deferred_redemption_amount for state in month.investor_class_states),
+            (state.deferred_redemption_cash for state in month.investor_class_states),
             ZERO,
         )
-        backlog_amount = sum((entry.remaining_amount for entry in month.backlog), ZERO)
         liquid_nav = _liquid_nav(month.positions)
         rows.append(
             {
@@ -555,7 +554,9 @@ def build_redemption_path_monthly_rows(
                 "effective_redemption_demand": effective_demand,
                 "paid_redemption": paid_redemption,
                 "deferred_redemption": deferred_redemption,
-                "cumulative_backlog": backlog_amount,
+                "cumulative_backlog": month.backlog_cash_value,
+                "backlog_units": month.backlog_units,
+                "nav_per_unit": month.nav_per_unit,
                 "liquidity_shortfall": month.liquidation_result.shortfall,
                 "opening_nav": month.opening_nav,
                 "pre_lmt_nav": month.pre_lmt_nav,
@@ -617,13 +618,22 @@ def build_redemption_path_investor_rows(
                 {
                     "month": month.period.month_number,
                     "client_class": state.client_class.value,
-                    "opening_balance": state.opening_balance,
-                    "new_redemption_demand": state.new_redemption_amount,
-                    "opening_backlog": state.opening_backlog_amount,
-                    "effective_redemption_demand": state.effective_redemption_amount,
-                    "paid_redemption": state.paid_redemption_amount,
-                    "deferred_redemption": state.deferred_redemption_amount,
-                    "closing_balance": state.closing_balance,
+                    "nav_per_unit": state.nav_per_unit,
+                    "closing_nav_per_unit": state.closing_nav_per_unit,
+                    "opening_units": state.opening_units,
+                    "new_redemption_units": state.new_redemption_units,
+                    "opening_backlog_units": state.opening_backlog_units,
+                    "effective_redemption_units": state.effective_redemption_units,
+                    "paid_redemption_units": state.paid_redemption_units,
+                    "deferred_redemption_units": state.deferred_redemption_units,
+                    "closing_units": state.closing_units,
+                    "opening_balance": state.opening_balance_cash,
+                    "new_redemption_demand": state.new_redemption_cash,
+                    "opening_backlog": state.opening_backlog_cash,
+                    "effective_redemption_demand": state.effective_redemption_cash,
+                    "paid_redemption": state.paid_redemption_cash,
+                    "deferred_redemption": state.deferred_redemption_cash,
+                    "closing_balance": state.closing_balance_cash,
                     "redemption_rate": state.redemption_rate,
                     "behavioural_feedback_multiplier": (
                         month.behavioural_feedback_adjustment.behavioural_feedback_multipliers.get(

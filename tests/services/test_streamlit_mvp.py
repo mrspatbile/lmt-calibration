@@ -132,11 +132,7 @@ def test_streamlit_path_passes_empty_applied_months_when_no_lmt_is_selected() ->
     assert all(not row["gate_applied"] for row in run.lmt_timeline_rows)
     assert all(not row["suspension_applied"] for row in run.lmt_timeline_rows)
     assert all(
-        row["cumulative_backlog"]
-        == sum(
-            (entry.remaining_amount for entry in run.result.monthly_results[index].backlog),
-            Decimal("0"),
-        )
+        row["cumulative_backlog"] == run.result.monthly_results[index].backlog_cash_value
         for index, row in enumerate(run.monthly_rows)
     )
     assert all(

@@ -164,8 +164,13 @@ def test_market_contagion_adjusts_only_next_month_liquidity_cost_rate() -> None:
     assert second_month.adjusted_estimated_liquidity_cost_rate == (
         second_month.base_estimated_liquidity_cost_rate * Decimal("2")
     )
-    assert second_month.investor_class_states == disabled.monthly_results[1].investor_class_states
     disabled_second_month = disabled.monthly_results[1]
+    enabled_state = second_month.investor_class_states[0]
+    disabled_state = disabled_second_month.investor_class_states[0]
+    assert enabled_state.opening_units == disabled_state.opening_units
+    assert enabled_state.new_redemption_units == disabled_state.new_redemption_units
+    assert enabled_state.paid_redemption_units == disabled_state.paid_redemption_units
+    assert enabled_state.closing_units == disabled_state.closing_units
     assert second_month.lmt_assessment.paid_redemption_amount == (
         disabled_second_month.lmt_assessment.paid_redemption_amount
     )
@@ -312,14 +317,13 @@ def test_gate_paid_redemptions_are_allocated_pro_rata_and_backlog_carries_forwar
     assert first_month.lmt_assessment.gate_signal is True
     assert first_month.lmt_assessment.gate_applied is True
     assert first_month.lmt_assessment.paid_redemption_amount == Decimal("100.0")
-    assert states[ClientClass.RETAIL].paid_redemption_amount == Decimal("50.00")
-    assert states[ClientClass.INSTITUTIONAL].paid_redemption_amount == Decimal("50.00")
-    assert states[ClientClass.RETAIL].deferred_redemption_amount == Decimal("200.00")
-    assert states[ClientClass.INSTITUTIONAL].deferred_redemption_amount == Decimal("200.00")
-    assert sum((entry.remaining_amount for entry in first_month.backlog), Decimal("0")) == Decimal(
-        "400.00"
-    )
-    assert result.monthly_results[1].investor_class_states[0].opening_backlog_amount > Decimal("0")
+    assert states[ClientClass.RETAIL].paid_redemption_cash == Decimal("50.00")
+    assert states[ClientClass.INSTITUTIONAL].paid_redemption_cash == Decimal("50.00")
+    assert states[ClientClass.RETAIL].deferred_redemption_cash == Decimal("200.00")
+    assert states[ClientClass.INSTITUTIONAL].deferred_redemption_cash == Decimal("200.00")
+    assert first_month.backlog_units == Decimal("400.00")
+    assert first_month.backlog_cash_value == Decimal("400.00")
+    assert result.monthly_results[1].investor_class_states[0].opening_backlog_units > Decimal("0")
 
 
 def test_threshold_breach_and_liquidity_shortfall_do_not_create_lmt_backlog() -> None:
@@ -363,7 +367,7 @@ def test_threshold_breach_and_liquidity_shortfall_do_not_create_lmt_backlog() ->
     assert first_month.liquidation_result.shortfall == Decimal("300.00")
     assert first_month.lmt_assessment.deferred_redemption_amount == Decimal("0.00")
     assert all(
-        state.deferred_redemption_amount == Decimal("0.00")
+        state.deferred_redemption_units == Decimal("0.00")
         for state in first_month.investor_class_states
     )
     assert first_month.backlog == ()
@@ -395,7 +399,7 @@ def test_full_payment_path_does_not_create_decimal_backlog_dust() -> None:
 
     assert all(month.backlog == () for month in result.monthly_results)
     assert all(
-        state.deferred_redemption_amount == Decimal("0")
+        state.deferred_redemption_units == Decimal("0")
         for month in result.monthly_results
         for state in month.investor_class_states
     )
@@ -649,12 +653,12 @@ def test_backlog_is_not_multiplied_again_by_behavioural_feedback() -> None:
         ),
     )
 
-    first_backlog = result.monthly_results[0].backlog[0].remaining_amount
+    first_backlog = result.monthly_results[0].backlog[0].remaining_units
     second_state = result.monthly_results[1].investor_class_states[0]
 
     assert first_backlog == Decimal("400.0")
-    assert second_state.opening_backlog_amount == first_backlog
-    assert second_state.new_redemption_amount == Decimal("500.0")
+    assert second_state.opening_backlog_units == first_backlog
+    assert second_state.new_redemption_cash == Decimal("500.0")
 
 
 def test_backlog_and_new_demand_do_not_exceed_remaining_investor_capital() -> None:
@@ -680,12 +684,12 @@ def test_backlog_and_new_demand_do_not_exceed_remaining_investor_capital() -> No
 
     for month in result.monthly_results:
         effective_demand = sum(
-            (state.effective_redemption_amount for state in month.investor_class_states),
+            (state.effective_redemption_cash for state in month.investor_class_states),
             Decimal("0"),
         )
         assert effective_demand <= initial_nav
 
-    assert result.monthly_results[1].investor_class_states[0].new_redemption_amount == Decimal(
+    assert result.monthly_results[1].investor_class_states[0].new_redemption_cash == Decimal(
         "500.0"
     )
 
@@ -716,6 +720,137 @@ def test_liquidation_still_uses_paid_redemption_only() -> None:
     # Gate period should liquidate for the backlog
     assert first_month.gate_period_liquidation_result is not None
     assert first_month.gate_period_liquidation_result.total_redemption_amount == Decimal("400.0")
+
+
+def test_deferred_units_remain_owned_until_execution_and_then_reduce_units() -> None:
+    result = run_redemption_path(
+        fund=_fund(),
+        positions=(_cash("1000"),),
+        investor_profiles=(_investor(ClientClass.RETAIL, "1", "0", "0.50"),),
+        liquidity_stress=_liquidity_stress(),
+        liquidation_strategy=_strategy(),
+        lmt_parameters=_parameters(gate_threshold="0.10"),
+        assumptions=RedemptionPathAssumptions(
+            scenario_id="unit_ownership_execution",
+            start_date="2026-01-01",
+            random_seed=4,
+            stress_months=(1,),
+            gate_months=(1,),
+        ),
+    )
+
+    deferred_month = result.monthly_results[0]
+    execution_month = result.monthly_results[1]
+    deferred_state = deferred_month.investor_class_states[0]
+    execution_state = execution_month.investor_class_states[0]
+
+    assert deferred_state.opening_units == Decimal("1000")
+    assert deferred_state.paid_redemption_units == Decimal("100.00")
+    assert deferred_state.deferred_redemption_units == Decimal("400.00")
+    assert deferred_state.closing_units == Decimal("900.00")
+    assert deferred_month.backlog_units == Decimal("400.00")
+    assert execution_state.opening_units == Decimal("900.00")
+    assert execution_state.paid_redemption_units == Decimal("400.00")
+    assert execution_state.closing_units == Decimal("500.00")
+    assert execution_month.backlog == ()
+
+
+def test_backlog_cash_value_moves_with_nav_without_changing_units() -> None:
+    result = run_redemption_path(
+        fund=_fund(),
+        positions=(_cash("300"), _equity("euro_equity", "700")),
+        investor_profiles=(_investor(ClientClass.RETAIL, "1", "0", "0.50"),),
+        liquidity_stress=_liquidity_stress(),
+        liquidation_strategy=_strategy(),
+        lmt_parameters=_parameters(gate_threshold="0.10"),
+        assumptions=RedemptionPathAssumptions(
+            scenario_id="backlog_nav_revaluation",
+            start_date="2026-01-01",
+            random_seed=5,
+            stress_months=(1,),
+            gate_months=(1,),
+            suspension_months=(2,),
+            market_stress_month=2,
+        ),
+        market_stress=MarketStress(
+            market_stress_id="backlog_equity_stress",
+            version="1.0",
+            name="backlog_equity_stress",
+            description="Synthetic equity stress for backlog revaluation.",
+            market_shock_rate=Decimal("-0.10"),
+        ),
+    )
+
+    first_month = result.monthly_results[0]
+    second_month = result.monthly_results[1]
+
+    assert first_month.backlog[0].nav_at_deferral == Decimal("1")
+    assert second_month.nav_per_unit < first_month.nav_per_unit
+    assert second_month.backlog_units == first_month.backlog_units
+    assert second_month.backlog_cash_value < first_month.backlog_cash_value
+    assert second_month.backlog_cash_value == (
+        second_month.backlog_units * second_month.nav_per_unit
+    )
+    assert second_month.backlog[0].nav_at_deferral == Decimal("1")
+
+
+def test_partial_backlog_execution_is_fifo_and_preserves_origin_metadata() -> None:
+    result = run_redemption_path(
+        fund=_fund(),
+        positions=(_cash("1000"),),
+        investor_profiles=(_investor(ClientClass.RETAIL, "1", "0", "0.50"),),
+        liquidity_stress=_liquidity_stress(),
+        liquidation_strategy=_strategy(),
+        lmt_parameters=_parameters(gate_threshold="0.10"),
+        assumptions=RedemptionPathAssumptions(
+            scenario_id="fifo_unit_backlog",
+            start_date="2026-01-01",
+            random_seed=6,
+            stress_months=(1, 2),
+            gate_months=(1, 2),
+        ),
+    )
+
+    second_month = result.monthly_results[1]
+
+    assert [entry.origin_month for entry in second_month.backlog] == [1, 2]
+    assert second_month.backlog[0].remaining_units == Decimal("310.00")
+    assert second_month.backlog[0].nav_at_deferral == Decimal("1")
+    assert second_month.backlog[1].remaining_units == Decimal("250.000")
+    assert second_month.backlog[1].nav_at_deferral == Decimal("1")
+
+
+def test_deferred_units_receive_no_swing_or_liquidity_cost_when_deferred() -> None:
+    result = run_redemption_path(
+        fund=_fund(),
+        positions=(
+            _cash("100"),
+            _equity("euro_equity", "900").model_copy(update={"base_haircut_rate": Decimal("0.10")}),
+        ),
+        investor_profiles=(_investor(ClientClass.RETAIL, "1", "0", "0.50"),),
+        liquidity_stress=_liquidity_stress(),
+        liquidation_strategy=_strategy(),
+        lmt_parameters=_parameters(swing_threshold="0.01", gate_threshold="0.10"),
+        assumptions=RedemptionPathAssumptions(
+            scenario_id="deferred_cost_exclusion",
+            start_date="2026-01-01",
+            random_seed=7,
+            stress_months=(1,),
+            swing_pricing_months=(1,),
+            gate_months=(1,),
+        ),
+    )
+
+    month = result.monthly_results[0]
+
+    assert month.backlog_units > Decimal("0")
+    assert month.realised_liquidity_cost_after_contagion > Decimal("0")
+    assert month.lmt_assessment.swing_pricing_adjustment_received == Decimal("0")
+    assert month.investor_borne_liquidity_cost_after_contagion == Decimal("0")
+    assert month.fund_borne_liquidity_cost_after_contagion == (
+        month.realised_liquidity_cost_after_contagion
+    )
+    assert month.swing_pricing_receivable_closing == Decimal("0")
 
 
 def _fund() -> FundSnapshot:
@@ -961,7 +1096,7 @@ def test_gate_creates_backlog_when_gate_threshold_breached() -> None:
             _cash("100"),
             _equity("euro_equity", "900"),
         ),
-        investor_profiles=(_investor(ClientClass.RETAIL, "1", "0.15", "0"),),
+        investor_profiles=(_investor(ClientClass.RETAIL, "1", "0", "0.15"),),
         liquidity_stress=_liquidity_stress(),
         liquidation_strategy=_strategy(),
         lmt_parameters=_parameters(gate_threshold="0.10"),
@@ -969,6 +1104,7 @@ def test_gate_creates_backlog_when_gate_threshold_breached() -> None:
             scenario_id="gate_backlog_test",
             start_date="2026-01-01",
             random_seed=42,
+            stress_months=(1,),
             gate_months=(1,),
         ),
     )
@@ -977,7 +1113,7 @@ def test_gate_creates_backlog_when_gate_threshold_breached() -> None:
     # Gate active, so payment should be limited by gate
     # Backlog should be created for deferred amount
     assert len(month_1.backlog) > 0
-    assert sum(entry.remaining_amount for entry in month_1.backlog) > Decimal("0")
+    assert month_1.backlog_units > Decimal("0")
 
 
 def test_gate_period_liquidation_target_equals_backlog() -> None:
@@ -1091,9 +1227,9 @@ def test_unsettled_gate_cash_flows_into_next_month_opening_cash() -> None:
     # Check that backlog tracking is correct
     # Month 1 has backlog that should be paid from month 2's available cash
     if len(month_1.backlog) > 0:
-        month_1_backlog = sum(entry.remaining_amount for entry in month_1.backlog)
+        month_1_backlog = month_1.backlog_units
         # Month 2 should have less backlog if gate cash settled
-        month_2_backlog = sum(entry.remaining_amount for entry in month_2.backlog)
+        month_2_backlog = month_2.backlog_units
         # With gate-period liquidation, backlog should reduce
         assert month_2_backlog <= month_1_backlog
 
@@ -1316,8 +1452,8 @@ def test_multiple_consecutive_gates_with_backlog_clearing() -> None:
     )
 
     # Verify backlog tracking across months
-    month_1_backlog = sum(e.remaining_amount for e in result.monthly_results[0].backlog)
-    month_2_backlog = sum(e.remaining_amount for e in result.monthly_results[1].backlog)
+    month_1_backlog = result.monthly_results[0].backlog_units
+    month_2_backlog = result.monthly_results[1].backlog_units
 
     # Each month should have backlog (since gate is active)
     if month_1_backlog > Decimal("0"):
@@ -1397,7 +1533,7 @@ def test_gate_cash_integration_across_months() -> None:
         assert month_1_settled + month_1_unsettled == month_1.gate_period_cash_generated
 
         # Month 2 and 3 should have consistent backlog progression
-        month_2_backlog = sum(e.remaining_amount for e in month_2.backlog)
-        month_3_backlog = sum(e.remaining_amount for e in month_3.backlog)
+        month_2_backlog = month_2.backlog_units
+        month_3_backlog = month_3.backlog_units
         # Backlog can only stay same or reduce (with gate help), never increase
         assert month_3_backlog <= month_2_backlog + Decimal("100")  # Allow for new demand

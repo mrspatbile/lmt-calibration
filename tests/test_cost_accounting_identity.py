@@ -281,7 +281,7 @@ def test_gate_period_cost_in_economic_cost():
 
 
 def test_gate_with_swing_allocation():
-    """Gate + swing: all economic costs (immediate + gate) allocated to investors."""
+    """Gate plus swing allocates cost only to redemptions executed in the month."""
     result = run_redemption_path(
         fund=_fund(),
         positions=(_cash(), _equity()),
@@ -299,12 +299,13 @@ def test_gate_with_swing_allocation():
     )
 
     month_1 = result.monthly_results[0]
-    if month_1.realised_liquidity_cost_after_contagion > ZERO:
-        # All economic cost transferred to investors
-        assert month_1.fund_borne_liquidity_cost_after_contagion == ZERO
-        assert month_1.investor_borne_liquidity_cost_after_contagion == (
-            month_1.realised_liquidity_cost_after_contagion
-        )
+    assert month_1.investor_borne_liquidity_cost_after_contagion == (
+        month_1.lmt_assessment.swing_pricing_adjustment_received
+    )
+    assert month_1.fund_borne_liquidity_cost_after_contagion == (
+        month_1.realised_liquidity_cost_after_contagion
+        - month_1.investor_borne_liquidity_cost_after_contagion
+    )
 
 
 def test_nav_reconciliation_identity():

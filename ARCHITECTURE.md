@@ -283,7 +283,7 @@ Forward-looking multi-period simulation:
 
 * fixed 12-month horizon with monthly liquidation capacity scaling
 * monthly threshold signals (swing pricing, redemption gates, liquidity buffer) separated from user-selected LMT applications
-* deferred redemption backlog tracking and evolution
+* unit-based deferred redemption backlog tracking and current-NAV valuation
 * optional market stress with one-month liquidity-cost and net-proceeds adjustment (market contagion)
 * behavioural feedback multiplier (applied after LMT use, increases next-month demand)
 * fund NAV, cash, position, and investor-class balance evolution month-to-month

@@ -163,28 +163,45 @@ class PathPositionState(BaseModel):
 
 
 class DeferredRedemptionBacklogEntry(BaseModel):
-    """Unpaid redemption demand carried into a later month."""
+    """Pending redemption units carried into a later month."""
 
     model_config = ConfigDict(extra="forbid", frozen=True, str_strip_whitespace=True)
 
     client_class: ClientClass
     origin_month: int = Field(ge=1)
-    remaining_amount: Decimal = Field(ge=ZERO)
+    remaining_units: Decimal = Field(ge=ZERO)
+    nav_at_deferral: Decimal = Field(gt=ZERO)
+
+    def cash_value(self, current_nav: Decimal) -> Decimal:
+        """Value the pending units at the supplied current NAV per unit."""
+
+        if current_nav < ZERO:
+            raise ValueError("current_nav must be non-negative")
+        return self.remaining_units * current_nav
 
 
 class InvestorClassMonthlyState(BaseModel):
-    """Redeemable investor-class balance and redemption result for one month."""
+    """Investor-class ownership, pending instructions, and monthly execution."""
 
     model_config = ConfigDict(extra="forbid", frozen=True, str_strip_whitespace=True)
 
     client_class: ClientClass
-    opening_balance: Decimal = Field(ge=ZERO)
-    new_redemption_amount: Decimal = Field(ge=ZERO)
-    opening_backlog_amount: Decimal = Field(ge=ZERO)
-    effective_redemption_amount: Decimal = Field(ge=ZERO)
-    paid_redemption_amount: Decimal = Field(ge=ZERO)
-    deferred_redemption_amount: Decimal = Field(ge=ZERO)
-    closing_balance: Decimal = Field(ge=ZERO)
+    nav_per_unit: Decimal = Field(gt=ZERO)
+    closing_nav_per_unit: Decimal = Field(gt=ZERO)
+    opening_units: Decimal = Field(ge=ZERO)
+    new_redemption_units: Decimal = Field(ge=ZERO)
+    opening_backlog_units: Decimal = Field(ge=ZERO)
+    effective_redemption_units: Decimal = Field(ge=ZERO)
+    paid_redemption_units: Decimal = Field(ge=ZERO)
+    deferred_redemption_units: Decimal = Field(ge=ZERO)
+    closing_units: Decimal = Field(ge=ZERO)
+    opening_balance_cash: Decimal = Field(ge=ZERO)
+    new_redemption_cash: Decimal = Field(ge=ZERO)
+    opening_backlog_cash: Decimal = Field(ge=ZERO)
+    effective_redemption_cash: Decimal = Field(ge=ZERO)
+    paid_redemption_cash: Decimal = Field(ge=ZERO)
+    deferred_redemption_cash: Decimal = Field(ge=ZERO)
+    closing_balance_cash: Decimal = Field(ge=ZERO)
     redemption_rate: Decimal = Field(ge=ZERO, le=ONE)
 
 
@@ -241,6 +258,8 @@ class MonthlyRedemptionPathResult(BaseModel):
     opening_nav: Decimal = Field(ge=ZERO)
     pre_lmt_nav: Decimal = Field(ge=ZERO)
     closing_nav: Decimal = Field(ge=ZERO)
+    nav_per_unit: Decimal = Field(gt=ZERO)
+    nav_at_gate_execution: Decimal | None = Field(default=None, gt=ZERO)
     opening_cash: Decimal = Field(ge=ZERO)
     closing_cash: Decimal = Field(ge=ZERO)
     contractual_cashflow_amount: Decimal = Field(ge=ZERO)
@@ -256,6 +275,8 @@ class MonthlyRedemptionPathResult(BaseModel):
     behavioural_feedback_adjustment: MonthlyBehaviouralFeedbackAdjustment
     investor_class_states: tuple[InvestorClassMonthlyState, ...]
     backlog: tuple[DeferredRedemptionBacklogEntry, ...]
+    backlog_units: Decimal = Field(default=ZERO, ge=ZERO)
+    backlog_cash_value: Decimal = Field(default=ZERO, ge=ZERO)
     positions: tuple[PathPositionState, ...]
     liquidation_result: LiquidationResult
     lmt_assessment: MonthlyPathLmtAssessment

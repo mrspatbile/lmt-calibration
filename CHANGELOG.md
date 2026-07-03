@@ -5,6 +5,7 @@ All notable changes to this project are documented here.
 ## Unreleased
 
 ### Changed
+- Represented deferred redemption backlog as units valued at each month’s NAV, with ownership reduced only when units execute.
 - Consolidated execution-cost, liquidity-capacity, and haircut assumptions by asset group under liquidity stress; market stress remains valuation-only.
 - Centralized applied swing-factor and cost-recovery calculations outside the dashboard.
 - Made initial, current pre-LMT, and current post-LMT NAV bases explicit while preserving their intended uses.

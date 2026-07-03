@@ -2477,13 +2477,9 @@ def _render_cash_account_diagnostics(run: AppRedemptionPathRun, *, dark_mode: bo
         actual_closing_cash = month_result.closing_cash
         cash_diff = abs(cash_components - actual_closing_cash)
 
-        # NAV reconciliation: economic cost should equal swing adjustment + fund-borne cost
+        # NAV reconciliation: economic cost equals executed-redemption allocation plus fund cost.
         economic_cost = month_result.realised_liquidity_cost_after_contagion
-        swing_adj = (
-            month_result.realised_liquidity_cost_after_contagion
-            if month_result.lmt_assessment.swing_applied
-            else ZERO
-        )
+        swing_adj = month_result.lmt_assessment.swing_pricing_adjustment_received
         fund_borne = month_result.fund_borne_liquidity_cost_after_contagion
         nav_diff = abs(economic_cost - (swing_adj + fund_borne))
 
@@ -2513,9 +2509,6 @@ def _render_cash_account_diagnostics(run: AppRedemptionPathRun, *, dark_mode: bo
             / M
         )
 
-        # Swing pricing receivable: balance of swing adjustment on deferred redemptions
-        swing_pricing_receivable = month_result.swing_pricing_receivable_closing / M
-
         total_cash_received = (
             liquidation_proceeds
             + contractual_inflows
@@ -2538,7 +2531,6 @@ def _render_cash_account_diagnostics(run: AppRedemptionPathRun, *, dark_mode: bo
             "cash_available": cash_available,
             "redemptions_paid": redemptions_paid,
             "closing_cash": closing_cash,
-            "swing_pricing_receivable": swing_pricing_receivable,
             "pending_settlement": pending_settlement,
         }
 
@@ -2675,7 +2667,6 @@ def _render_cash_account_diagnostics(run: AppRedemptionPathRun, *, dark_mode: bo
         ("cash_available", "Cash available", False, False),
         ("redemptions_paid", "Redemptions paid", False, False),
         ("closing_cash", "Closing cash", False, False),
-        ("swing_pricing_receivable", "Swing pricing receivable", False, True),
         ("pending_settlement", "Pending settlement (next period)", False, True),
     ]
 
@@ -2786,14 +2777,8 @@ def _render_nav_reconciliation_diagnostics(run: AppRedemptionPathRun, *, dark_mo
             / M
         )
 
-        # Swing pricing receivable: increase in receivable balance for deferred redemptions
-        swing_receivable_increase = (
-            month_result.swing_pricing_receivable_closing
-            - month_result.swing_pricing_receivable_opening
-        ) / M
-
-        # Liquidity cost allocated to redeeming investors: swing received + receivable increase
-        allocated_to_investors = swing_pricing_adj_received + swing_receivable_increase
+        # Deferred units receive no allocation until they execute in a later month.
+        allocated_to_investors = swing_pricing_adj_received
 
         # Fund-borne liquidity cost: portion of economic cost borne by fund
         fund_borne_cost = month_result.fund_borne_liquidity_cost_after_contagion / M
@@ -2814,7 +2799,6 @@ def _render_nav_reconciliation_diagnostics(run: AppRedemptionPathRun, *, dark_mo
             "market_gain_loss": market_gain_loss,
             "economic_cost": economic_cost,
             "swing_pricing_adj_received": swing_pricing_adj_received,
-            "swing_receivable_increase": swing_receivable_increase,
             "allocated_to_investors": allocated_to_investors,
             "fund_borne_cost": fund_borne_cost,
             "net_fund_borne": net_fund_borne,
@@ -3022,7 +3006,7 @@ def _render_nav_reconciliation_diagnostics(run: AppRedemptionPathRun, *, dark_mo
 def _render_path_kpis(run: AppRedemptionPathRun) -> None:
     first_month = run.result.monthly_results[0]
     last_month = run.result.monthly_results[-1]
-    final_backlog = sum((entry.remaining_amount for entry in last_month.backlog), ZERO)
+    final_backlog = last_month.backlog_cash_value
     final_nav_change = _safe_rate(
         last_month.closing_nav - first_month.opening_nav, first_month.opening_nav
     )
@@ -3031,7 +3015,7 @@ def _render_path_kpis(run: AppRedemptionPathRun) -> None:
         Kpi(
             "Final backlog",
             _money(final_backlog),
-            "deferred redemptions",
+            f"{last_month.backlog_units:,.2f} units at current NAV",
             "warning" if final_backlog > ZERO else "success",
         ),
         Kpi("Closing cash", _money(last_month.closing_cash), "month 12", "neutral"),

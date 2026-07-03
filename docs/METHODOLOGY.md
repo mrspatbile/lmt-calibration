@@ -45,6 +45,13 @@ This methodology includes:
 * deferred-redemption backlog and investor-balance evolution through the path
 * structured audit record models and JSON output support
 
+The redemption path stores deferred instructions as units. Deferred units
+remain in investor ownership until paid, are valued at the current NAV per unit
+for each monthly exposure, and execute at the execution-month NAV. The NAV per
+unit at deferral is retained as audit metadata and does not create a fixed cash
+claim. Swing-pricing and liquidity-cost allocations apply only to units that
+execute in the month.
+
 ## Out of current scope
 
 The current methodology does not include:

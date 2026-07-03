@@ -158,7 +158,8 @@ The current audit scope supports:
 **Page 2: 12-month redemption path**
 * Structured records capturing configuration (stress months, market stress, LMT applications)
 * Monthly simulation parameters and inputs
-* Support for audit trail of monthly results, backlog evolution, and LMT applications
+* Support for audit trail of monthly results, unit-based backlog evolution,
+  current backlog cash value, deferral NAV, and LMT applications
 
 Records can be written to any output directory using the JSON audit writer.
 

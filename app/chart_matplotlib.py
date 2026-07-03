@@ -131,7 +131,7 @@ def plot_redemption_profile(
             color=COLORS["orange"],
             marker="o",
             linewidth=2.5,
-            label="Backlog",
+            label="Backlog (current NAV)",
             markersize=6,
         )
 
@@ -332,17 +332,8 @@ def plot_redemption_and_nav_combined(
         df.get("swing_pricing_adjustment_received", pd.Series(0.0, index=df.index)).astype(float)
         / 1e6
     )
-    swing_receivable_opening_m = (
-        df.get("swing_pricing_receivable_opening", pd.Series(0.0, index=df.index)).astype(float)
-        / 1e6
-    )
-    swing_receivable_closing_m = (
-        df.get("swing_pricing_receivable_closing", pd.Series(0.0, index=df.index)).astype(float)
-        / 1e6
-    )
-    # Liquidity cost allocated to redeeming investors = swing received + increase in receivable
-    swing_receivable_increase_m = swing_receivable_closing_m - swing_receivable_opening_m
-    allocated_liquidity_cost_m = swing_adjustment_received_m + swing_receivable_increase_m
+    # Deferred units receive no cost allocation before execution.
+    allocated_liquidity_cost_m = swing_adjustment_received_m
     # Net fund-borne cost = economic cost - allocated cost
     net_fund_borne_m = realised_liquidity_cost_m - allocated_liquidity_cost_m
     illiquid_m = df["illiquid_nav"].astype(float) / 1e6
@@ -427,7 +418,7 @@ def plot_redemption_and_nav_combined(
             color=colors["orange"],
             marker="o",
             linewidth=2.5,
-            label="Backlog",
+            label="Backlog (current NAV)",
             markersize=6,
         )
 

@@ -459,7 +459,7 @@ def test_redemption_path_matplotlib_charts_refresh_with_controls():
     assert {text.get_text() for text in legend.get_texts()} == {
         "Paid",
         "Deferred",
-        "Backlog",
+        "Backlog (current NAV)",
     }
     assert legend.get_bbox_to_anchor()._bbox.y0 > 1.0
     assert fig4.axes[1].get_title(loc="left") == "Liquidity shortfall (unfunded)"
@@ -586,6 +586,6 @@ def test_redemption_chart_omits_zero_backlog_series() -> None:
     )
 
     legend_texts2 = [text.get_text() for text in figure2.axes[0].get_legend().get_texts()]
-    assert "Backlog" in legend_texts2
-    assert set(legend_texts2) == {"Paid", "Deferred", "Backlog"}
+    assert "Backlog (current NAV)" in legend_texts2
+    assert set(legend_texts2) == {"Paid", "Deferred", "Backlog (current NAV)"}
     assert figure2.axes[0].get_legend()._ncols == 3
