@@ -41,13 +41,21 @@ from lmt_calibration.domain.scenarios import (
     RedemptionScenario,
     ScenarioDefinition,
 )
+from lmt_calibration.domain.time_to_liquidation import (
+    AssetClassDistribution,
+    DailyLiquidationPoint,
+    TtlSensitivityResult,
+    TtlSensitivityType,
+)
 
 __all__ = [
     "AssetGroup",
+    "AssetClassDistribution",
     "AssetPosition",
     "BetaDistributionParameters",
     "ClientClass",
     "DeferredRedemptionBacklogEntry",
+    "DailyLiquidationPoint",
     "FundSnapshot",
     "HistoricalFxShock",
     "HistoricalMarketStressScenario",
@@ -80,5 +88,7 @@ __all__ = [
     "RedemptionPathResult",
     "ScenarioDefinition",
     "ThresholdAssessmentType",
+    "TtlSensitivityResult",
+    "TtlSensitivityType",
     "WarningType",
 ]

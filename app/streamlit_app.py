@@ -11,11 +11,12 @@ import pandas as pd
 import streamlit as st
 from streamlit.components.v1 import html as st_html
 
-from lmt_calibration.domain import AssetPosition, LmtParameters
+from lmt_calibration.domain import AssetPosition, LmtParameters, TtlSensitivityType
 from lmt_calibration.services import (
     AppRedemptionPathRun,
     AppSampleData,
     AppScenarioRun,
+    AppTtlRun,
     ScenarioMatrixOutcome,
     build_historical_result_rows,
     build_scenario_matrix_outcome,
@@ -24,6 +25,7 @@ from lmt_calibration.services import (
     run_sample_redemption_path,
     run_scenario_across_market_conditions,
     run_selected_sample_scenario,
+    run_ttl_sensitivity,
 )
 
 # Add app directory to path for content import
@@ -37,6 +39,29 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 SAMPLE_DATA_DIR = PROJECT_ROOT / "data" / "sample"
 ZERO = Decimal("0")
 ONE_HUNDRED = Decimal("100")
+
+TTL_SHOCK_LABELS = {
+    "10% NAV": Decimal("0.10"),
+    "20% NAV": Decimal("0.20"),
+    "25% NAV": Decimal("0.25"),
+    "30% NAV": Decimal("0.30"),
+}
+TTL_HORIZON_LABELS = {
+    "5 business days": 5,
+    "10 business days": 10,
+    "20 business days": 20,
+    "30 business days": 30,
+}
+TTL_PARTICIPATION_LABELS = {
+    "10%": Decimal("0.10"),
+    "20%": Decimal("0.20"),
+    "30%": Decimal("0.30"),
+}
+TTL_HAIRCUT_LABELS = {
+    "30%": Decimal("0.30"),
+    "40%": Decimal("0.40"),
+    "50%": Decimal("0.50"),
+}
 
 
 @dataclass(frozen=True)
@@ -261,6 +286,12 @@ div[data-testid="stRadio"] {
   background: $tertiary;
   border-bottom-color: $tertiary;
   color: $text !important;
+}
+body:has([data-testid="stTabs"] button[data-baseweb="tab"]:nth-of-type(3)[aria-selected="true"])
+  .st-key-scenario_sidebar_controls,
+body:has([data-testid="stTabs"] button[data-baseweb="tab"]:nth-of-type(3)[aria-selected="true"])
+  .st-key-threshold_sidebar_controls {
+  display: none !important;
 }
 div[data-baseweb="popover"],
 ul[data-baseweb="menu"],
@@ -948,6 +979,112 @@ table.lmt-matrix .cell-wrapper {
   text-align: right;
 }
 
+.lmt-ttl-header {
+  margin: 12px 32px 0;
+}
+.lmt-ttl-header .lmt-section-d {
+  margin-bottom: 0;
+}
+.lmt-ttl-card,
+.st-key-ttl_assumptions_panel {
+  background: $surface;
+  border: 1px solid $border;
+  border-radius: 8px;
+  box-sizing: border-box;
+  padding: 12px 14px;
+}
+.lmt-ttl-note-card {
+  color: $text;
+  font-size: 18px;
+  line-height: 1.45;
+}
+.lmt-ttl-note-card p {
+  margin: 0;
+}
+.lmt-ttl-note-card .lmt-ttl-section-title {
+  font-size: 22px;
+}
+.lmt-ttl-methodology-details {
+  color: $secondary_text;
+  font-size: 14px;
+  line-height: 1.55;
+}
+.lmt-ttl-methodology-details p {
+  margin: 0 0 12px;
+}
+.lmt-ttl-methodology-details p:last-child {
+  margin-bottom: 0;
+}
+.lmt-ttl-section-title {
+  color: $text;
+  font-size: 18px;
+  font-weight: 700;
+  margin: 0 0 8px;
+}
+.lmt-ttl-table {
+  border-collapse: collapse;
+  color: $text;
+  font-size: 14px;
+  width: 100%;
+}
+.lmt-ttl-table th {
+  background: $tertiary;
+  border-bottom: 1px solid $border;
+  color: $text;
+  font-weight: 600;
+  padding: 7px 8px;
+  text-align: left;
+}
+.lmt-ttl-table td {
+  border-bottom: 1px solid $border;
+  color: $text;
+  padding: 7px 8px;
+}
+.lmt-ttl-table th:not(:first-child),
+.lmt-ttl-table td:not(:first-child) {
+  text-align: right;
+}
+.lmt-ttl-table tbody tr:last-child td {
+  border-bottom: 0;
+}
+.st-key-ttl_assumptions_panel [data-testid="stSelectbox"] {
+  margin-bottom: 4px;
+}
+/* Streamlit adds a 16px sibling gap; 74px produces the required 90px row spacing. */
+.st-key-ttl_overview_row {
+  margin: 74px 132px 0;
+  position: relative;
+  width: calc(100% - 264px);
+}
+.st-key-ttl_overview_row::before {
+  border-top: 1px solid $border;
+  content: "";
+  left: 25%;
+  position: absolute;
+  top: -45px;
+  width: 50%;
+}
+.st-key-ttl_overview_row .lmt-ttl-section-title {
+  font-weight: 500;
+  opacity: 0.7;
+}
+.st-key-ttl_overview_row .lmt-ttl-note-card p,
+.st-key-ttl_overview_row .lmt-ttl-table th,
+.st-key-ttl_overview_row .lmt-ttl-table td,
+.st-key-ttl_overview_row .lmt-ttl-methodology-details,
+.st-key-ttl_overview_row [data-testid="stExpander"] summary p,
+.st-key-ttl_overview_row [data-testid="stExpander"] summary span {
+  font-weight: 400;
+  opacity: 0.7;
+}
+.st-key-ttl_analysis_row {
+  margin: 74px 32px 0;
+}
+[data-testid="stColumn"]:has(.lmt-ttl-note-card) > [data-testid="stVerticalBlock"],
+[data-testid="stColumn"]:has(.lmt-ttl-asset-mix-card) > [data-testid="stVerticalBlock"] {
+  gap: 4px;
+}
+
 [data-testid="stExpander"],
 [data-testid="stExpander"] details,
 [data-testid="stExpander"] summary,
@@ -1455,33 +1592,32 @@ def main() -> None:
         )
         _render_fund_card(fund_chars, fund_early.fund_name)
 
-        # Visual break between read-only fund info and interactive controls
-        st.markdown(
-            "<hr style='width:50%; margin:1.5rem auto; border:none; border-top:1px solid #2a3a5a;'>",
-            unsafe_allow_html=True,
-        )
+        with st.container(key="scenario_sidebar_controls"):
+            # Visual break between read-only fund info and interactive controls
+            st.markdown(
+                "<hr style='width:50%; margin:1.5rem auto; border:none; border-top:1px solid #2a3a5a;'>",
+                unsafe_allow_html=True,
+            )
 
-        # Redemption scenario section
-        st.markdown(
-            "<div class='lmt-sidebar-group-label' style='margin-top:1rem;'>Redemption Scenario</div>",
-            unsafe_allow_html=True,
-        )
-        st.markdown(
-            "<div style='font-size:11px; color:#9ca3af; margin-bottom:0.5rem;'>Defines investor behavior under stress.</div>",
-            unsafe_allow_html=True,
-        )
-        selected_redemption_id = _redemption_selector(inputs)
+            st.markdown(
+                "<div class='lmt-sidebar-group-label' style='margin-top:1rem;'>Redemption Scenario</div>",
+                unsafe_allow_html=True,
+            )
+            st.markdown(
+                "<div style='font-size:11px; color:#9ca3af; margin-bottom:0.5rem;'>Defines investor behavior under stress.</div>",
+                unsafe_allow_html=True,
+            )
+            selected_redemption_id = _redemption_selector(inputs)
 
-        # Liquidation strategy section
-        st.markdown(
-            "<div class='lmt-sidebar-group-label' style='margin-top:1.5rem;'>Liquidation Strategy</div>",
-            unsafe_allow_html=True,
-        )
-        st.markdown(
-            "<div style='font-size:11px; color:#9ca3af; margin-bottom:0.5rem;'>Determines asset ordering for redemptions.</div>",
-            unsafe_allow_html=True,
-        )
-        selected_strategy_id = _strategy_selector(inputs)
+            st.markdown(
+                "<div class='lmt-sidebar-group-label' style='margin-top:1.5rem;'>Liquidation Strategy</div>",
+                unsafe_allow_html=True,
+            )
+            st.markdown(
+                "<div style='font-size:11px; color:#9ca3af; margin-bottom:0.5rem;'>Determines asset ordering for redemptions.</div>",
+                unsafe_allow_html=True,
+            )
+            selected_strategy_id = _strategy_selector(inputs)
 
     # Get scenario template to access default LMT parameters
     scenario_template = next(
@@ -1495,9 +1631,9 @@ def main() -> None:
         )
     ]
 
-    # Render sliders and capture updated LMT parameters BEFORE building scenarios
     with st.sidebar:
-        updated_params = _capture_lmt_thresholds_from_sliders(default_params)
+        with st.container(key="threshold_sidebar_controls"):
+            updated_params = _capture_lmt_thresholds_from_sliders(default_params)
 
     col_header, col_theme_top = st.columns([0.82, 0.18])
     with col_theme_top:
@@ -1522,125 +1658,359 @@ def main() -> None:
     with col_header:
         _render_main_header()
 
-    matrix_tab, path_tab = st.tabs(
-        ["Market scenarios & notice-period liquidity", "12-month redemption path"]
+    lmt_tab, path_tab, ttl_tab = st.tabs(
+        [
+            "Market scenarios & notice-period liquidity",
+            "12-month redemption path",
+            "Time to liquidation",
+        ]
     )
 
-    with matrix_tab:
-        # NOW build scenario runs with updated LMT parameters and selected redemption scenario
-        run = run_selected_sample_scenario(
+    with lmt_tab:
+        _render_lmt_effects_view(
             inputs,
-            fund_id=selected_fund_id,
-            strategy_id=selected_strategy_id,
-            lmt_parameters_override=updated_params,
-            redemption_scenario_id_override=selected_redemption_id,
+            selected_fund_id=selected_fund_id,
+            selected_strategy_id=selected_strategy_id,
+            selected_redemption_id=selected_redemption_id,
+            updated_params=updated_params,
         )
-        positions = fund_positions(inputs, run.fund)
-
-        # Build scenario runs for matrix comparison across market conditions with updated parameters and redemption scenario
-        market_condition_runs = run_scenario_across_market_conditions(
-            inputs,
-            fund_id=selected_fund_id,
-            strategy_id=selected_strategy_id,
-            lmt_parameters_override=updated_params,
-            redemption_scenario_id_override=selected_redemption_id,
-        )
-
-        dashboard = _build_dashboard_result(inputs, run, positions, market_condition_runs)
-
-        st.markdown(
-            """
-            <div class='lmt-section-h'>LMT threshold breaches and activations</div>
-            <div class='lmt-section-d'>Assessing liquidity capacity within the configured notice and settlement horizon.</div>
-            """,
-            unsafe_allow_html=True,
-        )
-
-        _render_lmt_configuration(run)
-        _render_matrix(dashboard.scenarios)
-        _render_calibration_guidance(run)
 
     with path_tab:
-        chart_column, control_column = st.columns([0.72, 0.28], gap="medium")
+        _render_redemption_path_view(
+            inputs,
+            selected_fund_id=selected_fund_id,
+            selected_strategy_id=selected_strategy_id,
+            selected_redemption_id=selected_redemption_id,
+            updated_params=updated_params,
+            dark_mode=dark_mode,
+        )
 
-        with control_column:
-            path_controls = _capture_redemption_path_controls(inputs, selected_redemption_id)
+    with ttl_tab:
+        _render_time_to_liquidation_view(
+            inputs,
+            selected_fund_id=selected_fund_id,
+            dark_mode=dark_mode,
+        )
 
-        # In automatic mode, compute TWO paths:
-        # 1. Baseline path (no auto-apply) to extract true signal months
-        # 2. Final path (with auto-apply) for charts and applied months
-        if path_controls.apply_lmts_in_all_signal_months:
-            # Baseline path: compute without auto-apply to get ex-ante signals
-            baseline_path_run = run_sample_redemption_path(
-                inputs,
-                fund_id=selected_fund_id,
-                strategy_id=selected_strategy_id,
-                redemption_scenario_id=selected_redemption_id,
-                lmt_parameters_override=updated_params,
-                stress_months=path_controls.stress_months,
-                swing_pricing_months=(),  # No user selections
-                gate_months=(),  # No user selections
-                suspension_months=path_controls.suspension_months,  # Keep explicit suspension
-                apply_lmts_in_all_signal_months=False,  # No auto-apply
-                random_seed=path_controls.random_seed,
-                market_stress_id=path_controls.market_stress_id,
-                market_stress_month=path_controls.market_stress_month,
-                behavioural_feedback_multiplier=path_controls.behavioural_feedback_multiplier,
-                market_contagion_liquidity_cost_multiplier=(
-                    path_controls.market_contagion_liquidity_cost_multiplier
-                ),
-            )
 
-            # Final path: compute with auto-apply for actual simulation
-            path_run = run_sample_redemption_path(
-                inputs,
-                fund_id=selected_fund_id,
-                strategy_id=selected_strategy_id,
-                redemption_scenario_id=selected_redemption_id,
-                lmt_parameters_override=updated_params,
-                stress_months=path_controls.stress_months,
-                swing_pricing_months=(),  # Will be auto-applied via signals
-                gate_months=(),  # Will be auto-applied via signals
-                suspension_months=path_controls.suspension_months,
-                apply_lmts_in_all_signal_months=True,  # Auto-apply signals
-                random_seed=path_controls.random_seed,
-                market_stress_id=path_controls.market_stress_id,
-                market_stress_month=path_controls.market_stress_month,
-                behavioural_feedback_multiplier=path_controls.behavioural_feedback_multiplier,
-                market_contagion_liquidity_cost_multiplier=(
-                    path_controls.market_contagion_liquidity_cost_multiplier
-                ),
-            )
+def _render_lmt_effects_view(
+    inputs: AppSampleData,
+    *,
+    selected_fund_id: str,
+    selected_strategy_id: str,
+    selected_redemption_id: str,
+    updated_params: LmtParameters,
+) -> None:
+    """Render the existing single-period LMT analysis."""
 
-            # Extract signal months from baseline and applied months from final path
-            _sync_signal_linked_lmt_months(baseline_path_run, path_run)
-        else:
-            path_run = run_sample_redemption_path(
-                inputs,
-                fund_id=selected_fund_id,
-                strategy_id=selected_strategy_id,
-                redemption_scenario_id=selected_redemption_id,
-                lmt_parameters_override=updated_params,
-                stress_months=path_controls.stress_months,
-                swing_pricing_months=path_controls.swing_pricing_months,
-                gate_months=path_controls.gate_months,
-                suspension_months=path_controls.suspension_months,
-                apply_lmts_in_all_signal_months=False,
-                random_seed=path_controls.random_seed,
-                market_stress_id=path_controls.market_stress_id,
-                market_stress_month=path_controls.market_stress_month,
-                behavioural_feedback_multiplier=path_controls.behavioural_feedback_multiplier,
-                market_contagion_liquidity_cost_multiplier=(
-                    path_controls.market_contagion_liquidity_cost_multiplier
-                ),
-            )
+    run = run_selected_sample_scenario(
+        inputs,
+        fund_id=selected_fund_id,
+        strategy_id=selected_strategy_id,
+        lmt_parameters_override=updated_params,
+        redemption_scenario_id_override=selected_redemption_id,
+    )
+    positions = fund_positions(inputs, run.fund)
+    market_condition_runs = run_scenario_across_market_conditions(
+        inputs,
+        fund_id=selected_fund_id,
+        strategy_id=selected_strategy_id,
+        lmt_parameters_override=updated_params,
+        redemption_scenario_id_override=selected_redemption_id,
+    )
+    dashboard = _build_dashboard_result(inputs, run, positions, market_condition_runs)
+    st.markdown(
+        """
+        <div class='lmt-section-h'>LMT threshold breaches and activations</div>
+        <div class='lmt-section-d'>Assessing liquidity capacity within the configured notice and settlement horizon.</div>
+        """,
+        unsafe_allow_html=True,
+    )
+    _render_lmt_configuration(run)
+    _render_matrix(dashboard.scenarios)
+    _render_calibration_guidance(run)
 
-        with chart_column:
-            _render_redemption_path_page(
-                path_run,
-                selected_fund_id=selected_fund_id,
+
+def _render_redemption_path_view(
+    inputs: AppSampleData,
+    *,
+    selected_fund_id: str,
+    selected_strategy_id: str,
+    selected_redemption_id: str,
+    updated_params: LmtParameters,
+    dark_mode: bool,
+) -> None:
+    """Render the existing 12-month redemption-path analysis."""
+
+    chart_column, control_column = st.columns([0.72, 0.28], gap="medium")
+    with control_column:
+        path_controls = _capture_redemption_path_controls(inputs, selected_redemption_id)
+
+    if path_controls.apply_lmts_in_all_signal_months:
+        baseline_path_run = run_sample_redemption_path(
+            inputs,
+            fund_id=selected_fund_id,
+            strategy_id=selected_strategy_id,
+            redemption_scenario_id=selected_redemption_id,
+            lmt_parameters_override=updated_params,
+            stress_months=path_controls.stress_months,
+            swing_pricing_months=(),
+            gate_months=(),
+            suspension_months=path_controls.suspension_months,
+            apply_lmts_in_all_signal_months=False,
+            random_seed=path_controls.random_seed,
+            market_stress_id=path_controls.market_stress_id,
+            market_stress_month=path_controls.market_stress_month,
+            behavioural_feedback_multiplier=path_controls.behavioural_feedback_multiplier,
+            market_contagion_liquidity_cost_multiplier=(
+                path_controls.market_contagion_liquidity_cost_multiplier
+            ),
+        )
+        path_run = run_sample_redemption_path(
+            inputs,
+            fund_id=selected_fund_id,
+            strategy_id=selected_strategy_id,
+            redemption_scenario_id=selected_redemption_id,
+            lmt_parameters_override=updated_params,
+            stress_months=path_controls.stress_months,
+            swing_pricing_months=(),
+            gate_months=(),
+            suspension_months=path_controls.suspension_months,
+            apply_lmts_in_all_signal_months=True,
+            random_seed=path_controls.random_seed,
+            market_stress_id=path_controls.market_stress_id,
+            market_stress_month=path_controls.market_stress_month,
+            behavioural_feedback_multiplier=path_controls.behavioural_feedback_multiplier,
+            market_contagion_liquidity_cost_multiplier=(
+                path_controls.market_contagion_liquidity_cost_multiplier
+            ),
+        )
+        _sync_signal_linked_lmt_months(baseline_path_run, path_run)
+    else:
+        path_run = run_sample_redemption_path(
+            inputs,
+            fund_id=selected_fund_id,
+            strategy_id=selected_strategy_id,
+            redemption_scenario_id=selected_redemption_id,
+            lmt_parameters_override=updated_params,
+            stress_months=path_controls.stress_months,
+            swing_pricing_months=path_controls.swing_pricing_months,
+            gate_months=path_controls.gate_months,
+            suspension_months=path_controls.suspension_months,
+            apply_lmts_in_all_signal_months=False,
+            random_seed=path_controls.random_seed,
+            market_stress_id=path_controls.market_stress_id,
+            market_stress_month=path_controls.market_stress_month,
+            behavioural_feedback_multiplier=path_controls.behavioural_feedback_multiplier,
+            market_contagion_liquidity_cost_multiplier=(
+                path_controls.market_contagion_liquidity_cost_multiplier
+            ),
+        )
+
+    with chart_column:
+        _render_redemption_path_page(
+            path_run,
+            selected_fund_id=selected_fund_id,
+            dark_mode=dark_mode,
+        )
+
+
+def _render_time_to_liquidation_view(
+    inputs: AppSampleData,
+    *,
+    selected_fund_id: str,
+    dark_mode: bool,
+) -> None:
+    """Render the standalone asset-side TTL sensitivity analysis."""
+    from chart_matplotlib import plot_ttl_sensitivity
+
+    st.markdown(
+        """
+        <div class='lmt-ttl-header'>
+          <div class='lmt-section-h'>Time to liquidation</div>
+          <div class='lmt-section-d'>Asset-side liquidity capacity under benchmark redemption shocks.</div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+    redemption_shock_rate, horizon_days, participation_rate, haircut_rate = (
+        _selected_ttl_assumptions()
+    )
+    run = run_ttl_sensitivity(
+        inputs,
+        fund_id=selected_fund_id,
+        redemption_shock_rate=redemption_shock_rate,
+        horizon_days=horizon_days,
+        base_participation_rate=participation_rate,
+        base_liquidity_haircut_rate=haircut_rate,
+    )
+
+    with st.container(key="ttl_analysis_row"):
+        (
+            controls_column,
+            _controls_plot_gap,
+            participation_column,
+            _plot_gap,
+            haircut_column,
+        ) = st.columns([0.23, 0.02, 0.365, 0.02, 0.365], gap="small", vertical_alignment="top")
+        with controls_column:
+            with st.container(key="ttl_assumptions_panel"):
+                _capture_ttl_assumptions()
+
+        with participation_column:
+            participation_figure = plot_ttl_sensitivity(
+                run.sensitivity_results,
+                sensitivity_type=TtlSensitivityType.PARTICIPATION_RATE,
+                title="Liquidation capacity – participation-rate sensitivity",
+                fixed_assumption_label=f"Fixed liquidity haircut: {haircut_rate:.0%}",
                 dark_mode=dark_mode,
             )
+            st.pyplot(participation_figure, use_container_width=True)
+
+        with haircut_column:
+            haircut_figure = plot_ttl_sensitivity(
+                run.sensitivity_results,
+                sensitivity_type=TtlSensitivityType.LIQUIDITY_HAIRCUT,
+                title="Liquidation capacity – liquidity-haircut sensitivity",
+                fixed_assumption_label=f"Fixed participation rate: {participation_rate:.0%}",
+                dark_mode=dark_mode,
+            )
+            st.pyplot(haircut_figure, use_container_width=True)
+
+    with st.container(key="ttl_overview_row"):
+        methodology_column, _overview_gap, mix_column = st.columns(
+            [0.35, 0.06, 0.59], gap="small", vertical_alignment="top"
+        )
+        with methodology_column:
+            st.markdown(
+                """
+                <div class='lmt-ttl-card lmt-ttl-note-card'>
+                  <div class='lmt-ttl-section-title'>TTL methodology note</div>
+                  <p>This Time to liquidation view is standalone. It does not use the market scenarios, stochastic investor-redemption paths or LMT threshold settings used in the other dashboard tabs.</p>
+                </div>
+                """,
+                unsafe_allow_html=True,
+            )
+            with st.expander("Methodology details", expanded=False):
+                st.markdown(
+                    """
+                    <div class='lmt-ttl-methodology-details'>
+                      <p>The other tabs model a 12-month redemption path where redemption rates vary by investor type and may change through the path. They also apply scenario-dependent market shocks and asset-dependent liquidity assumptions.</p>
+                      <p>This view is simpler. It isolates asset-side liquidation capacity using benchmark assumptions selected directly in this tab: NAV reduction, redemption shock, participation rate and liquidity haircut. The objective is to show how many business days would be needed to raise cash under those assumptions.</p>
+                      <p>The approach is inspired by time-to-liquidation style stress testing, including the CSSF working paper on Luxembourg investment funds, but it is not intended to reproduce the CSSF framework. In particular, it does not estimate redemption shocks through a macroeconomic flow regression, and it does not produce cross-fund supervisory results.</p>
+                    </div>
+                    """,
+                    unsafe_allow_html=True,
+                )
+        with mix_column:
+            _render_ttl_asset_mix_table(run)
+            with st.expander("Asset details", expanded=False):
+                _render_ttl_asset_details(run, fund_positions(inputs, run.fund))
+
+
+def _selected_ttl_assumptions() -> tuple[Decimal, int, Decimal, Decimal]:
+    """Return the current TTL selections, using widget defaults on first render."""
+    return (
+        TTL_SHOCK_LABELS[st.session_state.get("ttl_redemption_shock", "20% NAV")],
+        TTL_HORIZON_LABELS[st.session_state.get("ttl_horizon", "20 business days")],
+        TTL_PARTICIPATION_LABELS[st.session_state.get("ttl_base_participation", "20%")],
+        TTL_HAIRCUT_LABELS[st.session_state.get("ttl_base_haircut", "40%")],
+    )
+
+
+def _capture_ttl_assumptions() -> tuple[Decimal, int, Decimal, Decimal]:
+    """Render controls used only by the standalone TTL view."""
+    st.markdown(
+        "<div class='lmt-ttl-section-title'>TTL assumptions</div>",
+        unsafe_allow_html=True,
+    )
+    shock_label = st.selectbox(
+        "Benchmark redemption shock",
+        options=list(TTL_SHOCK_LABELS),
+        index=1,
+        key="ttl_redemption_shock",
+        help="Redemption amount the cumulative liquidation capacity is assessed against, expressed as a percentage of fund NAV.",
+    )
+    horizon_label = st.selectbox(
+        "Liquidation horizon",
+        options=list(TTL_HORIZON_LABELS),
+        index=2,
+        key="ttl_horizon",
+        help=(
+            "Maximum business days shown and assessed. Asset capacity remains driven by "
+            "market value, capacity rate, participation, haircut, and settlement."
+        ),
+    )
+    participation_label = st.selectbox(
+        "Base participation rate",
+        options=list(TTL_PARTICIPATION_LABELS),
+        index=1,
+        key="ttl_base_participation",
+        help="Fixed participation rate used in the liquidity-haircut sensitivity plot.",
+    )
+    haircut_label = st.selectbox(
+        "Base liquidity haircut",
+        options=list(TTL_HAIRCUT_LABELS),
+        index=1,
+        key="ttl_base_haircut",
+        help="Fixed liquidity haircut used in the participation-rate sensitivity plot.",
+    )
+    return (
+        TTL_SHOCK_LABELS[shock_label],
+        TTL_HORIZON_LABELS[horizon_label],
+        TTL_PARTICIPATION_LABELS[participation_label],
+        TTL_HAIRCUT_LABELS[haircut_label],
+    )
+
+
+def _render_ttl_asset_mix_table(run: AppTtlRun) -> None:
+    rows = "".join(
+        "<tr>"
+        f"<td>{escape(_format_display_name(row.asset_group))}</td>"
+        f"<td>€{row.market_value / Decimal('1000000'):.1f}m</td>"
+        f"<td>{row.nav_share_rate:.1%}</td>"
+        "</tr>"
+        for row in run.asset_class_distribution
+    )
+    st.markdown(
+        "<div class='lmt-ttl-card lmt-ttl-asset-mix-card'>"
+        "<div class='lmt-ttl-section-title'>Portfolio Asset Mix</div>"
+        "<table class='lmt-ttl-table'>"
+        "<thead><tr><th>Asset group</th><th>Market value</th><th>% NAV</th></tr></thead>"
+        f"<tbody>{rows}</tbody>"
+        "</table>"
+        "</div>",
+        unsafe_allow_html=True,
+    )
+
+
+def _render_ttl_asset_details(run: AppTtlRun, positions: list[AssetPosition]) -> None:
+    """Render the position-level breakdown supporting the asset-mix summary."""
+    rows = "".join(
+        "<tr>"
+        f"<td>{escape(position.instrument_name)}</td>"
+        f"<td>{escape(_format_display_name(position.asset_group.value))}</td>"
+        f"<td>€{position.market_value / Decimal('1000000'):.1f}m</td>"
+        f"<td>{position.market_value / run.fund.nav:.1%}</td>"
+        "</tr>"
+        for position in positions
+        if position.market_value is not None and position.market_value > ZERO
+    )
+    st.markdown(
+        "<table class='lmt-ttl-table'>"
+        "<thead><tr><th>Instrument</th><th>Asset class</th>"
+        "<th>Market value</th><th>% NAV</th></tr></thead>"
+        f"<tbody>{rows}</tbody>"
+        "</table>",
+        unsafe_allow_html=True,
+    )
+
+
+def _ttl_day_label(ttl_days: int | None, horizon_days: int) -> str:
+    if ttl_days is None:
+        return f"> {horizon_days} days"
+    return f"{ttl_days} days"
 
 
 @st.cache_data(show_spinner=False)

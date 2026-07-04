@@ -8,9 +8,10 @@
 
 This project is an LMT calibration tool. It provides an interactive dashboard to configure redemption, market, and liquidity stress scenarios alongside selected liquidity management actions, including liquidation strategy, threshold calibration, activation timing, and tool selection, to support informed LMT threshold calibration.
 
-The dashboard provides two complementary analyses:
+The dashboard provides three complementary analyses:
 * **Market scenarios & notice-period liquidity** - can the fund meet redemptions within the configured notice and settlement horizon under different market conditions?
 * **12-month redemption path** - how do manager-selected LMT application timings affect paid redemptions, deferrals, shortfall, backlog, and NAV over successive monthly periods?
+* **Time to liquidation** - how many business days are needed to raise cash for benchmark redemption shocks under participation-rate and liquidity-haircut sensitivities?
 
 <br>
 

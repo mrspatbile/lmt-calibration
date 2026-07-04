@@ -29,12 +29,14 @@ def test_matrix_columns_have_different_shocked_nav():
     # Specific values (based on -5%, -12%, -35% shocks)
     initial_nav = Decimal("100000000")
     assert shocked_navs[0] == initial_nav, "Normal should have full NAV"
-    assert shocked_navs[1] == Decimal("96850000"), (
-        f"Moderate should be -3.15%, got {shocked_navs[1]}"
+    assert shocked_navs[1] == Decimal("95300000"), (
+        f"Moderate should be -4.70%, got {shocked_navs[1]}"
     )
-    assert shocked_navs[2] == Decimal("92440000"), f"Severe should be -7.56%, got {shocked_navs[2]}"
-    assert shocked_navs[3] == Decimal("77950000"), (
-        f"Crisis should be -22.05%, got {shocked_navs[3]}"
+    assert shocked_navs[2] == Decimal("88720000"), (
+        f"Severe should be -11.28%, got {shocked_navs[2]}"
+    )
+    assert shocked_navs[3] == Decimal("67100000"), (
+        f"Crisis should be -32.90%, got {shocked_navs[3]}"
     )
 
 

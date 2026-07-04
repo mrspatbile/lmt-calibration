@@ -50,22 +50,15 @@ def test_sample_files_load_through_v1_loaders() -> None:
     assert historical_market_stress_scenarios.scenarios
 
 
-def test_sample_position_values_reconcile_to_nav_excluding_repo_financing() -> None:
+def test_sample_position_values_reconcile_to_nav_without_repo_rows() -> None:
     fund = load_funds_csv(SAMPLE_DATA_DIR / "funds.csv")[0]
     positions = load_positions_csv(SAMPLE_DATA_DIR / "positions.csv")
 
-    ordinary_asset_value = sum(
-        position.market_value or Decimal("0")
-        for position in positions
-        if position.asset_group is not AssetGroup.REPO_FINANCING
-    )
-    repo_financing_positions = [
-        position for position in positions if position.asset_group is AssetGroup.REPO_FINANCING
-    ]
+    total_market_value = sum(position.market_value or Decimal("0") for position in positions)
+    repo_groups = {AssetGroup.REVERSE_REPO, AssetGroup.REPO_FINANCING}
 
-    assert ordinary_asset_value == fund.nav
-    assert repo_financing_positions
-    assert repo_financing_positions[0].notional_amount == Decimal("5000000")
+    assert total_market_value == fund.nav == Decimal("100000000")
+    assert not {position.asset_group for position in positions} & repo_groups
 
 
 def test_sample_investor_class_nav_shares_sum_to_one() -> None:

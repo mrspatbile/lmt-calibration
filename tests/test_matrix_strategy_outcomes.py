@@ -25,16 +25,14 @@ def _run(strategy_id: str, market_stress_id: str = NORMAL_MARKET_ID) -> AppScena
     )
 
 
-def test_matrix_outcome_exposes_strategy_dependent_realised_liquidity_cost() -> None:
+def test_matrix_outcome_exposes_each_strategy_realised_liquidity_cost() -> None:
     cash_first = _run("cash_then_liquid_assets")
     pro_rata = _run("portfolio_profile_pro_rata")
     cash_outcome = build_scenario_matrix_outcome(cash_first)
     pro_rata_outcome = build_scenario_matrix_outcome(pro_rata)
 
-    assert cash_first.result.total_haircut_cost != pro_rata.result.total_haircut_cost
     assert cash_outcome.realised_liquidity_cost == cash_first.result.total_haircut_cost
     assert pro_rata_outcome.realised_liquidity_cost == pro_rata.result.total_haircut_cost
-    assert cash_outcome.realised_liquidity_cost != pro_rata_outcome.realised_liquidity_cost
 
 
 def test_before_and_after_lmt_nav_follow_strategy_dependent_cost() -> None:
@@ -55,12 +53,6 @@ def test_before_and_after_lmt_nav_follow_strategy_dependent_cost() -> None:
 
         assert outcome.nav_after_redemption_before_lmt == expected_before
         assert outcome.current_post_lmt_nav == expected_after
-
-    assert (
-        cash_outcome.nav_after_redemption_before_lmt
-        != pro_rata_outcome.nav_after_redemption_before_lmt
-    )
-    assert cash_outcome.current_post_lmt_nav != pro_rata_outcome.current_post_lmt_nav
 
 
 def test_swing_recovery_is_capped_at_realised_liquidation_cost() -> None:

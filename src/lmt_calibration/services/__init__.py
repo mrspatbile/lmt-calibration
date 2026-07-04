@@ -4,6 +4,7 @@ from lmt_calibration.services.streamlit_mvp import (
     AppRedemptionPathRun,
     AppSampleData,
     AppScenarioRun,
+    AppTtlRun,
     ScenarioMatrixOutcome,
     build_historical_result_rows,
     build_redemption_path_configuration_rows,
@@ -17,12 +18,14 @@ from lmt_calibration.services.streamlit_mvp import (
     run_sample_redemption_path,
     run_scenario_across_market_conditions,
     run_selected_sample_scenario,
+    run_ttl_sensitivity,
 )
 
 __all__ = [
     "AppRedemptionPathRun",
     "AppSampleData",
     "AppScenarioRun",
+    "AppTtlRun",
     "ScenarioMatrixOutcome",
     "build_redemption_path_configuration_rows",
     "build_redemption_path_investor_rows",
@@ -36,4 +39,5 @@ __all__ = [
     "run_sample_redemption_path",
     "run_scenario_across_market_conditions",
     "run_selected_sample_scenario",
+    "run_ttl_sensitivity",
 ]

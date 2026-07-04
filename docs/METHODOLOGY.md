@@ -31,6 +31,20 @@ The notice and settlement horizon defines the period during which the fund must 
 
 Extends the single-period analysis across twelve monthly periods. This answers: "How do redemptions, liquidity resources, market stress, LMT applications, and fund NAV evolve over time, and what backlog or shortfall emerges?"
 
+**Time to liquidation** (standalone asset-side sensitivity)
+
+Assesses the business days needed to raise cash for benchmark redemption shocks from the current portfolio. Cash is available on day 0. Listed equity and ETF proceeds become available after their settlement delay, using daily capacity based on market value, base liquidity capacity, participation rate, and liquidity haircut:
+
+```text
+stressed_daily_capacity =
+    market_value
+    × base_liquidity_capacity_rate
+    × participation_rate
+    × (1 - liquidity_haircut_rate)
+```
+
+The TTL view is scenario-independent. It does not apply dashboard market scenarios, the stochastic investor redemption path, LMT thresholds, repo maturity cash flows, or a macroeconomic flow regression.
+
 This methodology includes:
 
 * investor-class redemption stress

@@ -143,6 +143,79 @@ def test_streamlit_app_imports_with_redemption_path_page():
     assert hasattr(app_module, "_render_redemption_path_page")
 
 
+def test_time_to_liquidation_view_is_scenario_independent() -> None:
+    """Verify TTL content is wired as a standalone third tab."""
+
+    app_source = Path("app/streamlit_app.py").read_text(encoding="utf-8")
+    ttl_source = app_source.split("def _render_time_to_liquidation_view", 1)[1].split(
+        "def _capture_ttl_assumptions", 1
+    )[0]
+
+    assert "st.tabs(" in app_source
+    assert '"Market scenarios & notice-period liquidity"' in app_source
+    assert '"12-month redemption path"' in app_source
+    assert '"Time to liquidation"' in app_source
+    assert '"Analysis view"' not in app_source
+    assert "This Time to liquidation view is standalone." in ttl_source
+    assert "Portfolio Asset Mix" in app_source
+    assert "Liquidation capacity – participation-rate sensitivity" in ttl_source
+    assert "Liquidation capacity – liquidity-haircut sensitivity" in ttl_source
+    assert "Fixed liquidity haircut:" in ttl_source
+    assert "Fixed participation rate:" in ttl_source
+    assert "Methodology details" in ttl_source
+    assert "Asset details" in ttl_source
+    assert ttl_source.index('key="ttl_analysis_row"') < ttl_source.index('key="ttl_overview_row"')
+    assert "[0.35, 0.06, 0.59]" in ttl_source
+    assert "[0.23, 0.02, 0.365, 0.02, 0.365]" in ttl_source
+    assert "margin: 74px 32px 0" in app_source
+    assert "margin: 74px 132px 0" in app_source
+    assert "width: calc(100% - 264px)" in app_source
+    assert ".st-key-ttl_overview_row .lmt-ttl-section-title" in app_source
+    assert "font-weight: 500" in app_source
+    assert "opacity: 0.7" in app_source
+    assert ".st-key-ttl_overview_row .lmt-ttl-table td" in app_source
+    assert ".st-key-ttl_overview_row .lmt-ttl-methodology-details" in app_source
+    assert ".st-key-ttl_overview_row::before" in app_source
+    assert "top: -45px" in app_source
+    assert "plot_ttl_sensitivity" in ttl_source
+    chart_source = Path("app/chart_matplotlib.py").read_text(encoding="utf-8")
+    assert "fontsize=11.25" in chart_source
+    assert "fontsize=8.75" in chart_source
+    assert "st.vega_lite_chart" not in ttl_source
+    assert 'key="scenario_sidebar_controls"' in app_source
+    assert 'key="threshold_sidebar_controls"' in app_source
+    assert 'nth-of-type(3)[aria-selected="true"]' in app_source
+    assert "_capture_lmt_thresholds_from_sliders" not in ttl_source
+    assert "run_selected_sample_scenario" not in ttl_source
+
+
+def test_dashboard_renders_three_tabs_and_ttl_controls() -> None:
+    """Exercise the app and verify all three tabs and TTL content render."""
+
+    from streamlit.testing.v1 import AppTest
+
+    app = AppTest.from_file("app/streamlit_app.py").run(timeout=30)
+
+    assert not app.exception
+    assert [tab.label for tab in app.tabs] == [
+        "Market scenarios & notice-period liquidity",
+        "12-month redemption path",
+        "Time to liquidation",
+    ]
+    selectbox_labels = {selectbox.label for selectbox in app.selectbox}
+    assert {
+        "Fund",
+        "Benchmark redemption shock",
+        "Liquidation horizon",
+        "Base participation rate",
+        "Base liquidity haircut",
+    } <= selectbox_labels
+    markdown_content = " ".join(markdown.value for markdown in app.markdown)
+    assert "This Time to liquidation view is standalone." in markdown_content
+    assert "Portfolio Asset Mix" in markdown_content
+    assert {"Methodology details", "Asset details"} <= {expander.label for expander in app.expander}
+
+
 def test_redemption_path_page_does_not_render_tables():
     """Verify the 12-month page avoids tables and KPI cards."""
 

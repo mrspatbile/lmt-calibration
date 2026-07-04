@@ -464,6 +464,6 @@ def test_t0_liquidity_profile_rows_include_cash_and_liquid_resources() -> None:
         "8-30 days",
         ">30 days / constrained",
     ]
-    assert rows_by_bucket["Cash"]["liquid_resources"] == Decimal("12000000")
+    assert rows_by_bucket["Cash"]["liquid_resources"] == Decimal("6000000")
     assert rows_by_bucket["0-7 days"]["liquid_resources"] > Decimal("0")
-    assert rows_by_bucket["8-30 days"]["nav_amount"] > Decimal("0")
+    assert rows_by_bucket["8-30 days"]["nav_amount"] == Decimal("0")

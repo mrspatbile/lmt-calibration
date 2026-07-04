@@ -143,7 +143,7 @@ def test_calibration_adequacy_varies_by_market():
 
 
 def test_shortfall_under_extreme_stress():
-    """Verify shortfall may occur under extreme market stress."""
+    """Verify the cleaned portfolio reports crisis capacity shortfall."""
     sample_data = load_app_sample_data(Path("data/sample"))
 
     # Run under crisis conditions
@@ -154,10 +154,7 @@ def test_shortfall_under_extreme_stress():
         market_stress=sample_data.market_stress_by_id["historical_crisis_2008"],
     )
 
-    # In crisis with 35% shock, should still meet redemption (good liquidity)
-    assert crisis_run.result.shortfall == Decimal("0"), (
-        "Even in crisis, redemption should be met with good liquidity"
-    )
+    assert crisis_run.result.shortfall > Decimal("0")
 
 
 def test_liquidity_stress_capacity_and_haircut_assumptions_are_applied():

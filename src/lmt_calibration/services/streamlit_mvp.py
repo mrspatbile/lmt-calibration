@@ -10,6 +10,7 @@ from decimal import Decimal
 from pathlib import Path
 
 from lmt_calibration.domain import (
+    AssetClassDistribution,
     AssetGroup,
     AssetPosition,
     ClientClass,
@@ -27,11 +28,16 @@ from lmt_calibration.domain import (
     RedemptionPathResult,
     RedemptionScenario,
     ScenarioDefinition,
+    TtlSensitivityResult,
 )
 from lmt_calibration.engines import StressedLiquidationPosition, calculate_liquidation_strategy
 from lmt_calibration.engines.liquidity_cost import estimate_liquidity_cost_breakdown
 from lmt_calibration.engines.lmt_activation import LmtActivationResult, assess_lmt_impact
 from lmt_calibration.engines.redemption_path import run_redemption_path
+from lmt_calibration.engines.time_to_liquidation import (
+    build_asset_class_distribution,
+    build_ttl_sensitivity_results,
+)
 from lmt_calibration.loaders import (
     load_funds_csv,
     load_historical_market_stress_scenarios_json,
@@ -137,6 +143,15 @@ class AppRedemptionPathRun:
     configuration_rows: list[dict[str, object]]
 
 
+@dataclass(frozen=True)
+class AppTtlRun:
+    """Scenario-independent time-to-liquidation results for presentation."""
+
+    fund: FundSnapshot
+    asset_class_distribution: tuple[AssetClassDistribution, ...]
+    sensitivity_results: tuple[TtlSensitivityResult, ...]
+
+
 def build_scenario_matrix_outcome(run: AppScenarioRun) -> ScenarioMatrixOutcome:
     """Reconcile matrix NAV values from the realised liquidation result."""
 
@@ -203,6 +218,33 @@ def load_app_sample_data(sample_data_dir: Path) -> AppSampleData:
             (parameters.fund_id, parameters.as_of_date, parameters.parameter_set_id): parameters
             for parameters in lmt_parameters
         },
+    )
+
+
+def run_ttl_sensitivity(
+    inputs: AppSampleData,
+    *,
+    fund_id: str,
+    redemption_shock_rate: Decimal,
+    horizon_days: int,
+    base_participation_rate: Decimal,
+    base_liquidity_haircut_rate: Decimal,
+) -> AppTtlRun:
+    """Calculate standalone TTL sensitivities from the current fund snapshot."""
+
+    fund = next(fund for fund in inputs.funds if fund.fund_id == fund_id)
+    positions = fund_positions(inputs, fund)
+    return AppTtlRun(
+        fund=fund,
+        asset_class_distribution=build_asset_class_distribution(positions, nav=fund.nav),
+        sensitivity_results=build_ttl_sensitivity_results(
+            positions,
+            nav=fund.nav,
+            redemption_shock_rate=redemption_shock_rate,
+            horizon_days=horizon_days,
+            base_participation_rate=base_participation_rate,
+            base_liquidity_haircut_rate=base_liquidity_haircut_rate,
+        ),
     )
 
 

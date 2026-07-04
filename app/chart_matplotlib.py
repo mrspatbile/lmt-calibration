@@ -11,6 +11,8 @@ import pandas as pd
 from matplotlib.lines import Line2D
 from matplotlib.ticker import FuncFormatter
 
+from lmt_calibration.domain import TtlSensitivityResult, TtlSensitivityType
+
 # Color palette (from brief + fund-risk-workflow)
 COLORS = {
     "bg": "#0d1424",
@@ -52,6 +54,87 @@ def _palette(*, dark_mode: bool) -> dict[str, str]:
         dark_colors["row_band"] = "#ffffff"
         return dark_colors
     return LIGHT_COLORS
+
+
+def plot_ttl_sensitivity(
+    results: tuple[TtlSensitivityResult, ...],
+    *,
+    sensitivity_type: TtlSensitivityType,
+    title: str,
+    fixed_assumption_label: str,
+    dark_mode: bool,
+) -> plt.Figure:
+    """Plot cumulative TTL capacity for one benchmark sensitivity dimension."""
+    colors = _palette(dark_mode=dark_mode)
+    filtered_results = [result for result in results if result.sensitivity_type is sensitivity_type]
+    fig, ax = plt.subplots(figsize=(4.6, 4.0), dpi=120)
+    fig.patch.set_facecolor(colors["bg"])
+    fig.patch.set_alpha(0 if dark_mode else 1)
+    ax.set_facecolor(colors["bg"])
+
+    line_colors = [colors["cyan"], colors["blue_paid"], colors["orange"]]
+    suffix = (
+        "participation" if sensitivity_type is TtlSensitivityType.PARTICIPATION_RATE else "haircut"
+    )
+    for result, line_color in zip(filtered_results, line_colors, strict=True):
+        days = [point.business_day for point in result.daily_cumulative_cash_raised]
+        capacity_rates = [
+            float(point.cumulative_cash_raised_rate)
+            for point in result.daily_cumulative_cash_raised
+        ]
+        ax.plot(
+            days,
+            capacity_rates,
+            color=line_color,
+            label=f"{result.sensitivity_value:.0%} {suffix}",
+            linewidth=1.8,
+        )
+
+    if filtered_results:
+        target_rate = float(filtered_results[0].redemption_shock_rate)
+        ax.axhline(
+            target_rate,
+            color=colors["shortfall"],
+            linestyle=(0, (5, 3)),
+            linewidth=1.2,
+            label=f"{target_rate:.0%} redemption shock",
+        )
+
+    ax.set_title(
+        title,
+        loc="left",
+        color=colors["text"],
+        fontsize=11.25,
+        fontweight="normal",
+        pad=22,
+    )
+    ax.text(
+        0,
+        1.01,
+        fixed_assumption_label,
+        transform=ax.transAxes,
+        color=colors["muted"],
+        fontsize=8.75,
+        ha="left",
+        va="bottom",
+    )
+    ax.set_xlabel("Business days", color=colors["muted"], fontsize=8)
+    ax.set_ylabel("Cumulative cash raised (% NAV)", color=colors["muted"], fontsize=8)
+    ax.tick_params(axis="both", colors=colors["muted"], labelsize=7)
+    ax.yaxis.set_major_formatter(FuncFormatter(lambda value, _: f"{value:.0%}"))
+    ax.xaxis.set_major_locator(plt.MaxNLocator(integer=True, nbins=6))
+    ax.grid(True, axis="both", color=colors["grid"], alpha=0.3, linewidth=0.5)
+    ax.set_axisbelow(True)
+    for spine in ax.spines.values():
+        spine.set_color(colors["muted"])
+        spine.set_linewidth(0.5)
+    ax.spines["top"].set_visible(False)
+    ax.spines["right"].set_visible(False)
+    legend = ax.legend(frameon=False, fontsize=7, loc="lower right")
+    for text in legend.get_texts():
+        text.set_color(colors["text"])
+    fig.tight_layout(pad=0.8)
+    return fig
 
 
 def plot_redemption_profile(

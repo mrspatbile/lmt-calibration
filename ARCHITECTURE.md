@@ -195,6 +195,14 @@ The application may link swing pricing and gates to every signal month through
 an explicit signal-linked mode. Suspension remains an independently selected
 scenario assumption and is never inferred from a model signal.
 
+### Time-to-liquidation engine
+
+The standalone engine calculates cumulative day-by-day cash capacity from the
+current portfolio under benchmark participation-rate and liquidity-haircut
+sensitivities. It uses cash, listed equities, listed ETFs, base capacity rates,
+and settlement days. It does not consume market scenarios, investor paths, LMT
+parameters, reverse-repo maturities, or repo financing exposures.
+
 ## Services layer
 
 The `services/streamlit_mvp.py` module orchestrates the complete workflow:
@@ -293,7 +301,7 @@ Forward-looking multi-period simulation:
 ### Shared features
 
 * structured audit record models and a JSON writer; automatic writing from the Streamlit application is not integrated
-* Streamlit dashboard with two-page interface
+* Streamlit dashboard with view-based navigation across LMT effects, the 12-month redemption path, and time-to-liquidation sensitivity
 * theme toggle and interactive parameter adjustment
 
 Future versions may include:

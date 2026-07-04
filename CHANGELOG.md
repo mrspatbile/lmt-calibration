@@ -4,7 +4,11 @@ All notable changes to this project are documented here.
 
 ## Unreleased
 
+### Added
+- Added a scenario-independent time-to-liquidation sensitivity view for the current portfolio.
+
 ### Changed
+- Removed reverse repo and repo financing rows from the synthetic sample portfolio while retaining EUR 100m total market value.
 - Represented deferred redemption backlog as units valued at each month’s NAV, with ownership reduced only when units execute.
 - Consolidated execution-cost, liquidity-capacity, and haircut assumptions by asset group under liquidity stress; market stress remains valuation-only.
 - Centralized applied swing-factor and cost-recovery calculations outside the dashboard.

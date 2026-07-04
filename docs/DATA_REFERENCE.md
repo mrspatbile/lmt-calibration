@@ -110,15 +110,13 @@ Relationships:
 
 ### positions.csv
 
-`positions.csv` defines position-level holdings and financing exposures for a fund snapshot. In the current sample data, positions stay within the active universe:
+`positions.csv` defines position-level holdings and financing exposures for a fund snapshot. The current synthetic sample contains:
 
 * cash
 * listed equities
 * listed ETFs
-* reverse repos
-* repo financing exposures
 
-Positions are used in current stress preparation and by the liquidation strategy engine. Repo financing exposures are treated as liquidity obligations, not ordinary liquid assets.
+The schema and existing calculation engines retain support for reverse repo and repo financing test inputs, but those rows are absent from the current sample portfolio. Positions are used in current stress preparation and by the liquidation strategy and time-to-liquidation engines. Repo financing exposures are treated as liquidity obligations, not ordinary liquid assets.
 
 Relationships:
 
