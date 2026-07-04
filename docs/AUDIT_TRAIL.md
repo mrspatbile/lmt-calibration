@@ -159,7 +159,9 @@ The current audit scope supports:
 * Structured records capturing configuration (stress months, market stress, LMT applications)
 * Monthly simulation parameters and inputs
 * Support for audit trail of monthly results, unit-based backlog evolution,
-  current backlog cash value, deferral NAV, and LMT applications
+  current backlog cash value, deferral NAV, LMT applications, gate-period
+  liquidation targets and proceeds, pending settlement, and realised
+  gate-period liquidity cost
 
 Records can be written to any output directory using the JSON audit writer.
 

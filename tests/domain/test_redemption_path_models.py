@@ -61,6 +61,7 @@ def test_redemption_path_assumptions_validate_selected_months() -> None:
     assert assumptions.gate_months == (3,)
     assert assumptions.apply_lmts_in_all_signal_months is False
     assert assumptions.liquidation_days_per_month == 20
+    assert assumptions.gate_period_liquidation_enabled is True
 
     with pytest.raises(ValidationError, match="stress_months"):
         RedemptionPathAssumptions(

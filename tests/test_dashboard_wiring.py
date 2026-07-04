@@ -373,6 +373,9 @@ def test_redemption_path_theme_styles_follow_the_app_theme() -> None:
     assert "height=400" not in app_source
     assert "height=cash_table_height" in app_source
     assert "height=nav_table_height" in app_source
+    assert '"Gate-period liquidity build-up"' in app_source
+    assert '"Pending settlement from gate-period liquidation"' in app_source
+    assert '"Gate-period liquidation cost"' in app_source
     assert "margin-top: -20px" in app_source
     assert "margin: 12px 0 6px" in app_source
     assert "align-items: flex-end" in app_source

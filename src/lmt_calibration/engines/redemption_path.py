@@ -72,18 +72,21 @@ def run_redemption_path(
     investor_units = _initial_investor_units(fund, investor_profiles)
     backlog: tuple[DeferredRedemptionBacklogEntry, ...] = ()
     swing_pricing_receivable = ZERO
+    pending_gate_settlement = ZERO
     monthly_results: list[MonthlyRedemptionPathResult] = []
     behavioural_feedback_adjustment = _neutral_behavioural_feedback_adjustment(investor_profiles)
 
     for month_number in range(1, assumptions.horizon_months + 1):
         period = _monthly_period(assumptions.start_date, month_number)
-        opening_nav = _position_nav(carried_positions)
-
-        # Unsettled proceeds from previous month's gate now settle and become available
-        unsettled_from_previous_month = (
-            monthly_results[-1].gate_period_unsettled_cash if monthly_results else ZERO
-        )
-        opening_cash = _cash_total(carried_positions) + unsettled_from_previous_month
+        opening_nav = _position_nav(carried_positions) + pending_gate_settlement
+        settled_gate_period_cash_from_prior_month = pending_gate_settlement
+        if settled_gate_period_cash_from_prior_month > ZERO:
+            carried_positions = _set_cash_total(
+                carried_positions,
+                _cash_total(carried_positions) + settled_gate_period_cash_from_prior_month,
+            )
+            pending_gate_settlement = ZERO
+        opening_cash = _cash_total(carried_positions)
 
         market_stress_applied = (
             market_stress is not None and month_number == assumptions.market_stress_month
@@ -156,17 +159,23 @@ def run_redemption_path(
             market_contagion_liquidity_cost_multiplier=(market_contagion_liquidity_cost_multiplier),
         )
 
-        # Calculate minimum cash buffer that must be preserved
+        # Use cash above the minimum buffer first. The liquidation engine then
+        # receives the post-cash-use position so the same cash cannot be used twice.
         minimum_cash_buffer = pre_lmt_nav * lmt_parameters.minimum_buffer_rate
-        available_excess_cash = max(opening_cash - minimum_cash_buffer, ZERO)
-
-        # Determine how much can be paid from available excess cash
+        available_excess_cash = max(_cash_total(carried_positions) - minimum_cash_buffer, ZERO)
         cash_available_for_payment = min(available_excess_cash, requested_paid_amount)
-
-        # Calculate liquidation needed for remainder
         liquidation_needed = requested_paid_amount - cash_available_for_payment
+        positions_after_direct_cash_use = _set_cash_total(
+            carried_positions,
+            _cash_total(carried_positions) - cash_available_for_payment,
+        )
+        stressed_positions_after_direct_cash_use = _stressed_positions(
+            positions_after_direct_cash_use,
+            liquidity_stress,
+            liquidation_days_per_month=assumptions.liquidation_days_per_month,
+            market_contagion_liquidity_cost_multiplier=(market_contagion_liquidity_cost_multiplier),
+        )
 
-        # Liquidate for shortfall (if any), using existing strategy
         if liquidation_needed > ZERO:
             liquidation_result = (
                 calculate_liquidation_strategy(
@@ -174,7 +183,7 @@ def run_redemption_path(
                     fund=fund.model_copy(
                         update={"as_of_date": period.month_start, "nav": pre_lmt_nav}
                     ),
-                    positions=stressed_positions,
+                    positions=stressed_positions_after_direct_cash_use,
                     redemption_amount=liquidation_needed,
                     strategy=liquidation_strategy,
                     lmt_parameters=lmt_parameters,
@@ -192,7 +201,6 @@ def run_redemption_path(
                 ZERO,
             )
         else:
-            # No liquidation needed
             final_paid_amount = cash_available_for_payment
             liquidation_result = _zero_nav_liquidation_result(
                 scenario_id=f"{assumptions.scenario_id}_month_{month_number}",
@@ -211,69 +219,95 @@ def run_redemption_path(
         )
         investor_units = {state.client_class: state.closing_units for state in investor_states}
 
-        # Gate-period liquidation: if gate is active, liquidate to cover backlog during deferral period
+        immediate_closing_cash = max(
+            _cash_total(carried_positions)
+            + liquidation_result.total_net_cash_raised
+            - final_paid_amount,
+            ZERO,
+        )
+        positions_after_immediate_liquidation = _apply_liquidation_to_positions(
+            positions=carried_positions,
+            liquidation_result=liquidation_result,
+            closing_cash=immediate_closing_cash,
+        )
+
+        # A gate creates an additional liquidation window. Pending units remain in
+        # ownership; asset sales build cash for execution in a later month.
         gate_period_liquidation_result = None
+        gate_period_liquidation_target_cash = ZERO
+        gate_period_units_targeted = ZERO
+        gate_period_units_supported = ZERO
+        gate_period_unsupported_backlog_units = ZERO
         gate_period_cash_generated = ZERO
         gate_period_settled_cash = ZERO
         gate_period_unsettled_cash = ZERO
 
-        if gate_applied:
-            # Value pending instructions at the current execution-month NAV.
-            gate_period_liquidation_target = _backlog_cash_value(backlog, nav_per_unit)
+        backlog_units_after_payment = sum((entry.remaining_units for entry in backlog), ZERO)
+        backlog_cash_after_payment = _backlog_cash_value(backlog, nav_per_unit)
+        cash_already_available_for_backlog = max(
+            immediate_closing_cash - minimum_cash_buffer,
+            ZERO,
+        )
+        if gate_applied and assumptions.gate_period_liquidation_enabled:
+            gate_period_liquidation_target_cash = max(
+                backlog_cash_after_payment - cash_already_available_for_backlog,
+                ZERO,
+            )
+            gate_period_units_targeted = min(
+                gate_period_liquidation_target_cash / nav_per_unit,
+                backlog_units_after_payment,
+            )
 
-            if gate_period_liquidation_target > ZERO:
-                # Ask liquidation engine to raise cash for backlog target
-                # Engine handles all constraints: strategy, settlement days, haircuts, etc.
+            if gate_period_liquidation_target_cash > ZERO and pre_lmt_nav > ZERO:
+                gate_stressed_positions = _stressed_positions(
+                    _set_cash_total(
+                        positions_after_immediate_liquidation,
+                        min(immediate_closing_cash, minimum_cash_buffer),
+                    ),
+                    liquidity_stress,
+                    liquidation_days_per_month=assumptions.liquidation_days_per_month,
+                    market_contagion_liquidity_cost_multiplier=(
+                        market_contagion_liquidity_cost_multiplier
+                    ),
+                )
                 gate_period_liquidation_result = calculate_liquidation_strategy(
                     scenario_id=f"{assumptions.scenario_id}_month_{month_number}_gate_period",
                     fund=fund.model_copy(
                         update={"as_of_date": period.month_start, "nav": pre_lmt_nav}
                     ),
-                    positions=stressed_positions,
-                    redemption_amount=gate_period_liquidation_target,
+                    positions=gate_stressed_positions,
+                    redemption_amount=gate_period_liquidation_target_cash,
                     strategy=liquidation_strategy,
                     lmt_parameters=lmt_parameters,
                     stress_horizon_days=liquidity_stress.stress_horizon_days,
                 )
 
-                # Existing cash is already present in the fund cash account; only
-                # net proceeds from asset sales are incremental gate-period cash.
                 gate_period_cash_generated = gate_period_liquidation_result.total_net_cash_raised
-
-                # Split into settled vs. unsettled based on settlement timing
-                # Use maximum settlement days from liquidated positions
-                liquidated_position_ids = {
-                    asset.position_id for asset in gate_period_liquidation_result.assets_liquidated
-                }
-                max_settlement_days = max(
-                    (
-                        pos.settlement_days
-                        for pos in stressed_positions
-                        if pos.position_id in liquidated_position_ids
-                    ),
-                    default=0,
+                gate_period_settled_cash, gate_period_unsettled_cash = (
+                    _gate_period_settlement_split(
+                        liquidation_result=gate_period_liquidation_result,
+                        positions=gate_stressed_positions,
+                        liquidation_days_per_month=assumptions.liquidation_days_per_month,
+                    )
                 )
 
-                remaining_days_in_month = (
-                    assumptions.liquidation_days_per_month - max_settlement_days
-                )
-
-                if remaining_days_in_month >= max_settlement_days:
-                    # All cash settles this month
-                    gate_period_settled_cash = gate_period_cash_generated
-                    gate_period_unsettled_cash = ZERO
-                else:
-                    # Partial settlement this month, rest next month
-                    settlement_rate = max(
-                        Decimal(remaining_days_in_month) / Decimal(max_settlement_days)
-                        if max_settlement_days > 0
-                        else ONE,
-                        ZERO,
-                    )
-                    gate_period_settled_cash = gate_period_cash_generated * settlement_rate
-                    gate_period_unsettled_cash = gate_period_cash_generated * (
-                        ONE - settlement_rate
-                    )
+        if gate_applied:
+            cash_supported_for_backlog = min(
+                (
+                    cash_already_available_for_backlog + gate_period_cash_generated
+                    if assumptions.gate_period_liquidation_enabled
+                    else ZERO
+                ),
+                backlog_cash_after_payment,
+            )
+            gate_period_units_supported = min(
+                cash_supported_for_backlog / nav_per_unit,
+                backlog_units_after_payment,
+            )
+            gate_period_unsupported_backlog_units = max(
+                backlog_units_after_payment - gate_period_units_supported,
+                ZERO,
+            )
 
         liquidity_cost_breakdown = estimate_liquidity_cost_breakdown(
             final_paid_amount,
@@ -284,18 +318,20 @@ def run_redemption_path(
         adjusted_estimated_liquidity_cost_rate = (
             base_estimated_liquidity_cost_rate * market_contagion_liquidity_cost_multiplier
         )
-        # Economic liquidity cost = immediate liquidation cost + gate-period liquidation cost
-        # All recognized in the month of liquidation, allocated via swing pricing
+        # Realised execution cost is already embedded in each liquidation result.
+        # Gate-period cost is fund-borne because the pending units do not execute now.
         immediate_liquidation_cost_after_contagion = (
             liquidation_result.total_realised_liquidity_cost
-            * market_contagion_liquidity_cost_multiplier
         )
 
         gate_period_liquidation_cost_after_contagion = ZERO
+        gate_period_execution_cost = ZERO
         if gate_period_liquidation_result is not None:
             gate_period_liquidation_cost_after_contagion = (
                 gate_period_liquidation_result.total_realised_liquidity_cost
-                * market_contagion_liquidity_cost_multiplier
+            )
+            gate_period_execution_cost = (
+                gate_period_liquidation_result.total_realised_execution_cost
             )
 
         # Total economic cost (both components)
@@ -333,29 +369,20 @@ def run_redemption_path(
             realised_liquidity_cost_after_contagion - investor_borne_liquidity_cost_after_contagion,
             ZERO,
         )
-        closing_cash = _closing_cash(
-            positions=carried_positions,
-            liquidation_result=liquidation_result,
-            final_paid_amount=final_paid_amount,
-            swing_recovery_amount=lmt_assessment.swing_recovery_amount,
+        closing_cash = (
+            immediate_closing_cash + gate_period_settled_cash + lmt_assessment.swing_recovery_amount
         )
-
-        # Apply regular liquidation to positions
-        carried_positions = _apply_liquidation_to_positions(
-            positions=carried_positions,
-            liquidation_result=liquidation_result,
-            closing_cash=closing_cash,
-        )
-
-        # Apply gate-period liquidation to positions and add settled proceeds to closing cash
+        carried_positions = positions_after_immediate_liquidation
         if gate_period_liquidation_result is not None:
-            closing_cash = closing_cash + gate_period_settled_cash
             carried_positions = _apply_liquidation_to_positions(
                 positions=carried_positions,
                 liquidation_result=gate_period_liquidation_result,
                 closing_cash=closing_cash,
             )
-        closing_nav = _position_nav(carried_positions)
+        else:
+            carried_positions = _set_cash_total(carried_positions, closing_cash)
+        pending_gate_settlement = gate_period_unsettled_cash
+        closing_nav = _position_nav(carried_positions) + pending_gate_settlement
         closing_nav_per_unit = _nav_per_unit(closing_nav, investor_units)
         investor_states = tuple(
             state.model_copy(
@@ -392,6 +419,9 @@ def run_redemption_path(
                 nav_at_gate_execution=nav_per_unit if gate_applied else None,
                 opening_cash=opening_cash,
                 closing_cash=closing_cash,
+                settled_gate_period_cash_from_prior_month=(
+                    settled_gate_period_cash_from_prior_month
+                ),
                 contractual_cashflow_amount=contractual_cashflow_amount,
                 base_estimated_liquidity_cost_rate=base_estimated_liquidity_cost_rate,
                 adjusted_estimated_liquidity_cost_rate=adjusted_estimated_liquidity_cost_rate,
@@ -413,7 +443,12 @@ def run_redemption_path(
                 liquidation_result=liquidation_result,
                 lmt_assessment=lmt_assessment,
                 gate_period_liquidation_result=gate_period_liquidation_result,
-                gate_period_execution_cost=gate_period_liquidation_cost_after_contagion,
+                gate_period_execution_cost=gate_period_execution_cost,
+                gate_period_liquidity_cost=gate_period_liquidation_cost_after_contagion,
+                gate_period_liquidation_target_cash=gate_period_liquidation_target_cash,
+                gate_period_units_targeted=gate_period_units_targeted,
+                gate_period_units_supported=gate_period_units_supported,
+                gate_period_unsupported_backlog_units=(gate_period_unsupported_backlog_units),
                 gate_period_cash_generated=gate_period_cash_generated,
                 gate_period_settled_cash=gate_period_settled_cash,
                 gate_period_unsettled_cash=gate_period_unsettled_cash,
@@ -737,6 +772,39 @@ def _backlog_cash_value(
     return sum((entry.cash_value(current_nav) for entry in backlog), ZERO)
 
 
+def _gate_period_settlement_split(
+    *,
+    liquidation_result: LiquidationResult,
+    positions: Sequence[StressedLiquidationPosition],
+    liquidation_days_per_month: int,
+) -> tuple[Decimal, Decimal]:
+    """Split gate-period proceeds under the path's monthly settlement convention."""
+
+    generated_cash = liquidation_result.total_net_cash_raised
+    liquidated_position_ids = {asset.position_id for asset in liquidation_result.assets_liquidated}
+    max_settlement_days = max(
+        (
+            position.settlement_days
+            for position in positions
+            if position.position_id in liquidated_position_ids
+        ),
+        default=0,
+    )
+    if max_settlement_days == 0:
+        return generated_cash, ZERO
+
+    remaining_liquidation_days = liquidation_days_per_month - max_settlement_days
+    if remaining_liquidation_days >= max_settlement_days:
+        return generated_cash, ZERO
+
+    settlement_rate = max(
+        Decimal(remaining_liquidation_days) / Decimal(max_settlement_days),
+        ZERO,
+    )
+    settled_cash = generated_cash * settlement_rate
+    return settled_cash, generated_cash - settled_cash
+
+
 def _requested_paid_amount(
     *,
     effective_total: Decimal,
@@ -772,7 +840,7 @@ def _allocate_paid_and_deferred_by_class(
         (
             units * current_nav
             for components in components_by_class.values()
-            for _, units, _ in components
+            for _, units, _, _ in components
         ),
         ZERO,
     )
@@ -781,7 +849,7 @@ def _allocate_paid_and_deferred_by_class(
 
     for demand in sorted(demands, key=lambda item: item.client_class.value):
         components = components_by_class.get(demand.client_class, ())
-        class_effective_units = sum((units for _, units, _ in components), ZERO)
+        class_effective_units = sum((units for _, units, _, _ in components), ZERO)
         class_effective_cash = class_effective_units * current_nav
         class_paid = (
             class_effective_cash
@@ -802,11 +870,18 @@ def _allocate_paid_and_deferred_by_class(
             )
         )
         requested_units_remaining = class_requested_paid / current_nav
+        paid_units_remaining = class_paid / current_nav
         class_backlog_units = ZERO
-        for origin_month, units, nav_at_deferral in components:
-            executed_units = min(units, requested_units_remaining)
-            requested_units_remaining = max(requested_units_remaining - executed_units, ZERO)
-            remaining_units = max(units - executed_units, ZERO)
+        for origin_month, units, nav_at_deferral, was_already_backlogged in components:
+            requested_units = min(units, requested_units_remaining)
+            requested_units_remaining = max(requested_units_remaining - requested_units, ZERO)
+            executed_units = min(requested_units, paid_units_remaining)
+            paid_units_remaining = max(paid_units_remaining - executed_units, ZERO)
+            remaining_units = (
+                max(units - executed_units, ZERO)
+                if was_already_backlogged
+                else max(units - requested_units, ZERO)
+            )
             class_backlog_units += remaining_units
             if remaining_units > ZERO:
                 closing_backlog.append(
@@ -861,20 +936,20 @@ def _redemption_components_by_class(
     month_number: int,
     *,
     current_nav: Decimal,
-) -> dict[ClientClass, tuple[tuple[int, Decimal, Decimal], ...]]:
-    components: dict[ClientClass, list[tuple[int, Decimal, Decimal]]] = {}
+) -> dict[ClientClass, tuple[tuple[int, Decimal, Decimal, bool], ...]]:
+    components: dict[ClientClass, list[tuple[int, Decimal, Decimal, bool]]] = {}
     for entry in sorted(opening_backlog, key=lambda item: item.origin_month):
         components.setdefault(entry.client_class, []).append(
-            (entry.origin_month, entry.remaining_units, entry.nav_at_deferral)
+            (entry.origin_month, entry.remaining_units, entry.nav_at_deferral, True)
         )
     for demand in demands:
         components.setdefault(demand.client_class, []).append(
-            (month_number, demand.redemption_amount / current_nav, current_nav)
+            (month_number, demand.redemption_amount / current_nav, current_nav, False)
         )
     return {
         client_class: tuple(
-            (origin, units, nav_at_deferral)
-            for origin, units, nav_at_deferral in entries
+            (origin, units, nav_at_deferral, was_already_backlogged)
+            for origin, units, nav_at_deferral, was_already_backlogged in entries
             if units > ZERO
         )
         for client_class, entries in components.items()
@@ -968,22 +1043,6 @@ def _assessment_with_outcomes(
             "outcomes": tuple(outcomes),
             "priority_outcome": priority_outcome,
         }
-    )
-
-
-def _closing_cash(
-    *,
-    positions: Sequence[PathPositionState],
-    liquidation_result: LiquidationResult,
-    final_paid_amount: Decimal,
-    swing_recovery_amount: Decimal,
-) -> Decimal:
-    return max(
-        _cash_total(positions)
-        + liquidation_result.total_net_cash_raised
-        - final_paid_amount
-        + swing_recovery_amount,
-        ZERO,
     )
 
 

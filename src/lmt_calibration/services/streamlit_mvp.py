@@ -586,7 +586,7 @@ def build_redemption_path_monthly_rows(
             (state.deferred_redemption_cash for state in month.investor_class_states),
             ZERO,
         )
-        liquid_nav = _liquid_nav(month.positions)
+        liquid_nav = _liquid_nav(month.positions) + month.gate_period_unsettled_cash
         rows.append(
             {
                 "month": month.period.month_number,
@@ -605,6 +605,19 @@ def build_redemption_path_monthly_rows(
                 "closing_nav": month.closing_nav,
                 "opening_cash": month.opening_cash,
                 "closing_cash": month.closing_cash,
+                "settled_gate_period_cash_from_prior_month": (
+                    month.settled_gate_period_cash_from_prior_month
+                ),
+                "gate_period_liquidation_target_cash": (month.gate_period_liquidation_target_cash),
+                "gate_period_cash_generated": month.gate_period_cash_generated,
+                "gate_period_settled_cash": month.gate_period_settled_cash,
+                "gate_period_unsettled_cash": month.gate_period_unsettled_cash,
+                "gate_period_liquidity_cost": month.gate_period_liquidity_cost,
+                "gate_period_units_targeted": month.gate_period_units_targeted,
+                "gate_period_units_supported": month.gate_period_units_supported,
+                "gate_period_unsupported_backlog_units": (
+                    month.gate_period_unsupported_backlog_units
+                ),
                 "remaining_liquid_resources": month.liquidation_result.remaining_liquid_resources,
                 "remaining_liquid_buffer_rate": (month.lmt_assessment.remaining_liquid_buffer_rate),
                 "liquid_nav": liquid_nav,

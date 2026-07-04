@@ -100,6 +100,7 @@ class RedemptionPathAssumptions(BaseModel):
     market_contagion_liquidity_cost_multiplier: Decimal = Field(default=ONE, ge=ONE)
     days_per_month: int = Field(default=30, gt=0)
     liquidation_days_per_month: int = Field(default=20, gt=0)
+    gate_period_liquidation_enabled: bool = True
 
     @field_validator("behavioural_feedback_multipliers_by_outcome")
     @classmethod
@@ -262,6 +263,7 @@ class MonthlyRedemptionPathResult(BaseModel):
     nav_at_gate_execution: Decimal | None = Field(default=None, gt=ZERO)
     opening_cash: Decimal = Field(ge=ZERO)
     closing_cash: Decimal = Field(ge=ZERO)
+    settled_gate_period_cash_from_prior_month: Decimal = Field(default=ZERO, ge=ZERO)
     contractual_cashflow_amount: Decimal = Field(ge=ZERO)
     base_estimated_liquidity_cost_rate: Decimal = Field(ge=ZERO)
     adjusted_estimated_liquidity_cost_rate: Decimal = Field(ge=ZERO)
@@ -282,6 +284,11 @@ class MonthlyRedemptionPathResult(BaseModel):
     lmt_assessment: MonthlyPathLmtAssessment
     gate_period_liquidation_result: LiquidationResult | None = None
     gate_period_execution_cost: Decimal = Field(default=ZERO, ge=ZERO)
+    gate_period_liquidity_cost: Decimal = Field(default=ZERO, ge=ZERO)
+    gate_period_liquidation_target_cash: Decimal = Field(default=ZERO, ge=ZERO)
+    gate_period_units_targeted: Decimal = Field(default=ZERO, ge=ZERO)
+    gate_period_units_supported: Decimal = Field(default=ZERO, ge=ZERO)
+    gate_period_unsupported_backlog_units: Decimal = Field(default=ZERO, ge=ZERO)
     gate_period_cash_generated: Decimal = Field(default=ZERO, ge=ZERO)
     gate_period_settled_cash: Decimal = Field(default=ZERO, ge=ZERO)
     gate_period_unsettled_cash: Decimal = Field(default=ZERO, ge=ZERO)

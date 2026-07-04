@@ -195,6 +195,12 @@ The application may link swing pricing and gates to every signal month through
 an explicit signal-linked mode. Suspension remains an independently selected
 scenario assumption and is never inferred from a model signal.
 
+An applied gate limits current-month payment and carries unpaid instructions as
+units. The engine then runs a separate gate-period liquidation against the
+post-payment portfolio. Settled proceeds increase cash, unsettled proceeds are
+carried as a pending-settlement asset into the next month, and the related
+realised liquidity cost reduces NAV in the liquidation month.
+
 ### Time-to-liquidation engine
 
 The standalone engine calculates cumulative day-by-day cash capacity from the

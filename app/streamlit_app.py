@@ -3037,7 +3037,12 @@ def _render_cash_account_diagnostics(run: AppRedemptionPathRun, *, dark_mode: bo
         ("cash_available", "Cash available", False, False),
         ("redemptions_paid", "Redemptions paid", False, False),
         ("closing_cash", "Closing cash", False, False),
-        ("pending_settlement", "Pending settlement (next period)", False, True),
+        (
+            "pending_settlement",
+            "Pending settlement from gate-period liquidation",
+            False,
+            True,
+        ),
     ]
 
     # Build rows
@@ -3159,8 +3164,7 @@ def _render_nav_reconciliation_diagnostics(run: AppRedemptionPathRun, *, dark_mo
         # Redemptions paid
         redemptions_paid = month_result.lmt_assessment.paid_redemption_amount / M
 
-        # Gate-period execution cost (if present)
-        gate_execution_cost = safe_get_field(month_result, "gate_period_execution_cost", ZERO) / M
+        gate_liquidity_cost = safe_get_field(month_result, "gate_period_liquidity_cost", ZERO) / M
 
         closing_nav = month_result.closing_nav / M
 
@@ -3173,7 +3177,7 @@ def _render_nav_reconciliation_diagnostics(run: AppRedemptionPathRun, *, dark_mo
             "fund_borne_cost": fund_borne_cost,
             "net_fund_borne": net_fund_borne,
             "redemptions_paid": redemptions_paid,
-            "gate_execution_cost": gate_execution_cost,
+            "gate_liquidity_cost": gate_liquidity_cost,
             "closing_nav": closing_nav,
         }
 
@@ -3332,16 +3336,16 @@ def _render_nav_reconciliation_diagnostics(run: AppRedemptionPathRun, *, dark_mo
             "cost-breakdown",
         ),
         ("redemptions_paid", "Redemptions paid", False, False, "group-row"),
-        ("gate_execution_cost", "Gate-period execution cost", False, False, "memo-row"),
+        ("gate_liquidity_cost", "Gate-period liquidation cost", False, False, "memo-row"),
         ("closing_nav", "Closing NAV", False, False, "total-row"),
     ]
 
     # Build rows
     rendered_row_count = 0
     for key, label, is_indent, is_memo, row_class_override in rows:
-        # Skip gate execution cost rows if all values are zero
+        # Skip the gate-period cost row if no gate-period sale incurred cost.
         skip_row = False
-        if key == "gate_execution_cost":
+        if key == "gate_liquidity_cost":
             all_zero = all(months_data[month_num][key] == ZERO for month_num in months_data.keys())
             skip_row = all_zero
 

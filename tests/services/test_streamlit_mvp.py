@@ -78,6 +78,16 @@ def test_streamlit_mvp_service_runs_redemption_path_without_market_stress() -> N
     assert len(run.lmt_timeline_rows) == 12
     assert run.market_stress is None
     assert {row["market_stress_applied"] for row in run.monthly_rows} == {False}
+    assert {
+        "gate_period_liquidation_target_cash",
+        "gate_period_cash_generated",
+        "gate_period_settled_cash",
+        "gate_period_unsettled_cash",
+        "gate_period_liquidity_cost",
+        "gate_period_units_targeted",
+        "gate_period_units_supported",
+        "gate_period_unsupported_backlog_units",
+    } <= run.monthly_rows[0].keys()
     assert run.liquidity_profile_rows
     assert {row["setting"] for row in run.configuration_rows} >= {
         "Market stress scenario",
@@ -296,7 +306,7 @@ def test_sample_normal_redemption_path_uses_stable_beta_draws() -> None:
         Decimal("0.02279958238952855675"),
         Decimal("0.03300293112535390314085616671"),
         Decimal("0.02271074983020271296240057116"),
-        Decimal("0.02870684566739427417724533616"),
+        Decimal("0.02870684566739427417724533617"),
     ]
     assert max(first_four_month_rates) < Decimal("0.05")
 

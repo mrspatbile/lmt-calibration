@@ -717,9 +717,11 @@ def test_liquidation_still_uses_paid_redemption_only() -> None:
     # Since opening_cash (300) exceeds requested payment (100), no liquidation needed
     assert first_month.liquidation_result.total_redemption_amount == Decimal("0")
     assert first_month.lmt_assessment.deferred_redemption_amount == Decimal("400.0")
-    # Gate period should liquidate for the backlog
+    # Existing excess cash supports half the backlog, so gate-period sales target
+    # only the additional cash required.
     assert first_month.gate_period_liquidation_result is not None
-    assert first_month.gate_period_liquidation_result.total_redemption_amount == Decimal("400.0")
+    assert first_month.gate_period_liquidation_target_cash == Decimal("200.0")
+    assert first_month.gate_period_liquidation_result.total_redemption_amount == Decimal("200.0")
 
 
 def test_deferred_units_remain_owned_until_execution_and_then_reduce_units() -> None:
@@ -1041,6 +1043,31 @@ def _position_value(positions: tuple, position_id: str) -> Decimal:
     )
 
 
+def _issue_46_gate_path(
+    *,
+    gate_period_liquidation_enabled: bool = True,
+    liquidity_stress: LiquidityStress | None = None,
+    liquidation_days_per_month: int = 20,
+) -> RedemptionPathResult:
+    return run_redemption_path(
+        fund=_fund(),
+        positions=(_cash("100"), _equity("euro_equity", "900")),
+        investor_profiles=(_investor(ClientClass.RETAIL, "1", "0", "0.50"),),
+        liquidity_stress=liquidity_stress or _liquidity_stress(),
+        liquidation_strategy=_strategy(),
+        lmt_parameters=_parameters(swing_threshold="1", gate_threshold="0.10"),
+        assumptions=RedemptionPathAssumptions(
+            scenario_id="issue_46_gate_period_liquidation",
+            start_date="2026-01-01",
+            random_seed=3,
+            stress_months=(1,),
+            gate_months=(1,),
+            liquidation_days_per_month=liquidation_days_per_month,
+            gate_period_liquidation_enabled=gate_period_liquidation_enabled,
+        ),
+    )
+
+
 def _buffer_breach_path(
     behavioural_feedback_multipliers: dict[
         PathLmtOutcome,
@@ -1114,6 +1141,149 @@ def test_gate_creates_backlog_when_gate_threshold_breached() -> None:
     # Backlog should be created for deferred amount
     assert len(month_1.backlog) > 0
     assert month_1.backlog_units > Decimal("0")
+
+
+def test_gate_without_period_liquidation_only_defers_units() -> None:
+    result = _issue_46_gate_path(gate_period_liquidation_enabled=False)
+
+    month_1 = result.monthly_results[0]
+
+    assert month_1.lmt_assessment.paid_redemption_amount == Decimal("100.0")
+    assert month_1.backlog_units == Decimal("400.0")
+    assert month_1.backlog_cash_value == Decimal("400.0")
+    assert month_1.backlog[0].remaining_units == Decimal("400.0")
+    assert month_1.backlog[0].nav_at_deferral == Decimal("1")
+    assert month_1.gate_period_liquidation_result is None
+    assert month_1.gate_period_cash_generated == Decimal("0")
+    assert month_1.closing_cash == Decimal("0")
+
+
+def test_gate_period_liquidation_builds_cash_without_executing_deferred_units() -> None:
+    result = _issue_46_gate_path()
+
+    month_1 = result.monthly_results[0]
+    investor_state = month_1.investor_class_states[0]
+
+    assert month_1.gate_period_liquidation_result is not None
+    assert month_1.gate_period_liquidation_target_cash == Decimal("400.0")
+    assert month_1.gate_period_cash_generated == Decimal("400.0")
+    assert month_1.gate_period_settled_cash == Decimal("400.0")
+    assert month_1.gate_period_units_targeted == Decimal("400.0")
+    assert month_1.gate_period_units_supported == Decimal("400.0")
+    assert month_1.gate_period_unsupported_backlog_units == Decimal("0")
+    assert month_1.backlog_units == Decimal("400.0")
+    assert investor_state.paid_redemption_units == Decimal("100.0")
+    assert investor_state.closing_units == Decimal("900.0")
+    assert month_1.closing_cash == Decimal("400.0")
+
+
+def test_gate_period_cash_is_used_to_pay_unit_backlog_in_later_month() -> None:
+    result = _issue_46_gate_path()
+
+    month_1, month_2 = result.monthly_results[:2]
+
+    assert month_2.opening_cash == month_1.gate_period_cash_generated
+    assert month_2.lmt_assessment.paid_redemption_amount == Decimal("400.0")
+    assert month_2.investor_class_states[0].paid_redemption_units == Decimal("400.0")
+    assert month_2.backlog_units == Decimal("0")
+    assert month_2.backlog == ()
+    assert month_2.liquidation_result.total_net_cash_raised == Decimal("0")
+
+
+def test_partial_gate_period_liquidation_leaves_unit_backlog_for_later_execution() -> None:
+    constrained_stress = LiquidityStress(
+        liquidity_stress_id="gate_capacity_constraint",
+        version="1.0",
+        name="gate_capacity_constraint",
+        description="Synthetic constrained gate-period capacity.",
+        stress_horizon_days=5,
+        execution_assumptions_by_asset_group={
+            AssetGroup.CASH: _execution_assumption(),
+            AssetGroup.LISTED_EQUITY: LiquidityExecutionAssumption(
+                bid_ask_spread_rate=Decimal("0"),
+                transaction_cost_rate=Decimal("0"),
+                market_impact_rate=Decimal("0"),
+                participation_rate=Decimal("0.10"),
+                liquidity_haircut_rate=Decimal("0"),
+            ),
+        },
+    )
+    result = _issue_46_gate_path(
+        liquidity_stress=constrained_stress,
+        liquidation_days_per_month=1,
+    )
+
+    month_1, month_2 = result.monthly_results[:2]
+
+    assert month_1.gate_period_cash_generated == Decimal("90.00")
+    assert month_1.gate_period_units_supported == Decimal("90.00")
+    assert month_1.gate_period_unsupported_backlog_units == Decimal("310.00")
+    assert month_1.backlog_units == Decimal("400.0")
+    assert month_2.backlog_units > Decimal("0")
+    assert month_2.backlog[0].remaining_units == month_2.backlog_units
+
+
+def test_gate_period_liquidation_cost_reduces_nav_and_is_reported_separately() -> None:
+    haircut_stress = LiquidityStress(
+        liquidity_stress_id="gate_haircut_cost",
+        version="1.0",
+        name="gate_haircut_cost",
+        description="Synthetic gate-period haircut cost.",
+        stress_horizon_days=5,
+        execution_assumptions_by_asset_group={
+            AssetGroup.CASH: _execution_assumption(),
+            AssetGroup.LISTED_EQUITY: LiquidityExecutionAssumption(
+                bid_ask_spread_rate=Decimal("0"),
+                transaction_cost_rate=Decimal("0"),
+                market_impact_rate=Decimal("0"),
+                participation_rate=Decimal("1"),
+                liquidity_haircut_rate=Decimal("0.10"),
+            ),
+        },
+    )
+    result = _issue_46_gate_path(liquidity_stress=haircut_stress)
+
+    month_1 = result.monthly_results[0]
+
+    assert month_1.gate_period_liquidity_cost > Decimal("0")
+    assert month_1.gate_period_liquidity_cost == (
+        month_1.gate_period_liquidation_result.total_realised_liquidity_cost
+    )
+    assert month_1.realised_liquidity_cost_after_contagion == (month_1.gate_period_liquidity_cost)
+    assert month_1.closing_nav == (
+        month_1.pre_lmt_nav
+        - month_1.lmt_assessment.paid_redemption_amount
+        - month_1.gate_period_liquidity_cost
+    )
+
+
+def test_gate_period_pending_settlement_becomes_later_cash_and_preserves_nav() -> None:
+    result = _issue_46_gate_path(liquidation_days_per_month=1)
+
+    month_1, month_2 = result.monthly_results[:2]
+
+    assert month_1.gate_period_settled_cash == Decimal("0")
+    assert month_1.gate_period_unsettled_cash == Decimal("400.0")
+    assert month_1.closing_cash == Decimal("0")
+    assert month_1.closing_nav == Decimal("900.0")
+    assert month_2.settled_gate_period_cash_from_prior_month == Decimal("400.0")
+    assert month_2.opening_cash == Decimal("400.0")
+    assert month_2.opening_nav == month_1.closing_nav
+    assert month_2.backlog_units == Decimal("0")
+
+
+def test_gate_period_liquidation_improves_later_cash_vs_pure_deferral() -> None:
+    with_benefit = _issue_46_gate_path()
+    pure_deferral = _issue_46_gate_path(gate_period_liquidation_enabled=False)
+
+    benefit_month_2 = with_benefit.monthly_results[1]
+    baseline_month_2 = pure_deferral.monthly_results[1]
+
+    assert benefit_month_2.opening_cash == Decimal("400.0")
+    assert baseline_month_2.opening_cash == Decimal("0")
+    assert benefit_month_2.opening_cash > baseline_month_2.opening_cash
+    assert benefit_month_2.liquidation_result.total_net_cash_raised == Decimal("0")
+    assert baseline_month_2.liquidation_result.total_net_cash_raised == Decimal("400.0")
 
 
 def test_gate_period_liquidation_target_equals_backlog() -> None:

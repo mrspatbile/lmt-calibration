@@ -125,7 +125,9 @@ Apply user-selected LMT governance assumptions
         ↓
 Determine paid and deferred redemption
         ↓
-Calculate liquidation only for paid redemption
+Calculate liquidation for paid redemption
+        ↓
+If a gate applies, liquidate eligible remaining assets to build cash for backlog
         ↓
 Determine month-end cash, positions, NAV, liquid resources, and backlog
         ↓
@@ -134,8 +136,10 @@ Use month-end position as next month’s opening position
 
 Cashflows occur before liquidation.
 
-Liquidation is calculated only for paid redemption amounts, not for demand that
-is gated, suspended, or deferred.
+Immediate redemption-funding liquidation is calculated only for paid amounts.
+An applied gate creates a separate liquidation window for building cash against
+the current-NAV value of deferred units; it does not execute those units in the
+gate month.
 
 ## Opening Monthly Fund Position
 
@@ -294,9 +298,28 @@ The gate signal is based on effective redemption demand. Payment restriction and
 deferral occur only when the gate is selected for the month or the signal-linked
 option applies it.
 
-If the gate applies, only the paid portion is liquidated.
+If the gate applies, immediate payment is capped and the unpaid portion becomes
+unit-based deferred backlog. Deferred units remain in investor ownership and do
+not receive swing-pricing or liquidity-cost allocation until they execute.
 
-The unpaid portion becomes deferred backlog.
+After immediate payment and its liquidation have been applied, the manager may
+sell eligible remaining assets during the gate period. The additional cash
+target is the current-NAV value of backlog not already supported by cash above
+the minimum buffer. The existing liquidation strategy, eligibility, capacity,
+haircut, and settlement rules apply to this second liquidation window.
+
+Settled net proceeds increase the cash account and can fund backlog execution in
+a later month. Proceeds that do not settle within the aggregated period remain a
+pending-settlement asset and become cash in the next month. Haircut and realised
+execution costs reduce NAV in the month of the gate-period sale and remain
+fund-borne because deferred units have not executed.
+
+This is a month-level approximation. It does not introduce a daily trading or
+cash-management schedule.
+
+`gate_period_liquidation_enabled` is an explicit path assumption. It defaults
+to enabled for application runs and may be disabled in comparison runs to
+represent a pure deferral-only gate baseline.
 
 The gate result should preserve the split between paid redemption and deferred
 redemption by investor class where practical, so later months can carry forward
@@ -461,6 +484,10 @@ Liquidation must respect:
 Asset sales reduce carried-forward position values. Cash balances should reflect
 contractual cashflows, cash used, liquidation proceeds, redemption payments, and
 the approved treatment of swing recovery.
+
+Gate-period proceeds are reported separately as settled cash and pending
+settlement. Pending proceeds remain part of NAV until they settle into the next
+month's cash balance.
 
 ## Liquidation Capacity Across Months
 

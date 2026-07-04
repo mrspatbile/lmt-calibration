@@ -66,6 +66,14 @@ unit at deferral is retained as audit metadata and does not create a fixed cash
 claim. Swing-pricing and liquidity-cost allocations apply only to units that
 execute in the month.
 
+When a gate is applied, the path limits immediate payment and uses the gate
+period as an additional liquidation window. Eligible assets may be sold against
+the current-NAV cash value of pending units after allowing for cash already
+available above the minimum buffer. Settled proceeds build cash for later
+payments; proceeds still awaiting settlement are carried into the next monthly
+period. Deferred units remain pending until they are actually paid, and
+gate-period liquidation costs are fund-borne in the liquidation month.
+
 ## Out of current scope
 
 The current methodology does not include:
@@ -272,6 +280,11 @@ value of 1.0 makes the incremental execution cost above the base estimate a
 realised cost of asset sales. That increment reduces net proceeds, can require
 higher gross sales, and reduces the path NAV. The single-period scenario matrix
 continues to treat estimated execution cost as calibration context only.
+
+Gate-period liquidation uses the same stressed eligibility, capacity, haircut,
+execution-cost, and strategy rules as redemption-funding liquidation. It is a
+second sequential liquidation window against the remaining portfolio, so it
+cannot reuse cash or positions consumed by the immediate payment flow.
 
 ## NAV bases
 
